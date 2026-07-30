@@ -19,6 +19,13 @@ const PORT = process.env.PORT || 5000;
 app.use(express.json());
 app.use(cors());
 
+app.get("/", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "e-Setu Backend is running 🚀",
+  });
+});
+
 app.use("/api/v1/user", userRoute);
 app.use("/api/v1/product", productRoute);
 app.use("/api/v1/cart", cartRoute);
