@@ -19,6 +19,7 @@ import TodayOrders from "./components/TodayOrders";
 import AdminMoneyControl from "./pages/admin/AdminMoneyControl";
 import AdminProductView from "./components/AdminProductView";
 import AddProduct from "./components/AddProduct";
+import Cart from "./pages/Cart";
 function App() {
   const { userData, supplierData } = useSelector((state) => state.user);
   const dispatch = useDispatch();
@@ -202,6 +203,21 @@ function App() {
         element={
           userData || supplierData ? (
             <EditProfile />
+          ) : (
+            <Navigate to={"/login"} />
+          )
+        }
+      />
+      <Route
+        path="/cart"
+        element={
+          userData ? (
+            <>
+              {" "}
+              <Cart />
+              <Nav />
+              <Navbar />
+            </>
           ) : (
             <Navigate to={"/login"} />
           )

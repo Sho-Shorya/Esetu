@@ -35,6 +35,10 @@ const Navbar = () => {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef(null);
 
+  const { cartData } = useSelector((state) => state.product);
+  useEffect(() => {
+    setCartCount(cartData.items.length);
+  });
   // close user menu on outside click or Escape
   useEffect(() => {
     const onDocClick = (e) => {

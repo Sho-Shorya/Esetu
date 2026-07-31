@@ -1,304 +1,629 @@
-import React, { useEffect, useState } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
-import { useNavigate } from 'react-router-dom'
-import axios from 'axios'
-import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
-import { setCart } from '@/redux/ProductSlice'
-import { API_BASE_URL } from '@/lib/constants'
+import React, { useEffect, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
+import axios from "axios";
+import { toast } from "sonner";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  ShoppingBag,
+  Trash2,
+  Plus,
+  Minus,
+  Package,
+  IndianRupee,
+  Loader2,
+  CircleAlert,
+  ChevronLeft,
+  Check,
+} from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { setCartData } from "@/redux/ProductSlice";
+import { API_BASE_URL } from "@/lib/constants";
+
+const containerVariants = {
+  hidden: {},
+  visible: {
+    transition: {
+      staggerChildren: 0.08,
+    },
+  },
+};
+
+const cardVariants = {
+  hidden: {
+    opacity: 0,
+    y: 20,
+  },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.3,
+    },
+  },
+};
 
 const Cart = () => {
-  const dispatch = useDispatch()
-  const navigate = useNavigate()
-  const { cart } = useSelector((store) => store.product || { cart: { items: [] } })
-  const [loading, setLoading] = useState(false)
-  const [updatingId, setUpdatingId] = useState(null)
-  const [checkoutLoading, setCheckoutLoading] = useState(false)
-  const [checkoutMessage, setCheckoutMessage] = useState('')
-  const [modalOpen, setModalOpen] = useState(false)
-  const items = cart?.items || []
-  const totalPrice = items.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 0), 0)
-  const accessToken = localStorage.getItem('accessToken')
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
 
-  const getProductImageUrl = (item) => {
-    // Primary source: populated productId with productImg array
-    if (item?.productId?.productImg?.[0]?.url) {
-      return item.productId.productImg[0].url
-    }
-    // Fallback for direct productImg structure
-    if (item?.productImg?.[0]?.url) {
-      return item.productImg[0].url
-    }
-    // Fallback for old image format
-    if (item?.productId?.image) {
-      return item.productId.image
-    }
-    if (item?.image) {
-      return item.image
-    }
-    return null
-  }
+  const { cartData } = useSelector(
+    (store) => store.product || { cartData: { items: [] } },
+  );
 
-  const syncCart = (newCart) => {
-    const normalizedCart = newCart || { items: [] }
-    dispatch(setCart(normalizedCart))
-    localStorage.setItem('cart', JSON.stringify(normalizedCart.items || []))
-  }
+  const [loading, setLoading] = useState(false);
+  const [updatingId, setUpdatingId] = useState(null);
+  const [checkoutLoading, setCheckoutLoading] = useState(false);
+  const [checkoutMessage, setCheckoutMessage] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [discount, setDiscount] = useState("");
+  const token = localStorage.getItem("token");
 
-  const fetchCart = async (suppressLoading = false) => {
-    if (!accessToken) return
-    if (!suppressLoading) setLoading(true)
-    try {
-      const res = await axios.get(`${API_BASE_URL}/api/v1/cart`, {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      })
-      if (res.data.success) {
-        syncCart(res.data.cart)
-      }
-    } catch (error) {
-      console.error('Fetch cart failed', error)
-      toast.error(error.response?.data?.message || 'Unable to load cart')
-    } finally {
-      if (!suppressLoading) setLoading(false)
-    }
-  }
+  const items = cartData?.items || [];
+  const totalPrice = cartData?.totalPrice || 0;
 
   useEffect(() => {
-    fetchCart()
-  }, [])
+    const dis = (cartData.totalPrice * 13) / 100;
+    setDiscount(dis.toFixed(1));
+  }, [cartData]);
 
-  const updateQuantity = async (productId, type) => {
-    if (!accessToken) {
-      toast.error('Please login to update cart.')
-      return
+  const getProductImageUrl = (item) => {
+    if (item?.productId?.image) {
+      return item.productId.image;
     }
-    setUpdatingId(productId)
+    return null;
+  };
+
+  const syncCart = (newCart) => {
+    dispatch(
+      setCartData(
+        newCart || {
+          items: [],
+          totalPrice: 0,
+        },
+      ),
+    );
+  };
+
+  const fetchCart = async () => {
+    if (!token) return;
+
+    setLoading(true);
+
     try {
-      const res = await axios.put(`${API_BASE_URL}/api/v1/cart/update-cart`, { productId, type }, {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      })
+      const res = await axios.get(`${API_BASE_URL}/api/v1/cart`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
       if (res.data.success) {
-        await fetchCart(true)
-      } else {
-        toast.error(res.data.message || 'Unable to update quantity')
+        syncCart(res.data.cart);
       }
     } catch (error) {
-      console.error('Update cart failed', error)
-      toast.error(error.response?.data?.message || 'Unable to update quantity')
+      console.error(error);
+      toast.error(
+        error.response?.data?.message || "कार्ट लोड करने में समस्या हुई",
+      );
     } finally {
-      setUpdatingId(null)
+      setLoading(false);
     }
-  }
+  };
 
-  const removeItem = async (productId) => {
-    if (!accessToken) {
-      toast.error('Please login to remove items.')
-      return
+  useEffect(() => {
+    fetchCart();
+  }, []);
+  const updateQuantity = async (item, type) => {
+    if (!token) {
+      toast.error("कृपया पहले लॉगिन करें", { duration: 1000 });
+      return;
     }
-    setUpdatingId(productId)
+
+    setUpdatingId(item.productId._id);
+
     try {
-      const res = await axios.delete(`${API_BASE_URL}/api/v1/cart/remove-cart`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        data: { productId }
-      })
+      const res = await axios.put(
+        `${API_BASE_URL}/api/v1/cart/update-cart`,
+        {
+          productId: item.productId._id,
+          company: item.company,
+          measurement: item.measurement,
+          type,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
       if (res.data.success) {
-        await fetchCart(true)
-        toast.success('Item removed from cart')
+        syncCart(res.data.cart);
       } else {
-        toast.error(res.data.message || 'Unable to remove item')
+        toast.error(res.data.message, { duration: 2000 });
       }
-    } catch (error) {
-      console.error('Remove cart item failed', error)
-      toast.error(error.response?.data?.message || 'Unable to remove item')
+    } catch (err) {
+      toast.error(err.response?.data?.message || "मात्रा अपडेट नहीं हो सकी");
     } finally {
-      setUpdatingId(null)
+      setUpdatingId(null);
     }
-  }
+  };
+  const removeItem = async (item) => {
+    if (!token) {
+      toast.error("कृपया पहले लॉग इन करें");
+      return;
+    }
+
+    setUpdatingId(item.productId._id);
+
+    try {
+      const res = await axios.delete(
+        `${API_BASE_URL}/api/v1/cart/remove-cart`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          data: {
+            productId: item.productId._id,
+            company: item.company._id || item.company,
+            measurement: item.measurement,
+          },
+        },
+      );
+
+      if (res.data.success) {
+        dispatch(setCartData(res.data.cart));
+        toast.success("कार्ट से हटाया गया", {
+          duration: 1000,
+        });
+      } else {
+        toast.error(res.data.message);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "कुछ गलत हो गया");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
 
   const handleCheckout = async () => {
-    if (!accessToken) {
-      toast.error('Please login to checkout.')
-      return
+    setCheckoutLoading(true);
+    if (!token) {
+      toast.error("कृपया पहले लॉगिन करें");
+      return;
     }
-    setCheckoutLoading(true)
-    try {
-      const res = await axios.post(`${API_BASE_URL}/api/v1/cart/checkout`, {}, {
-        headers: { Authorization: `Bearer ${accessToken}` }
-      })
-      if (res.data.success) {
-        syncCart(res.data.cart)
-        setCheckoutMessage(res.data.message || 'Your order has been placed successfully!')
-        setModalOpen(true)
-        toast.success(res.data.message || 'Order placed successfully')
-      } else {
-        toast.error(res.data.message || 'Unable to complete checkout')
-      }
-    } catch (error) {
-      console.error('Checkout failed', error)
-      toast.error(error.response?.data?.message || 'Checkout failed')
-    } finally {
-      setCheckoutLoading(false)
-    }
-  }
+    toast.success("🎉 हो गया!,आज का ऑर्डर देखें!", { duration: 2000 });
+    navigate("/");
+    setCheckoutLoading(false);
 
-  if (!accessToken) {
+    // try {
+    //   const res = await axios.post(
+    //     `${API_BASE_URL}/api/v1/cart/checkout`,
+    //     {},
+    //     {
+    //       headers: {
+    //         Authorization: `Bearer ${token}`,
+    //       },
+    //     },
+    //   );
+
+    //   if (res.data.success) {
+    //     syncCart(res.data.cart);
+    //     setCheckoutMessage(
+    //       res.data.message || "आपका ऑर्डर सफलतापूर्वक दर्ज हो गया।",
+    //     );
+    //     setModalOpen(true);
+    //     toast.success("ऑर्डर सफलतापूर्वक दर्ज हो गया");
+    //   } else {
+    //     toast.error(res.data.message);
+    //   }
+    // } catch (error) {
+    //   toast.error(error.response?.data?.message || "ऑर्डर पूरा नहीं हो सका");
+    // } finally {
+    //   setCheckoutLoading(false);
+    // }
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    navigate("/");
+  };
+  const { productData } = useSelector((state) => state.product);
+  const fetchCompanyName = (companyId) => {
+    for (const product of productData) {
+      const variant = product.variants?.find(
+        (v) => v.company?._id === companyId,
+      );
+
+      if (variant) {
+        return variant.company.name;
+      }
+    }
+
+    return "";
+  };
+
+  if (!token) {
     return (
-      <div className='mt-20 mx-auto max-w-4xl p-4 sm:mt-24 sm:p-6'>
-        <h1 className='mb-4 text-2xl font-bold sm:text-4xl'>Your Cart</h1>
-        <p className='text-gray-600'>Please login to view and manage your cart.</p>
+      <div className="mt-24 flex min-h-[60vh] items-center justify-center px-4">
+        <motion.div
+          initial={{ opacity: 0, y: 25 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-lg rounded-3xl border bg-white p-10 text-center shadow-xl"
+        >
+          <ShoppingBag className="mx-auto mb-5 h-20 w-20 text-green-600" />
+
+          <h1 className="text-3xl font-bold">कृपया पहले लॉगिन करें</h1>
+
+          <p className="mt-3 text-gray-500">
+            कार्ट देखने और ऑर्डर करने के लिए आपको अपने खाते में लॉगिन करना
+            आवश्यक है।
+          </p>
+
+          <Button
+            onClick={() => navigate("/login")}
+            className="mt-8 h-12 w-full rounded-2xl text-lg"
+          >
+            लॉगिन करें
+          </Button>
+        </motion.div>
       </div>
-    )
+    );
   }
 
   if (loading) {
     return (
-      <div className='mt-20 mx-auto max-w-4xl p-4 text-center sm:mt-24 sm:p-6'>
-        <p className='text-lg text-gray-600'>Loading cart...</p>
+      <div className="mt-24 flex min-h-[70vh] items-center justify-center">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{
+            repeat: Infinity,
+            duration: 1,
+            ease: "linear",
+          }}
+          className="h-14 w-14 rounded-full border-4 border-green-600 border-t-transparent"
+        />
       </div>
-    )
+    );
   }
 
-  const showModal = modalOpen
-  const closeModal = () => {
-    setModalOpen(false)
-    navigate('/')
-  }
-
-  if (!items.length && !showModal) {
+  if (!items.length && !modalOpen) {
     return (
-      <div className='mt-20 mx-auto max-w-4xl p-4 sm:mt-24 sm:p-6'>
-        <h1 className='mb-4 text-2xl font-bold sm:text-4xl'>Your Cart</h1>
-        <p className='text-gray-600'>Your cart is empty. Add a product to see it here.</p>
+      <div className="mt-20 flex min-h-[80vh] items-center justify-center bg-gray-50 px-5">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="max-w-md rounded-[32px] bg-white p-10 text-center shadow-xl"
+        >
+          <ShoppingBag size={80} className="mx-auto mb-5 text-green-600" />
+
+          <h2 className="text-3xl font-bold">आपका कार्ट खाली है</h2>
+
+          <p className="mt-3 text-gray-500">
+            अभी तक आपने कोई सामान नहीं चुना है। अपनी ज़रूरत का सामान जोड़कर
+            खरीदारी शुरू करें।
+          </p>
+
+          <Button
+            onClick={() => navigate("/")}
+            className="mt-8 h-12 w-full rounded-2xl text-lg"
+          >
+            खरीदारी शुरू करें
+          </Button>
+        </motion.div>
       </div>
-    )
+    );
   }
 
   return (
-    <div className='mt-20 mx-auto max-w-6xl p-4 sm:mt-24 sm:p-6'>
-      <div className='flex flex-col gap-4 sm:gap-6'>
-        <div className='rounded-3xl bg-white p-4 shadow-sm sm:p-6'>
-          <h1 className='mb-2 text-2xl font-bold sm:text-4xl'>Your Cart</h1>
-          <p className='text-sm text-gray-500'>Manage cart items, adjust quantities and remove products before checkout.</p>
-        </div>
+    <div className="mx-auto mt-20 max-w-7xl px-4 pb-10 lg:px-6">
+      <motion.div
+        initial={{ opacity: 0, y: -25 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="mb-6 overflow-hidden rounded-3xl border border-red-100 bg-gradient-to-tr from-green-400 via-black to-green-700 shadow-sm"
+      >
+        <div className="flex flex-col gap-5 p-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl p-3 text-green-400">
+                <ShoppingBag size={24} />
+              </div>
+              <div>
+                <h1 className="text-3xl mb-3 text-white font-bold">
+                  आपका कार्ट ({items.length})
+                </h1>
 
-        <div className='grid gap-4 sm:gap-6 lg:grid-cols-[1.9fr_1fr]'>
-          <div className='space-y-4'>
+                <p className="mt-1 text-sm text-gray-400">
+                  आपका कार्ट आज के ऑर्डर में जोड़ दिया जाएगा,कृपया इसे सावधानी
+                  से जोड़ें।
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+
+      <div className="grid mb-15 gap-6 lg:grid-cols-[2fr_360px]">
+        <motion.div
+          variants={containerVariants}
+          initial="hidden"
+          animate="visible"
+          className="grid grid-cols-2 gap-4 md:grid-cols-2"
+        >
+          <AnimatePresence>
             {items.map((item) => {
-              const productId = item.productId?._id || item.productId
-              const imageUrl = getProductImageUrl(item)
+              const imageUrl = getProductImageUrl(item);
+
+              const productId = item.productId?._id || item.productId;
+
               return (
-                <div key={productId} className='rounded-3xl border bg-white p-4 shadow-sm sm:p-5'>
-                  <div className='flex flex-col gap-4 lg:flex-row'>
-                    <div className='h-30 w-full rounded-2xl bg-gray-100 sm:h-36 sm:w-44'>
+                <motion.div
+                  key={`${productId}-${item.company}-${item.measurement}`}
+                  layout
+                  variants={cardVariants}
+                  exit={{
+                    opacity: 0,
+                    x: -80,
+                    scale: 0.95,
+                  }}
+                  whileHover={{
+                    y: -4,
+                  }}
+                  className="rounded-3xl border bg-white p-4 shadow-sm transition-all"
+                >
+                  <div className="flex gap-3 mb-3">
+                    <div className="flex h-15 w-15 shrink-0 items-center justify-center rounded-2xl bg-gray-100">
                       {imageUrl ? (
-                        <img src={imageUrl} alt={item.productId?.productName || 'Cart item'} className='h-full w-full object-scale-down' />
+                        <img
+                          src={imageUrl}
+                          alt={item.productId?.name}
+                          className="h-20 w-20 object-contain"
+                        />
                       ) : (
-                        <div className='flex h-full w-full items-center justify-center bg-gray-200 text-sm text-gray-500'>No image</div>
+                        <Package className="h-10 w-10 text-gray-400" />
                       )}
                     </div>
-                    <div className='flex-1'>
-                      <div className='flex flex-col gap-3 sm:gap-4 lg:flex-row lg:items-start lg:justify-between'>
-                        <div>
-                          <h2 className='text-lg font-semibold sm:text-xl'>{item.productId?.productName || 'Product'}</h2>
-                          <p className='mt-2 text-sm text-gray-500 line-clamp-3'>{item.productId?.productDesc || 'No description available.'}</p>
-                        </div>
-                        <div className='text-left sm:text-right'>
-                          <p className='text-xl font-bold sm:text-2xl'>₹{(item.price || 0) * (item.quantity || 0)}</p>
-                          <p className='text-sm text-gray-500'>₹{item.price || 0} each</p>
-                        </div>
-                      </div>
 
-                      <div className='mt-4 flex flex-col gap-3 sm:mt-5 sm:flex-row sm:items-center sm:justify-between'>
-                        <div className='flex items-center justify-center gap-2 rounded-full border border-gray-200 bg-gray-50 p-1 sm:justify-start'>
-                          <Button
-                            onClick={() => updateQuantity(productId, 'decrease')}
-                            className='h-9 w-9 rounded-full bg-white text-xl text-gray-700 hover:bg-gray-100 sm:h-10 sm:w-10'
-                            disabled={item.quantity <= 1 || updatingId === productId}
-                          >
-                            -
-                          </Button>
-                          <span className='min-w-[2.5rem] text-center text-base font-semibold sm:text-lg'>{item.quantity}</span>
-                          <Button
-                            onClick={() => updateQuantity(productId, 'increase')}
-                            className='h-9 w-9 rounded-full bg-white text-xl text-gray-700 hover:bg-gray-100 sm:h-10 sm:w-10'
-                            disabled={updatingId === productId}
-                          >
-                            +
-                          </Button>
-                        </div>
-                        <div className='flex flex-col gap-2 sm:flex-row'>
-                          <Button
-                            variant='destructive'
-                            onClick={() => removeItem(productId)}
-                            disabled={updatingId === productId}
-                            className='w-full sm:w-auto'
-                          >
-                            Remove
-                          </Button>
-                          <Button
-                            variant='outline'
-                            onClick={() => toast.success('Saved for later feature coming soon')}
-                            className='w-full sm:w-auto'
-                          >
-                            Save for later
-                          </Button>
+                    <div className="flex flex-1 flex-col px-1  justify-between">
+                      <div>
+                        <div>
+                          <span className="inline-flex rounded-full bg-blue-100 px-2 text-[15px] font-semibold text-blue-700">
+                            {fetchCompanyName(item.company)}
+                          </span>
+
+                          <h2 className="line-clamp-2 mt-1 text-lg font-bold text-gray-900">
+                            {item.productId?.name}
+                          </h2>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
+                  <span className="rounded-full px-1 py-1 text-[15px] font-semibold text-gray-500">
+                    कुल - {item.measurement}* x {item.qty}
+                  </span>
+                  <div className="mt-8 flex flex-col justify-between">
+                    <div className="flex items-end gap-1">
+                      <p className="flex items-center text-2xl font-bold text-green-700">
+                        <IndianRupee className="mr-1  h-5 w-5" />
+                        {item.total}
+                      </p>
+                      <p className="text-[10px] text-gray-400">
+                        ₹{item.total / item.qty} प्रति
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center w-full mt-4  gap-2">
+                    <div className="flex  gap-2 rounded-full border bg-gray-50 justify-around items-center">
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        disabled={item.qty <= 1 || updatingId === productId}
+                        onClick={() => updateQuantity(item, "decrease")}
+                        className="h-9 w-9 rounded-full"
+                      >
+                        <Minus className="h-4 w-4" />
+                      </Button>
 
-          <aside className='space-y-4'>
-            <div className='rounded-3xl border bg-white p-4 shadow-sm sm:p-6'>
-              <h2 className='mb-3 text-xl font-semibold sm:text-2xl'>Order Summary</h2>
-              <div className='space-y-3 text-sm text-gray-600'>
-                <div className='flex items-center justify-between'>
-                  <span>Subtotal</span>
-                  <span>₹{totalPrice}</span>
-                </div>
-                <div className='flex items-center justify-between'>
-                  <span>Items</span>
-                  <span>{items.length}</span>
-                </div>
-                <div className='flex items-center justify-between'>
-                  <span>Shipping</span>
-                  <span>Calculated at checkout</span>
-                </div>
+                      <motion.span
+                        key={item.qty}
+                        initial={{
+                          scale: 1.3,
+                        }}
+                        animate={{
+                          scale: 1,
+                        }}
+                        transition={{
+                          duration: 0.2,
+                        }}
+                        className="min-w-[20px] text-center text-lg font-bold"
+                      >
+                        {item.qty}
+                      </motion.span>
+
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        disabled={updatingId === productId}
+                        onClick={() => updateQuantity(item, "increase")}
+                        className="h-9 w-9 rounded-full"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+
+                    <Button
+                      size="icon"
+                      variant="destructive"
+                      disabled={updatingId === productId}
+                      onClick={() => removeItem(item)}
+                      className="h-7 w-7 rounded-full"
+                    >
+                      <Trash2 className="h-7 w-7" />
+                    </Button>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </motion.div>
+
+        <motion.aside
+          initial={{
+            opacity: 0,
+            x: 40,
+          }}
+          animate={{
+            opacity: 1,
+            x: 0,
+          }}
+          className="sticky top-24 h-fit space-y-4"
+        >
+          <div className="rounded-3xl border bg-white p-6 shadow-sm">
+            <h2 className="mb-5 text-2xl font-bold">कार्ट का कुल योग</h2>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between text-gray-600">
+                <span>उप-योग</span>
+
+                <span className="font-semibold">₹{totalPrice}</span>
+              </div>
+
+              <div className="flex items-center justify-between text-gray-600">
+                <span>डिलीवरी शुल्क</span>
+
+                <span className="font-semibold text-green-600">निःशुल्क</span>
+              </div>
+
+              <div className="flex items-center justify-between border-t pt-4">
+                <span className="text-lg font-bold">कुल भुगतान</span>
+
+                <span className=" flex items-end gap-2 text-3xl font-bold text-green-700">
+                  <span className="bg-green-600 flex items-center text-white text-xs px-2 py-1 rounded-full font-semibold">
+                    ₹{discount} off
+                  </span>
+                  ₹{totalPrice}
+                  <p className="text-[20px] py-1">/-</p>
+                </span>
               </div>
             </div>
 
-            <div className='space-y-3 rounded-3xl border bg-white p-4 shadow-sm sm:p-6'>
-              <Button onClick={handleCheckout} disabled={checkoutLoading} className='w-full py-3 text-base sm:py-4 sm:text-lg'>
-                {checkoutLoading ? 'Processing...' : 'Proceed to Checkout'}
-              </Button>
-              <Button variant='outline' onClick={() => navigate('/')} className='w-full py-3 sm:py-4'>Continue Shopping</Button>
+            <Button
+              onClick={handleCheckout}
+              disabled={checkoutLoading}
+              className="mt-6 h-14 w-full rounded-2xl bg-gradient-to-tr from-green-900 via-black to-green-700 text-[20px] text-white font-semibold"
+            >
+              {checkoutLoading ? (
+                <>
+                  <Loader2 className="animate-spin" />
+                  कृपया प्रतीक्षा करें!
+                </>
+              ) : (
+                <>
+                  <Check size={20} className="" />
+                  ऑर्डर पक्का करें
+                </>
+              )}
+            </Button>
+
+            <Button
+              variant="outline"
+              onClick={() => navigate("/")}
+              className="mt-3 h-14 w-full rounded-2xl"
+            >
+              <ChevronLeft />
+              और खरीदारी करें
+            </Button>
+
+            <div className="mt-6  rounded-2xl bg-green-50 p-4">
+              <h3 className="font-semibold flex gap-2 text-green-700">
+                <CircleAlert /> आज की डिलीवरी (ऑर्डर)
+              </h3>
+
+              <p className="mt-2 text-sm leading-6 text-gray-600">
+                आपका ऑर्डर आज की डिलीवरी सूची में शामिल किया जाएगा। समय सीमा
+                समाप्त होने से पहले आप मात्रा बदल सकते हैं या किसी भी उत्पाद को
+                हटा सकते हैं।
+              </p>
             </div>
-          </aside>
-        </div>
+          </div>
+        </motion.aside>
       </div>
 
-      {showModal ? (
-        <div className='fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-8'>
-          <div className='w-full max-w-xl rounded-[32px] border border-white/10 bg-white p-8 shadow-2xl backdrop-blur-lg transition-all duration-300 ease-out'>
-            <div className='flex flex-col items-center gap-4 text-center'>
-              <div className='flex h-20 w-20 items-center justify-center rounded-full bg-green-100 text-5xl animate-pulse'>🎉</div>
-              <h2 className='text-3xl font-bold'>Thank you for your order!</h2>
-              <p className='max-w-xl text-sm text-gray-600'>
-                {checkoutMessage} A confirmation email has been sent to your registered email address.
-              </p>
-              <div className='grid w-full gap-3 sm:grid-cols-2'>
-                <Button onClick={closeModal} className='w-full py-4'>Continue Shopping</Button>
-                <Button variant='outline' onClick={closeModal} className='w-full py-4'>Close</Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  )
-}
+      <AnimatePresence>
+        {modalOpen && (
+          <motion.div
+            initial={{
+              opacity: 0,
+            }}
+            animate={{
+              opacity: 1,
+            }}
+            exit={{
+              opacity: 0,
+            }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          >
+            <motion.div
+              initial={{
+                scale: 0.85,
+                opacity: 0,
+              }}
+              animate={{
+                scale: 1,
+                opacity: 1,
+              }}
+              exit={{
+                scale: 0.9,
+                opacity: 0,
+              }}
+              transition={{
+                duration: 0.25,
+              }}
+              className="w-full max-w-lg rounded-[32px] bg-white p-8 shadow-2xl"
+            >
+              <div className="flex flex-col items-center text-center">
+                <motion.div
+                  animate={{
+                    scale: [1, 1.1, 1],
+                  }}
+                  transition={{
+                    repeat: Infinity,
+                    duration: 1.6,
+                  }}
+                  className="mb-5 flex h-24 w-24 items-center justify-center rounded-full bg-green-100"
+                >
+                  <span className="text-5xl">🎉</span>
+                </motion.div>
 
-export default Cart
+                <h2 className="text-3xl font-bold">ऑर्डर सफल रहा!</h2>
+
+                <p className="mt-3 text-gray-600 leading-7">
+                  {checkoutMessage}
+                </p>
+
+                <div className="mt-8 grid w-full grid-cols-2 gap-3">
+                  <Button onClick={closeModal} className="h-12 rounded-2xl">
+                    खरीदारी जारी रखें
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setModalOpen(false);
+                    }}
+                    className="h-12 rounded-2xl"
+                  >
+                    बंद करें
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+export default Cart;

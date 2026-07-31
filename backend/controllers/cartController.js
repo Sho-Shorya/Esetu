@@ -27,13 +27,37 @@ export const getCart = async (req, res) => {
 export const addToCart = async (req, res) => {
   try {
     const userId = req.userId;
-    const { productId } = req.body;
+    const qty = Number(req.body.qty) || 1;
+    const { productId, company, measurement } = req.body;
+    // Check product
+    const product =
+      await Product.findById(productId).populate("variants.company");
 
-    const product = await Product.findById(productId);
     if (!product) {
       return res.status(404).json({
         success: false,
         message: "Product not found",
+      });
+    }
+
+    // Find selected variant
+    const selectedVariant = product.variants.find(
+      (variant) =>
+        variant.company._id.toString() === company &&
+        variant.measurement === measurement,
+    );
+
+    if (!selectedVariant) {
+      return res.status(404).json({
+        success: false,
+        message: "Selected variant not found",
+      });
+    }
+
+    if (!selectedVariant.available) {
+      return res.status(400).json({
+        success: false,
+        message: "This item is currently unavailable",
       });
     }
 
@@ -42,54 +66,65 @@ export const addToCart = async (req, res) => {
     if (!cart) {
       cart = new Cart({
         userId,
-        items: [{ productId, quantity: 1, price: product.productPrice }],
-        totalPrice: product.productPrice,
+        items: [],
       });
-    } else {
-      const itemsIndex = cart.items.findIndex(
-        (item) => item.productId.toString() === productId,
-      );
-      if (itemsIndex > -1) {
-        cart.items[itemsIndex].quantity += 1;
-      } else {
-        cart.items.push({
-          productId,
-          quantity: 1,
-          price: product.productPrice,
-        });
-      }
-
-      cart.totalPrice = cart.items.reduce(
-        (acc, item) => acc + (item.price || 0) * (item.quantity || 0),
-        0,
-      );
     }
+
+    const existingIndex = cart.items.findIndex(
+      (item) =>
+        item.productId.toString() === productId &&
+        item.company.toString() === company &&
+        item.measurement === measurement,
+    );
+
+    if (existingIndex > -1) {
+      cart.items[existingIndex].qty += qty;
+
+      cart.items[existingIndex].total =
+        cart.items[existingIndex].qty * selectedVariant.price;
+    } else {
+      const total = selectedVariant.price * qty;
+
+      cart.items.push({
+        productId,
+        company,
+        measurement,
+        qty,
+        total,
+      });
+    }
+    const total = selectedVariant.price * qty;
+
+    cart.totalPrice = cart.items.reduce((sum, item) => sum + item.total, 0);
 
     await cart.save();
 
-    //populate product details before sending responce
-    const populatedCart = await Cart.findById(cart._id).populate(
-      "items.productId",
-    );
+    const populatedCart = await Cart.findById(cart._id)
+      .populate("items.productId")
+      .populate("items.company");
+
     return res.status(200).json({
       success: true,
-      message: "Product added to cart successfully",
+      message: "कार्ट में जोड़ा गया!",
       cart: populatedCart,
     });
   } catch (error) {
+    console.log(error);
+
     return res.status(500).json({
       success: false,
       message: error.message,
     });
   }
 };
-
 export const UpdateQuantity = async (req, res) => {
   try {
     const userId = req.userId;
-    const { productId, type } = req.body;
+
+    const { productId, company, measurement, type } = req.body;
 
     let cart = await Cart.findOne({ userId });
+
     if (!cart) {
       return res.status(404).json({
         success: false,
@@ -98,22 +133,47 @@ export const UpdateQuantity = async (req, res) => {
     }
 
     const item = cart.items.find(
-      (item) => item.productId.toString() === productId,
+      (item) =>
+        item.productId.toString() === productId &&
+        item.company.toString() === company &&
+        item.measurement === measurement,
     );
-    if (!item)
-      return res
-        .status(404)
-        .json({ success: false, message: "Item not found" });
-    if (type === "increase") item.quantity += 1;
-    if (type === "decrease" && item.quantity > 1) item.quantity -= 1;
 
-    cart.totalPrice = cart.items.reduce(
-      (acc, item) => acc + (item.price || 0) * (item.quantity || 0),
-      0,
+    if (!item) {
+      return res.status(404).json({
+        success: false,
+        message: "Item not found",
+      });
+    }
+
+    if (type === "increase") {
+      item.qty += 1;
+    }
+
+    if (type === "decrease" && item.qty > 1) {
+      item.qty -= 1;
+    }
+
+    const product = await Product.findById(productId);
+
+    const variant = product.variants.find(
+      (v) => v.company.toString() === company && v.measurement === measurement,
     );
+
+    if (!variant) {
+      return res.status(404).json({
+        success: false,
+        message: "Variant not found",
+      });
+    }
+
+    item.total = variant.price * item.qty;
+    cart.totalPrice = cart.items.reduce((sum, item) => sum + item.total, 0);
 
     await cart.save();
+
     cart = await cart.populate("items.productId");
+
     return res.status(200).json({
       success: true,
       cart,
@@ -125,7 +185,6 @@ export const UpdateQuantity = async (req, res) => {
     });
   }
 };
-
 export const checkoutCart = async (req, res) => {
   try {
     const userId = req.userId;
@@ -202,30 +261,36 @@ export const getUserOrders = async (req, res) => {
 export const removeFromCart = async (req, res) => {
   try {
     const userId = req.userId;
-    const { productId } = req.body;
+
+    const { productId, company, measurement } = req.body;
 
     let cart = await Cart.findOne({ userId });
+
     if (!cart) {
-      return res.status(400).json({
+      return res.status(404).json({
         success: false,
         message: "Cart not found",
       });
     }
+
     cart.items = cart.items.filter(
-      (item) => item.productId.toString() != productId,
-    );
-    cart.totalPrice = cart.items.reduce(
-      (acc, item) => acc + (item.price || 0) * (item.quantity || 0),
-      0,
+      (item) =>
+        !(
+          item.productId.toString() === productId &&
+          item.company.toString() === company &&
+          item.measurement === measurement
+        ),
     );
 
+    cart.totalPrice = cart.items.reduce((sum, item) => sum + item.total, 0);
+
     await cart.save();
-    const populatedCart = await Cart.findById(cart._id).populate(
-      "items.productId",
-    );
+
+    cart = await Cart.findById(cart._id).populate("items.productId");
+
     return res.status(200).json({
       success: true,
-      cart: populatedCart,
+      cart,
     });
   } catch (error) {
     return res.status(500).json({
