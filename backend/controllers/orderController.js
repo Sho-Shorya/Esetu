@@ -47,6 +47,29 @@ const isWithinOrderingWindow = async () => {
   return new Date() <= cutoffTime;
 };
 
+export const syncTodayOrderFlags = async () => {
+  try {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const result = await Order.updateMany(
+      { createdAt: { $lt: startOfToday }, isTodayOrder: true },
+      { $set: { isTodayOrder: false } },
+    );
+
+    if (result.modifiedCount > 0) {
+      console.log(
+        `[order-sync] Moved ${result.modifiedCount} orders to history`,
+      );
+    }
+
+    return result;
+  } catch (error) {
+    console.error("[order-sync] Failed to update today order flags:", error);
+    throw error;
+  }
+};
+
 /* ===========================================================
    Create / Merge Today's Order
 =========================================================== */
@@ -232,14 +255,6 @@ export const addOrder = async (req, res) => {
     cart.totalPrice = 0;
 
     await cart.save();
-
-    if (user?.phoneNumber) {
-      await sendMobileNotification({
-        phone: user.phoneNumber,
-        title: "ऑर्डर सफलतापूर्वक रखा गया",
-        body: `आपका ऑर्डर #${order._id?.slice(-6)} अब पेंडिंग है।`,
-      });
-    }
 
     return res.status(200).json({
       success: true,

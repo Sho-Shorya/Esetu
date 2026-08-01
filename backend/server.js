@@ -13,13 +13,20 @@ import catRouter from "./routes/categoryRoute.js";
 import comRouter from "./routes/companyRoutes.js";
 import orderRouter from "./routes/orderRoutes.js";
 import settingsRouter from "./routes/settingsRoute.js";
+import { syncTodayOrderFlags } from "./controllers/OrderController.js";
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+process.env.TZ = process.env.TZ || "Asia/Kolkata";
+
 //middleware
 app.use(express.json());
 app.use(cors());
+app.use((req, res, next) => {
+  syncTodayOrderFlags().catch(() => {});
+  next();
+});
 
 app.get("/", (req, res) => {
   res.status(200).json({
@@ -38,8 +45,29 @@ app.use("/api/v1/order", orderRouter);
 app.use("/api/v1/settings", settingsRouter);
 app.use("/api/v1/offer", offerRoute);
 
-app.listen(PORT, () => {
-  connectDb();
+const scheduleMidnightSync = () => {
+  const now = new Date();
+  const nextMidnight = new Date(now);
+  nextMidnight.setHours(24, 0, 0, 0);
+
+  const delay = nextMidnight.getTime() - now.getTime();
+
+  setTimeout(async () => {
+    try {
+      await syncTodayOrderFlags();
+    } catch (error) {
+      console.error("[order-sync] Midnight sync failed:", error);
+    }
+
+    scheduleMidnightSync();
+  }, delay);
+};
+
+app.listen(PORT, async () => {
+  await connectDb();
+  await syncTodayOrderFlags();
+  scheduleMidnightSync();
+
   console.log("Server started successfully");
   console.log(`Server running on port ${PORT}`);
 });
