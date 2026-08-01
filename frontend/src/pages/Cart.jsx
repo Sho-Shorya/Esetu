@@ -207,7 +207,7 @@ const Cart = () => {
       );
 
       if (res.data.success) {
-        toast.success("🎉 ऑर्डर सफलतापूर्वक दर्ज हो गया");
+        toast.success("🎉 ऑर्डर सफलतापूर्वक दर्ज हो गया", { duration: 1000 });
         dispatch(clearCart());
         navigate("/my-orders");
       } else {

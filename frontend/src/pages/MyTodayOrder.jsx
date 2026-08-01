@@ -11,6 +11,7 @@ import {
   removeOrder,
   updateOrderItems,
 } from "../redux/orderSlice";
+import { Check, Dot } from "lucide-react";
 
 const getCountdown = (cutoffTime, now) => {
   const diff = Math.max(0, new Date(cutoffTime).getTime() - now.getTime());
@@ -92,7 +93,7 @@ const MyTodayOrder = () => {
           dispatch(updateOrderItems(res.data.order));
         }
 
-        toast.success(res.data.message);
+        toast.success("आइटम हटा दिया", { duration: 1000 });
       }
     } catch (error) {
       toast.error(error.response?.data?.message || "Item remove nahi hua.");
@@ -124,17 +125,17 @@ const MyTodayOrder = () => {
         <div className="bg-white rounded-3xl shadow-md border border-gray-200 p-5 mb-5">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-800">आज के ऑर्डर</h1>
+              <h1 className="text-2xl font-bold text-gray-800">आज का ऑर्डर</h1>
 
               <p className="text-sm text-gray-500 mt-1">
-                आपके सभी Pending और Approved ऑर्डर
+                आपके Pending और Approved ऑर्डर
               </p>
             </div>
 
-            <div className="bg-green-100 px-4 py-2 rounded-2xl">
+            <div className="bg-green-100 relative px-4 py-2 rounded-2xl">
               <p className="text-xs text-gray-500">Total Orders</p>
 
-              <h2 className="text-2xl font-bold text-green-700">
+              <h2 className="text-2xl   flex items-center justify-center font-bold text-green-700">
                 {totalOrders}
               </h2>
             </div>
@@ -162,25 +163,33 @@ const MyTodayOrder = () => {
 
                 <div className="bg-gray-50 px-5 py-4 border-b flex items-center justify-between">
                   <div>
-                    <h2 className="font-bold text-lg">
+                    <p className="font-bold text-lg">
+                      {new Date(order.createdAt).toLocaleString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                        hour12: true,
+                      })}
+                    </p>
+                    <h2 className=" text-xs text-gray-500 mt-1">
                       Order #{order._id.slice(-6)}
                     </h2>
-
-                    <p className="text-xs text-gray-500 mt-1">
-                      {new Date(order.createdAt).toLocaleString()}
-                    </p>
                   </div>
 
-                  <div>
+                  <div className="relative">
                     {order.status === "Pending" && (
-                      <span className="bg-yellow-100 text-yellow-700 text-sm font-semibold px-4 py-2 rounded-full">
+                      <span className="bg-yellow-100 text-orange-700 text-sm font-semibold px-4 py-2 rounded-1xl">
                         Pending
+                        <Dot className="-top-4 animate-ping -right-3 absolute bg-red h-10 w-10" />
                       </span>
                     )}
 
                     {order.status === "Approved" && (
                       <span className="bg-green-100 text-green-700 text-sm font-semibold px-4 py-2 rounded-full">
                         Approved
+                        <Dot className="top-6 -left-6 absolute h-7 w-7" />
                       </span>
                     )}
 
@@ -215,14 +224,14 @@ const MyTodayOrder = () => {
                 <div className="px-5 py-3 border-b bg-orange-50 flex items-center gap-2">
                   <FaClock className="text-orange-600" />
 
-                  <p className="text-sm text-orange-700 font-medium">
-                    Order Edit Till :
-                    <span className="ml-2 font-bold">
+                  <p className="text-sm text-orange-700  font-medium">
+                    <span className="ml-2 mr-[5px] font-bold">
                       {new Date(order.cutoffTime).toLocaleTimeString([], {
                         hour: "2-digit",
                         minute: "2-digit",
                       })}
                     </span>
+                    तक एडिट करें!
                   </p>
                 </div>
 
@@ -231,26 +240,15 @@ const MyTodayOrder = () => {
                 <div className="divide-y">
                   {order.items.map((item) => (
                     <div key={item._id} className="p-5 flex gap-4">
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="w-24 h-24 rounded-2xl object-cover border"
-                      />
-
                       <div className="flex-1">
                         <div className="flex justify-between">
                           <div>
-                            <h2 className="font-bold text-lg text-gray-800">
-                              {item.name}
-                            </h2>
-
-                            <p className="text-sm text-gray-500">
-                              {item.hinglishName}
-                            </p>
-
                             <p className="text-sm text-green-700 mt-1">
                               {item.companyName}
                             </p>
+                            <h2 className="font-bold text-lg text-gray-800">
+                              {item.name}
+                            </h2>
                           </div>
 
                           <div className="text-right">
@@ -292,7 +290,7 @@ const MyTodayOrder = () => {
                     </div>
                   ))}
 
-                  <div className="border-b bg-yellow-50 px-5 py-3 text-sm text-yellow-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  {/* <div className="border-b bg-yellow-50 px-5 py-3 text-sm text-yellow-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div className="font-semibold">Order Edit Cutoff</div>
                     <div>
                       {new Date(order.cutoffTime) <= now ? (
@@ -306,11 +304,14 @@ const MyTodayOrder = () => {
                         </span>
                       )}
                     </div>
-                  </div>
+                  </div> */}
 
                   {/* Order Footer */}
 
                   <div className="border-t bg-gray-50 px-5 py-4">
+                    <p className="w-full flex items-center justify-center text-red-600 font-bold text-2xl">
+                      Total
+                    </p>
                     <div className="flex justify-between items-center mb-3">
                       <span className="text-gray-600 font-medium">
                         Payment Method
@@ -319,16 +320,6 @@ const MyTodayOrder = () => {
                       <span className="font-semibold text-gray-800">
                         {order.paymentMethod}
                       </span>
-                    </div>
-
-                    <div className="flex justify-between items-start mb-3">
-                      <span className="text-gray-600 font-medium">
-                        Delivery Address
-                      </span>
-
-                      <p className="text-right max-w-[70%] text-gray-700">
-                        {order.shippingAddress || "No Address"}
-                      </p>
                     </div>
 
                     <div className="border-t pt-4 flex justify-between items-center">
@@ -356,8 +347,8 @@ const MyTodayOrder = () => {
                         </h3>
 
                         <p className="text-sm text-yellow-700 mt-1">
-                          आपका ऑर्डर अभी Pending है। Admin के approve करने तक आप
-                          items remove कर सकते हैं।
+                          आपका ऑर्डर अभी Pending है। Admin के approve करने तक या
+                          तय समय तक आप items remove कर सकते हैं।
                         </p>
                       </div>
                     )}
