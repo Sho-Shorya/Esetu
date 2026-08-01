@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { setCartData } from "@/redux/ProductSlice";
+import { setCartData, clearCart } from "@/redux/ProductSlice";
 import { API_BASE_URL } from "@/lib/constants";
 
 const containerVariants = {
@@ -64,7 +64,7 @@ const Cart = () => {
   const totalPrice = cartData?.totalPrice || 0;
 
   useEffect(() => {
-    const dis = (cartData.totalPrice * 13) / 100;
+    const dis = ((cartData?.totalPrice || 0) * 13) / 100;
     setDiscount(dis.toFixed(1));
   }, [cartData]);
 
@@ -127,7 +127,7 @@ const Cart = () => {
         `${API_BASE_URL}/api/v1/cart/update-cart`,
         {
           productId: item.productId._id,
-          company: item.company,
+          company: item.company?._id || item.company,
           measurement: item.measurement,
           type,
         },
@@ -188,41 +188,36 @@ const Cart = () => {
   };
 
   const handleCheckout = async () => {
-    setCheckoutLoading(true);
     if (!token) {
       toast.error("कृपया पहले लॉगिन करें");
       return;
     }
-    toast.success("🎉 हो गया!,आज का ऑर्डर देखें!", { duration: 2000 });
-    navigate("/");
-    setCheckoutLoading(false);
 
-    // try {
-    //   const res = await axios.post(
-    //     `${API_BASE_URL}/api/v1/cart/checkout`,
-    //     {},
-    //     {
-    //       headers: {
-    //         Authorization: `Bearer ${token}`,
-    //       },
-    //     },
-    //   );
+    try {
+      setCheckoutLoading(true);
 
-    //   if (res.data.success) {
-    //     syncCart(res.data.cart);
-    //     setCheckoutMessage(
-    //       res.data.message || "आपका ऑर्डर सफलतापूर्वक दर्ज हो गया।",
-    //     );
-    //     setModalOpen(true);
-    //     toast.success("ऑर्डर सफलतापूर्वक दर्ज हो गया");
-    //   } else {
-    //     toast.error(res.data.message);
-    //   }
-    // } catch (error) {
-    //   toast.error(error.response?.data?.message || "ऑर्डर पूरा नहीं हो सका");
-    // } finally {
-    //   setCheckoutLoading(false);
-    // }
+      const res = await axios.post(
+        `${API_BASE_URL}/api/v1/order/add-order`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
+      );
+
+      if (res.data.success) {
+        toast.success("🎉 ऑर्डर सफलतापूर्वक दर्ज हो गया");
+        dispatch(clearCart());
+        navigate("/my-orders");
+      } else {
+        toast.error(res.data.message);
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || "ऑर्डर पूरा नहीं हो सका");
+    } finally {
+      setCheckoutLoading(false);
+    }
   };
 
   const closeModal = () => {

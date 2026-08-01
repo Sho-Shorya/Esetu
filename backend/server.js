@@ -11,6 +11,8 @@ import cors from "cors";
 import dns from "dns";
 import catRouter from "./routes/categoryRoute.js";
 import comRouter from "./routes/companyRoutes.js";
+import orderRouter from "./routes/orderRoutes.js";
+import settingsRouter from "./routes/settingsRoute.js";
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -32,6 +34,8 @@ app.use("/api/v1/cart", cartRoute);
 app.use("/api/v1/debug", debugRoute);
 app.use("/api/v1/category", catRouter);
 app.use("/api/v1/company", comRouter);
+app.use("/api/v1/order", orderRouter);
+app.use("/api/v1/settings", settingsRouter);
 app.use("/api/v1/offer", offerRoute);
 
 app.listen(PORT, () => {

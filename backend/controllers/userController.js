@@ -172,7 +172,7 @@ export const changePassword = async (req, res) => {
 
 export const allUser = async (_, res) => {
   try {
-    const users = await User.find();
+    const users = await User.find({ role: "user" });
     res.status(200).json({
       success: true,
       users,

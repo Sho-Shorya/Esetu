@@ -85,7 +85,7 @@ const Footer = () => {
                 🛍️ कार्ट
               </Link>
 
-              <Link to="/orders" className="hover:text-red-500">
+              <Link to="/order-history" className="hover:text-red-500">
                 📋 मेरे ऑर्डर
               </Link>
             </div>

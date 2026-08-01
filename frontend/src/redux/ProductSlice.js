@@ -18,7 +18,7 @@ const productSlice = createSlice({
       state.cartData = action.payload;
     },
     clearCart: (state) => {
-      state.cartData = null;
+      state.cartData = { items: [], totalPrice: 0 };
     },
   },
 });

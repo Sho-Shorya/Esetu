@@ -8,7 +8,9 @@ export const getCart = async (req, res) => {
   try {
     const userId = req.userId;
 
-    const cart = await Cart.findOne({ userId }).populate("items.productId");
+    const cart = await Cart.findOne({ userId })
+      .populate("items.productId")
+      .populate("items.company");
     if (!cart) {
       return res.status(200).json({ success: true, cart: { items: [] } });
     }
@@ -79,7 +81,7 @@ export const addToCart = async (req, res) => {
 
     if (existingIndex > -1) {
       cart.items[existingIndex].qty += qty;
-
+      cart.items[existingIndex].price = selectedVariant.price;
       cart.items[existingIndex].total =
         cart.items[existingIndex].qty * selectedVariant.price;
     } else {
@@ -90,6 +92,7 @@ export const addToCart = async (req, res) => {
         company,
         measurement,
         qty,
+        price: selectedVariant.price,
         total,
       });
     }
@@ -167,6 +170,7 @@ export const UpdateQuantity = async (req, res) => {
       });
     }
 
+    item.price = variant.price;
     item.total = variant.price * item.qty;
     cart.totalPrice = cart.items.reduce((sum, item) => sum + item.total, 0);
 

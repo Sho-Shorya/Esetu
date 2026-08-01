@@ -15,11 +15,16 @@ import AdminSignup from "./pages/admin/AdminSignup";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminProductPage from "./pages/admin/AdminProductPage";
-import TodayOrders from "./components/TodayOrders";
+import AdminTodayOrders from "./pages/admin/AdminTodayOrders";
+import AdminUsers from "./pages/admin/AdminUsers";
+import AdminUserProfile from "./pages/admin/AdminUserProfile";
 import AdminMoneyControl from "./pages/admin/AdminMoneyControl";
 import AdminProductView from "./components/AdminProductView";
 import AddProduct from "./components/AddProduct";
 import Cart from "./pages/Cart";
+import ProductsList from "./pages/ProductsList";
+import MyTodayOrder from "./pages/MyTodayOrder";
+import OrderHistory from "./pages/Orders";
 function App() {
   const { userData, supplierData } = useSelector((state) => state.user);
   const dispatch = useDispatch();
@@ -99,13 +104,29 @@ function App() {
         }
       />
       <Route
+        path="/products"
+        element={
+          userData ? (
+            <>
+              <Nav />
+              <Navbar />
+              <div className="mt-16">
+                <ProductsList />
+              </div>
+            </>
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+      <Route
         path="/admin-dashboard"
         element={
           supplierData ? (
             <>
               <Nav />
-              <AdminDashboard />
               <Navbar />
+              <AdminDashboard />
               <Footer />
             </>
           ) : (
@@ -119,8 +140,8 @@ function App() {
           supplierData ? (
             <>
               <Nav />
-              <AdminProductPage />
               <Navbar />
+              <AdminProductPage />
               <Footer />
             </>
           ) : (
@@ -134,8 +155,10 @@ function App() {
           supplierData ? (
             <>
               <Nav />
-              <AdminProductView tailwind="mt-18" />
               <Navbar />
+              <div className="pb-20">
+                <AdminProductView tailwind="mt-18" />
+              </div>
               <Footer />
             </>
           ) : (
@@ -163,7 +186,35 @@ function App() {
           supplierData ? (
             <>
               <Nav />
-              <TodayOrders />
+              <AdminTodayOrders />
+              <Navbar />
+            </>
+          ) : (
+            <Navigate to={"/admin-login"} />
+          )
+        }
+      />
+      <Route
+        path="/admin-users"
+        element={
+          supplierData ? (
+            <>
+              <Nav />
+              <AdminUsers />
+              <Navbar />
+            </>
+          ) : (
+            <Navigate to={"/admin-login"} />
+          )
+        }
+      />
+      <Route
+        path="/admin/user/:userId"
+        element={
+          supplierData ? (
+            <>
+              <Nav />
+              <AdminUserProfile />
               <Navbar />
             </>
           ) : (
@@ -220,6 +271,48 @@ function App() {
             </>
           ) : (
             <Navigate to={"/login"} />
+          )
+        }
+      />
+      <Route
+        path="/my-orders"
+        element={
+          userData ? (
+            <>
+              <Nav />
+              <Navbar />
+              <MyTodayOrder />
+            </>
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+      <Route
+        path="/order-history"
+        element={
+          userData ? (
+            <>
+              <Nav />
+              <Navbar />
+              <OrderHistory />
+            </>
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        }
+      />
+      <Route
+        path="/orders"
+        element={
+          userData ? (
+            <>
+              <Nav />
+              <Navbar />
+              <OrderHistory />
+            </>
+          ) : (
+            <Navigate to="/login" replace />
           )
         }
       />

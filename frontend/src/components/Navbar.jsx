@@ -2,30 +2,40 @@ import {
   ShoppingCart,
   Loader2,
   Search,
-  User,
   Menu,
   X,
   ChevronDown,
   LoaderCircle,
+  BadgePercent,
+  UserRoundPen,
+  ReceiptText,
+  ListChecks,
+  MoveUpRight,
+  TrendingUp,
+  LayoutDashboard,
 } from "lucide-react";
 import React, { useState, useRef, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "./ui/button";
 import { useDispatch, useSelector } from "react-redux";
-import { setUserData } from "../redux/userSlice";
+import {
+  setUserData,
+  clearUserData,
+  clearSupplierData,
+} from "../redux/userSlice";
 import axios from "axios";
 import { toast } from "sonner";
 import { API_BASE_URL } from "@/lib/constants";
 import { BiPowerOff } from "react-icons/bi";
+import { CgProductHunt } from "react-icons/cg";
 
 const Navbar = () => {
-  const { userData, supplierData } = useSelector((store) => store.user);
-  const { productData } = useSelector((store) => store.product);
-  const { cart } = useSelector(
-    (store) => store.product || { cart: { items: [] } },
-  );
   const dispatch = useDispatch();
   const navigate = useNavigate();
+
+  const { userData, supplierData } = useSelector((state) => state.user || {});
+
+  const { cartData } = useSelector((state) => state.product || {});
 
   const [slideBar, setSlideBar] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -33,15 +43,26 @@ const Navbar = () => {
   const [search, setSearch] = useState("");
   const [badgePulse, setBadgePulse] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [adminConfirmLogout, setAdminConfirmLogout] = useState(false);
+  const [userConfirmLogout, setUserConfirmLogout] = useState(false);
+
   const userMenuRef = useRef(null);
 
-  const { cartData } = useSelector((state) => state.product);
+  // Update cart badge
   useEffect(() => {
-    setCartCount(cartData.items.length);
-  });
-  // close user menu on outside click or Escape
+    const count = cartData?.items?.length || 0;
+    setCartCount(count);
+
+    if (count > 0) {
+      setBadgePulse(true);
+      const timer = setTimeout(() => setBadgePulse(false), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [cartData]);
+
+  // Close user menu
   useEffect(() => {
-    const onDocClick = (e) => {
+    const handleClickOutside = (e) => {
       if (
         showUserMenu &&
         userMenuRef.current &&
@@ -50,26 +71,33 @@ const Navbar = () => {
         setShowUserMenu(false);
       }
     };
-    const onKey = (e) => {
-      if (e.key === "Escape") setShowUserMenu(false);
+
+    const handleEscape = (e) => {
+      if (e.key === "Escape") {
+        setShowUserMenu(false);
+      }
     };
-    document.addEventListener("click", onDocClick);
-    document.addEventListener("keydown", onKey);
+
+    document.addEventListener("click", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+
     return () => {
-      document.removeEventListener("click", onDocClick);
-      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("click", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
     };
   }, [showUserMenu]);
 
   const logoutHandler = async () => {
     setLoading(true);
+
     const token = localStorage.getItem("token");
+
     if (!token) {
-      // no token — just clear local state
-      dispatch(setUserData(null));
+      dispatch(clearUserData());
+      dispatch(clearSupplierData());
       localStorage.removeItem("token");
+      navigate(supplierData ? "/admin-login" : "/login");
       setLoading(false);
-      navigate("/login");
       return;
     }
 
@@ -77,30 +105,37 @@ const Navbar = () => {
       const res = await axios.post(
         `${API_BASE_URL}/api/v1/user/logout`,
         {},
-        { headers: { Authorization: `Bearer ${token}` } },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        },
       );
-      if (res.data && res.data.success) {
-        toast.success(res.data.message || "Logged out");
-        dispatch(setUserData(null));
+
+      if (res.data.success) {
+        toast.success(res.data.message || "Logged out successfully");
+        dispatch(clearUserData());
+        dispatch(clearSupplierData());
         localStorage.removeItem("token");
-        navigate("/login");
+        navigate(supplierData ? "/admin-login" : "/login");
       } else {
-        // server didn't accept logout — keep client state but notify
-        toast.error(res.data?.message || "Logout failed on server");
+        toast.error(res.data.message || "Logout failed");
       }
     } catch (err) {
       const status = err?.response?.status;
-      const serverMessage =
-        err?.response?.data?.message || err?.response?.data || err?.message;
-      console.warn("Logout request failed", err, err?.response?.data);
+      const message =
+        err?.response?.data?.message || err.message || "Logout failed";
+
+      console.error("Logout Error:", err);
+
       if (status === 401 || status === 403) {
-        dispatch(setUserData(null));
+        dispatch(clearUserData());
+        dispatch(clearSupplierData());
         localStorage.removeItem("token");
-        navigate("/login");
-        toast.error(serverMessage || "Logged out!");
-      } else {
-        toast.error(serverMessage || "Logout failed — please try again");
+        navigate(supplierData ? "/admin-login" : "/login");
       }
+
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -108,191 +143,232 @@ const Navbar = () => {
 
   const onSearchSubmit = (e) => {
     e.preventDefault();
-    if (!search) return navigate("/products");
-    navigate(`/products?search=${encodeURIComponent(search)}`);
+
+    if (!search.trim()) {
+      navigate("/products");
+      return;
+    }
+
+    navigate(`/products?search=${encodeURIComponent(search.trim())}`);
   };
 
-  const displayName = (() => {
-    if (!userData || !supplierData) return "";
-    const fn = userData.firstName || supplierData.firstName || "";
-    const ln = userData.lastName || supplierData.lastName || "";
-    const name = `${fn} ${ln}`.trim();
-    if (name) return name;
-    if (userData.phoneNumber || supplierData.phoneNumber)
-      return userData.phoneNumber[0] || supplierData.phoneNumber[0];
-    return "userData" || "supplierData";
-  })();
-
-  const avatarInitial = (() => {
-    const ch = userData?.firstName?.[0] || supplierData?.firstName?.[0] || "U";
-    return String(ch).toUpperCase();
-  })();
+  const avatarInitial = (
+    userData?.firstName?.[0] ||
+    supplierData?.firstName?.[0] ||
+    "U"
+  ).toUpperCase();
 
   const avatarUrl = userData?.profilePic || supplierData?.profilePic || "";
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-40 bg-gray-100 backdrop-blur-sm border-b border-gray-100">
+    <header className=" fixed top-0 left-0 right-0 z-40 border-b bg-gray-100 backdrop-blur-sm">
       <div className="max-w-6xl mx-auto px-4 lg:px-6">
-        <div className="flex items-center justify-between h-16">
-          {/* Left: logo + mobile hamburger */}
+        <div className="flex h-16 items-center justify-between">
+          {/* Left */}
           <div className="flex items-center gap-4">
             <button
-              className="lg:hidden p-2 text-gray-700 hover:text-red-400"
-              aria-label="Open menu"
+              className="lg:hidden p-2 text-gray-700 hover:text-red-500"
               onClick={() => setSlideBar(true)}
             >
               <Menu className="h-6 w-6" />
             </button>
-            <div className="flex justify-between items-center">
-              <Link
-                to={(userData && "/") || (supplierData && "/admin-dashboard")}
-                onClick={() => setSlideBar(false)}
-                className="flex items-center gap-3"
-              >
-                <img src="/logo2.png" className="h-10" alt="logo" />
-                <span className="font-bold text-[24px]">E-Setu</span>
-              </Link>
-            </div>
+
+            <Link
+              to={supplierData ? "/admin-dashboard" : "/"}
+              className="flex items-center gap-3"
+            >
+              <img src="/logo2.png" alt="logo" className="h-10" />
+
+              <span className="text-2xl font-bold">E-Setu</span>
+            </Link>
           </div>
 
-          {/* Center: nav links + search (hidden on small) */}
-          <div className="hidden lg:flex lg:items-center lg:gap-8">
-            <nav className="flex items-center gap-6 text-sm text-gray-700">
+          {/* Desktop Navigation */}
+          <div className="hidden lg:flex items-center gap-8">
+            <nav className="flex items-center gap-6 text-sm font-medium">
               <Link to="/product" className="hover:text-emerald-600">
                 Products
               </Link>
+
               <Link to="/categories" className="hover:text-emerald-600">
                 Categories
               </Link>
+
               <Link to="/offers" className="hover:text-emerald-600">
                 Offers
               </Link>
             </nav>
+
             <form
               onSubmit={onSearchSubmit}
-              className="flex items-center gap-2 bg-gray-50 px-3 py-1 rounded shadow-sm"
+              className="flex items-center rounded-lg bg-white px-3 py-2 shadow-sm"
             >
-              <Search className="text-gray-400" />
+              <Search className="h-5 w-5 text-gray-400" />
+
               <input
-                aria-label="Search products"
+                type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search products, brands..."
-                className="w-64 bg-transparent px-2 py-2 text-sm placeholder:text-gray-400 focus:outline-none"
+                placeholder="Search products..."
+                className="w-64 bg-transparent px-2 outline-none"
               />
-              <Button type="submit" className="px-3 py-1 text-sm">
+              <Button type="submit" className="ml-2 px-3">
                 Search
               </Button>
             </form>
           </div>
 
-          {/* Right: cart + auth */}
+          {/* Right Section */}
           <div className="flex items-center gap-4">
+            {/* Cart */}
             {userData && (
-              <Link
-                to="/cart"
-                className="relative p-2"
-                aria-label={`Cart with ${cartCount} items`}
-                title="View cart"
-              >
+              <Link to="/cart" className="relative p-2">
                 <ShoppingCart className="text-2xl text-gray-700" />
+
                 <span
-                  className={`absolute -top-2 -right-2 bg-red-600 text-white text-xs font-semibold rounded-full w-5 h-5 flex items-center justify-center transform ${badgePulse ? "scale-110" : "scale-100"} transition-transform`}
+                  className={`absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs font-semibold text-white transition-transform ${
+                    badgePulse ? "scale-110" : "scale-100"
+                  }`}
                 >
                   {cartCount}
                 </span>
               </Link>
             )}
 
-            {userData ? (
+            {/* User / Supplier Menu */}
+            {userData || supplierData ? (
               <div className="relative" ref={userMenuRef}>
-                <button
-                  id="user-menu-button"
-                  onClick={() => setShowUserMenu((s) => !s)}
-                  className="flex items-center gap-2 px-2 py-1 rounded-full bg-white hover:shadow-sm focus:shadow-outline focus:outline-none"
-                  aria-haspopup="true"
-                  aria-expanded={showUserMenu}
-                  aria-controls="user-menu"
-                >
-                  <div className="relative flex items-center">
+                {supplierData && (
+                  <button
+                    onClick={() => setShowUserMenu((prev) => !prev)}
+                    className="flex items-center gap-2 rounded-full bg-white px-2 py-1 shadow-sm"
+                  >
                     {avatarUrl ? (
                       <img
                         src={avatarUrl}
-                        alt="avatar"
-                        className="h-9 w-9 rounded-full object-cover ring-2 ring-red-50 shadow-sm"
+                        alt="Profile"
+                        className="h-9 w-9 rounded-full object-cover"
                       />
                     ) : (
-                      <div className="h-9 w-9 rounded-full bg-red-100 text-emerald-700 flex items-center justify-center font-medium ring-2 ring-red-50 shadow-sm">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full font-semibold text-emerald-700 bg-emerald-100">
                         {avatarInitial}
                       </div>
                     )}
-                  </div>
-                  <ChevronDown className="h-4 w-4 text-gray-500" />
-                </button>
-                {showUserMenu && (
-                  <div
-                    id="user-menu"
-                    className="absolute right-0 mt-2 w-64 bg-white border shadow-lg z-40 rounded-md ring-1 ring-black ring-opacity-5 transform transition ease-out duration-150"
-                    role="menu"
-                    aria-labelledby="user-menu-button"
+
+                    <ChevronDown className="h-4 w-4 text-gray-500" />
+                  </button>
+                )}
+                {userData && (
+                  <button
+                    onClick={() => setShowUserMenu((prev) => !prev)}
+                    className="flex items-center gap-2 rounded-full bg-white px-2 py-1 shadow-sm"
                   >
-                    <div
-                      className="absolute right-4 -top-3 w-3 h-3 bg-white rotate-45 border-l border-t border-gray-100"
-                      aria-hidden="true"
-                    />
-                    <div className="px-4 py-3 border-b">
+                    {avatarUrl ? (
+                      <img
+                        src={avatarUrl}
+                        alt="Profile"
+                        className="h-9 w-9 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full font-semibold text-red-700 bg-red-100">
+                        {avatarInitial}
+                      </div>
+                    )}
+
+                    <ChevronDown className="h-4 w-4 text-gray-500" />
+                  </button>
+                )}
+
+                {showUserMenu && (
+                  <div className="absolute right-0 mt-2 w-64 rounded-lg border bg-white shadow-xl">
+                    <div className="border-b px-4 py-3">
                       <div className="flex items-center gap-3">
                         {avatarUrl ? (
                           <img
                             src={avatarUrl}
-                            alt="avatar"
-                            className="max-h-10 w-10 rounded-full object-cover"
+                            alt="Profile"
+                            className="h-10 w-10 rounded-full object-cover"
                           />
-                        ) : (
-                          <div className="h-10 w-10 rounded-full bg-red-100 text-emerald-700 flex items-center justify-center font-medium">
+                        ) : userData && (
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 font-semibold text-red-700">
+                              {avatarInitial}
+                            </div>
+                          ) ? (
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 font-semibold text-red-700">
                             {avatarInitial}
                           </div>
+                        ) : (
+                          ""
                         )}
+
                         <div>
-                          <div className="font-medium text-lg">
-                            {userData.firstName}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {userData.phoneNumber}
-                          </div>
+                          <h3 className="font-semibold">
+                            {supplierData?.firstName || userData?.firstName}
+                          </h3>
+
+                          <p className="text-sm text-gray-500">
+                            {supplierData?.phoneNumber || userData?.phoneNumber}
+                          </p>
                         </div>
                       </div>
                     </div>
-                    <nav className="py-1" aria-label="User options">
+
+                    <nav className="flex flex-col py-2">
                       <Link
-                        to={`/profile/${userData._id}`}
-                        className="text-[20px] flex items-center gap-3 px-4 py-2 hover:bg-emerald-50"
-                        role="menuitem"
+                        to={`/profile/${(supplierData || userData)._id}`}
+                        onClick={() => setShowUserMenu(false)}
+                        className="px-4 py-3 text-lg hover:bg-emerald-50 transition"
                       >
                         प्रोफ़ाइल
                       </Link>
-                      <Link
-                        to="/orders"
-                        className="text-[20px] flex items-center gap-3 px-4 py-2 hover:bg-emerald-50"
-                        role="menuitem"
-                      >
-                        सभी ऑर्डर
-                      </Link>
-                      {/* <Link to="/settings" className="text-[20px] flex items-center gap-3 px-4 py-2 hover:bg-emerald-50" role="menuitem">Settings</Link> */}
+
+                      {!supplierData && (
+                        <Link
+                          to="/order-history"
+                          onClick={() => setShowUserMenu(false)}
+                          className="px-4 py-3 text-lg hover:bg-emerald-50 transition"
+                        >
+                          सभी ऑर्डर
+                        </Link>
+                      )}
+
+                      {supplierData && (
+                        <Link
+                          to="/admin-dashboard"
+                          onClick={() => setShowUserMenu(false)}
+                          className="px-4 py-3 text-lg hover:bg-emerald-50 transition"
+                        >
+                          डैशबोर्ड
+                        </Link>
+                      )}
                     </nav>
-                    <div className="px-4 py-3">
+
+                    <div className="border-t px-4 py-3">
                       <button
-                        onClick={logoutHandler}
+                        onClick={() => {
+                          setShowUserMenu(false);
+
+                          if (supplierData) {
+                            setAdminConfirmLogout(true);
+                          }
+                          if (userData) {
+                            setUserConfirmLogout(true);
+                          }
+                        }}
                         disabled={loading}
-                        className="text-[20px] w-full text-left px-4 py-2 bg-red-600 hover:bg-emerald-700 text-white rounded"
+                        className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2 text-white transition ${
+                          supplierData
+                            ? "bg-emerald-600 hover:bg-emerald-700"
+                            : "bg-red-600 hover:bg-red-700"
+                        }`}
                       >
                         {loading ? (
-                          <LoaderCircle className="animate-spin ml-20" />
+                          <LoaderCircle className="h-5 w-5 animate-spin" />
                         ) : (
-                          <div className="flex items-center gap-[10px]">
-                            <BiPowerOff />
-                            लॉग आउट
-                          </div>
+                          <>
+                            <BiPowerOff className="text-lg" />
+                            <span>लॉग आउट</span>
+                          </>
                         )}
                       </button>
                     </div>
@@ -301,126 +377,13 @@ const Navbar = () => {
               </div>
             ) : (
               <div className="hidden lg:flex items-center gap-2">
-                <Button
-                  onClick={() => navigate("/signup")}
-                  className="px-3 py-2 border text-sm"
-                >
+                <Button onClick={() => navigate("/signup")} variant="outline">
                   Sign Up
                 </Button>
+
                 <Button
                   onClick={() => navigate("/login")}
-                  className="bg-gradient-to-tl from-blue-600 to-purple-600 text-white px-3 py-2 text-sm"
-                >
-                  Login
-                </Button>
-              </div>
-            )}
-            {supplierData ? (
-              <div className="relative" ref={userMenuRef}>
-                <button
-                  id="user-menu-button"
-                  onClick={() => setShowUserMenu((s) => !s)}
-                  className="flex items-center gap-2 px-2 py-1 rounded-full bg-white hover:shadow-sm focus:shadow-outline focus:outline-none"
-                  aria-haspopup="true"
-                  aria-expanded={showUserMenu}
-                  aria-controls="user-menu"
-                >
-                  <div className="relative flex items-center">
-                    {avatarUrl ? (
-                      <img
-                        src={avatarUrl}
-                        alt="avatar"
-                        className="h-9 w-9 rounded-full object-cover ring-2 ring-emerald-50 shadow-sm"
-                      />
-                    ) : (
-                      <div className="h-9 w-9 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-medium ring-2 ring-red-50 shadow-sm">
-                        {avatarInitial}
-                      </div>
-                    )}
-                  </div>
-                  <ChevronDown className="h-4 w-4 text-gray-500" />
-                </button>
-                {showUserMenu && (
-                  <div
-                    id="user-menu"
-                    className="absolute right-0 mt-2 w-64 bg-white border shadow-lg z-40 rounded-md ring-1 ring-black ring-opacity-5 transform transition ease-out duration-150"
-                    role="menu"
-                    aria-labelledby="user-menu-button"
-                  >
-                    <div
-                      className="absolute right-4 -top-3 w-3 h-3 bg-white rotate-45 border-l border-t border-gray-100"
-                      aria-hidden="true"
-                    />
-                    <div className="px-4 py-3 border-b">
-                      <div className="flex items-center gap-3">
-                        {avatarUrl ? (
-                          <img
-                            src={avatarUrl}
-                            alt="avatar"
-                            className="max-h-10 w-10 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div className="h-10 w-10 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-medium">
-                            {avatarInitial}
-                          </div>
-                        )}
-                        <div>
-                          <div className="font-medium text-lg">
-                            {supplierData.firstName}
-                          </div>
-                          <div className="text-1xl text-gray-500">
-                            {supplierData.phoneNumber}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    <nav className="py-1" aria-label="User options">
-                      <Link
-                        to={`/profile/${supplierData._id}`}
-                        className="text-[20px] flex items-center gap-3 px-4 py-2 hover:bg-emerald-50"
-                        role="menuitem"
-                      >
-                        प्रोफ़ाइल
-                      </Link>
-                      <Link
-                        to="/orders"
-                        className="text-[20px] flex items-center gap-3 px-4 py-2 hover:bg-emerald-50"
-                        role="menuitem"
-                      >
-                        सभी ऑर्डर
-                      </Link>
-                      {/* <Link to="/settings" className="text-[20px] flex items-center gap-3 px-4 py-2 hover:bg-emerald-50" role="menuitem">Settings</Link> */}
-                    </nav>
-                    <div className="px-4 py-3">
-                      <button
-                        onClick={logoutHandler}
-                        disabled={loading}
-                        className="text-[20px] w-full text-left px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded"
-                      >
-                        {loading ? (
-                          <LoaderCircle className="animate-spin ml-20" />
-                        ) : (
-                          <div className="flex items-center gap-[10px]">
-                            <BiPowerOff />
-                            लॉग आउट
-                          </div>
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="hidden lg:flex items-center gap-2">
-                <Button
-                  onClick={() => navigate("/signup")}
-                  className="px-3 py-2 border text-sm"
-                >
-                  Sign Up
-                </Button>
-                <Button
-                  onClick={() => navigate("/login")}
-                  className="bg-gradient-to-tl from-blue-600 to-purple-600 text-white px-3 py-2 text-sm"
+                  className="bg-gradient-to-r from-blue-600 to-purple-600 text-white"
                 >
                   Login
                 </Button>
@@ -430,238 +393,237 @@ const Navbar = () => {
         </div>
       </div>
 
-      {/* Overlay for mobile panel */}
+      {/* Mobile Overlay */}
       {slideBar && (
         <div
           onClick={() => setSlideBar(false)}
-          className="fixed inset-0 bg-black/40 z-40"
+          className="fixed inset-0 z-40 bg-black/40"
         />
       )}
 
-      {userData && (
-        <div
-          className={`fixed top-0 right-0 h-screen w-[80%] bg-white transition-transform duration-300 ease-in-out ${slideBar ? "translate-x-0" : "translate-x-full"} z-50`}
-        >
-          <div className="p-4">
-            <div className="flex justify-between items-center">
-              <Link
-                to="/"
-                onClick={() => setSlideBar(false)}
-                className="flex items-center gap-3"
-              >
-                <img src="/logo2.png" className="h-8" alt="logo" />
-                <span className="font-bold text-lg">e-Setu</span>
-              </Link>
-              <button
-                onClick={() => setSlideBar(false)}
-                aria-label="Close menu"
-                className="text-gray-700 hover:text-emerald-600"
-              >
-                <X className="h-6 w-6" />
-              </button>
-            </div>
+      {/* Mobile Sidebar */}
+      <div
+        className={`fixed top-0 right-0 z-50 h-screen w-[80%] bg-white transition-transform duration-300 ${
+          slideBar ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        <div className="p-5">
+          <div className="flex items-center justify-between">
+            <Link
+              to={supplierData ? "/admin-dashboard" : "/"}
+              onClick={() => setSlideBar(false)}
+              className="flex items-center gap-3"
+            >
+              <img src="/logo2.png" alt="logo" className="h-8" />
+              <span className="text-xl font-bold">E-Setu</span>
+            </Link>
 
-            <div className="mt-6 flex flex-col gap-4">
-              <Link
-                to="/product"
-                onClick={() => setSlideBar(false)}
-                className="text-lg"
-              >
-                प्रोडक्ट्स
-              </Link>
-              <Link
-                to="/offers"
-                onClick={() => setSlideBar(false)}
-                className="text-lg"
-              >
-                ऑफर
-              </Link>
-              <form
-                onSubmit={(e) => {
-                  onSearchSubmit(e);
-                  setSlideBar(false);
-                }}
-                className="flex gap-2"
-              >
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="उत्पाद खोजें..."
-                  className="flex-1 px-3 py-2 rounded border"
-                />
-                <Button type="submit">Go</Button>
-              </form>
+            <button
+              onClick={() => setSlideBar(false)}
+              className="rounded-md p-2 hover:bg-gray-100"
+            >
+              <X className="h-6 w-6" />
+            </button>
+          </div>
+
+          <div className="mt-8 flex flex-col gap-5">
+            <Link
+              to={supplierData ? "/product-view" : "/products"}
+              onClick={() => setSlideBar(false)}
+              className="rounded-md  flex gap-2 items-center  px-3 py-2 text-lg hover:bg-emerald-50"
+            >
+              <TrendingUp className="animate-pulse" /> प्रोडक्ट्स
+            </Link>
+
+            <Link
+              to="/categories"
+              onClick={() => setSlideBar(false)}
+              className="rounded-md  flex gap-2 items-center px-3 py-2 text-lg hover:bg-emerald-50"
+            >
+              📂 Categories
+            </Link>
+
+            <Link
+              to="/offers"
+              onClick={() => setSlideBar(false)}
+              className="rounded-md flex gap-2 items-center px-3 py-2 text-lg hover:bg-emerald-50"
+            >
+              <BadgePercent className="animate-pulse" /> ऑफर्स
+            </Link>
+
+            <form
+              onSubmit={(e) => {
+                onSearchSubmit(e);
+                setSlideBar(false);
+              }}
+              className="mt-3 flex gap-2"
+            >
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="उत्पाद खोजें..."
+                className="flex-1 rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+
+              <Button type="submit">Go</Button>
+            </form>
+
+            {!supplierData && userData && (
               <Link
                 to="/cart"
                 onClick={() => setSlideBar(false)}
-                className="flex items-center gap-2"
+                className="flex items-center justify-between rounded-md px-3 py-2 hover:bg-emerald-50"
               >
-                कार्ट{" "}
-                <span className="ml-2  top-2 right-2 inline-block bg-red-500 text-white rounded-full w-7 h-full text-center">
+                <span className="text-lg  flex gap-2 items-center">
+                  <ShoppingCart /> कार्ट
+                </span>
+
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-sm font-semibold text-white">
                   {cartCount}
                 </span>
               </Link>
-              {userData || supplierData ? (
-                <>
-                  <Link
-                    to={`/profile/${(supplierData || userData)._id}`}
-                    onClick={() => setSlideBar(false)}
-                  >
-                    प्रोफ़ाइल
-                  </Link>
+            )}
 
-                  <Link
-                    to={supplierData ? "/admin/dashboard" : "/orders"}
-                    onClick={() => setSlideBar(false)}
-                  >
-                    {supplierData ? "Dashboard" : "सभी ऑर्डर"}
-                  </Link>
+            {userData || supplierData ? (
+              <>
+                <Link
+                  to={`/profile/${(supplierData || userData)._id}`}
+                  onClick={() => setSlideBar(false)}
+                  className="rounded-md px-3 py-2  flex gap-2 items-center text-lg hover:bg-emerald-50"
+                >
+                  <UserRoundPen /> प्रोफ़ाइल
+                </Link>
 
-                  <Button
-                    onClick={logoutHandler}
-                    disabled={loading}
-                    className="mt-4"
-                  >
-                    {loading ? "Logging out..." : "Logout"}
-                  </Button>
-                </>
-              ) : (
-                <div className="flex gap-2 mt-4">
-                  <Button
-                    onClick={() => {
-                      setSlideBar(false);
-                      navigate("/signup");
-                    }}
-                    className="flex-1"
-                  >
-                    Sign Up
-                  </Button>
+                <Link
+                  to={supplierData ? "/admin-dashboard" : "/order-history"}
+                  onClick={() => setSlideBar(false)}
+                  className="rounded-md px-3  flex gap-2 items-center py-2 text-lg hover:bg-emerald-50"
+                >
+                  {supplierData ? (
+                    <div className="flex items-center gap-2">
+                      <LayoutDashboard /> डैशबोर्ड
+                    </div>
+                  ) : (
+                    <>
+                      <ReceiptText /> सभी ऑर्डर
+                    </>
+                  )}
+                </Link>
 
-                  <Button
-                    onClick={() => {
-                      setSlideBar(false);
-                      navigate("/login");
-                    }}
-                    className="flex-1"
-                  >
-                    Login
-                  </Button>
-                </div>
-              )}
+                <Button
+                  onClick={() => {
+                    setSlideBar(false);
+
+                    if (supplierData) {
+                      setAdminConfirmLogout(true);
+                    }
+                    if (userData) {
+                      setUserConfirmLogout(true);
+                    } else {
+                      logoutHandler();
+                    }
+                  }}
+                  disabled={loading}
+                  className="mt-4 bg-red-600"
+                >
+                  {loading ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <>
+                      <BiPowerOff className="text-lg" />
+                      <span>लॉग आउट</span>
+                    </>
+                  )}
+                </Button>
+              </>
+            ) : (
+              <div className="mt-6 flex gap-2">
+                <Button
+                  className="flex-1"
+                  variant="outline"
+                  onClick={() => {
+                    setSlideBar(false);
+                    navigate("/signup");
+                  }}
+                >
+                  Sign Up
+                </Button>
+
+                <Button
+                  className="flex-1"
+                  onClick={() => {
+                    setSlideBar(false);
+                    navigate("/login");
+                  }}
+                >
+                  Login
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Admin Logout Confirmation */}
+      {adminConfirmLogout && (
+        <div className="fixed inset-0 z-[60] absolute flex items-center h-screen justify-center bg-black/60">
+          <div className="w-[90%] max-w-sm rounded-xl bg-emerald-50 p-6 shadow-xl">
+            <h2 className="text-center text-xl font-semibold">लॉग आउट?</h2>
+
+            <p className="mt-2 text-center text-gray-500">
+              क्या आप सच में लॉग आउट करना चाहते हैं?
+            </p>
+
+            <div className="mt-6 flex justify-center gap-4">
+              <Button
+                variant="outline"
+                onClick={() => setAdminConfirmLogout(false)}
+              >
+                नहीं
+              </Button>
+
+              <Button
+                className="bg-emerald-600 hover:bg-emerald-700"
+                onClick={() => {
+                  setAdminConfirmLogout(false);
+                  logoutHandler();
+                }}
+              >
+                हाँ
+              </Button>
             </div>
           </div>
         </div>
       )}
-      {supplierData && (
-        <div
-          className={`fixed top-0 right-0 h-screen w-[80%] bg-white transition-transform duration-300 ease-in-out ${slideBar ? "translate-x-0" : "translate-x-full"} z-50`}
-        >
-          <div className="p-4">
-            <div className="flex justify-between items-center">
-              <Link
-                to="/"
-                onClick={() => setSlideBar(false)}
-                className="flex items-center gap-3"
-              >
-                <img src="/logo2.png" className="h-8" alt="logo" />
-                <span className="font-bold text-lg">e-Setu</span>
-              </Link>
-              <button
-                onClick={() => setSlideBar(false)}
-                aria-label="Close menu"
-                className="text-gray-700 hover:text-emerald-600"
-              >
-                <X className="h-6 w-6" />
-              </button>
-            </div>
 
-            <div className="mt-6 flex flex-col gap-4">
-              <Link
-                to="/product"
-                onClick={() => setSlideBar(false)}
-                className="text-lg"
+      {/* user Logout Confirmation */}
+      {userConfirmLogout && (
+        <div className="fixed inset-0 z-[60] absolute flex items-center h-screen justify-center bg-black/60">
+          <div className="w-[90%] max-w-sm rounded-xl bg-emerald-50 p-6 shadow-xl">
+            <h2 className="text-center text-xl font-semibold">लॉग आउट?</h2>
+
+            <p className="mt-2 text-center text-gray-500">
+              क्या आप सच में लॉग आउट करना चाहते हैं?
+            </p>
+
+            <div className="mt-6 flex justify-center gap-4">
+              <Button
+                variant="outline"
+                onClick={() => setUserConfirmLogout(false)}
               >
-                प्रोडक्ट्स
-              </Link>
-              <Link
-                to="/offers"
-                onClick={() => setSlideBar(false)}
-                className="text-lg"
-              >
-                ऑफर
-              </Link>
-              <form
-                onSubmit={(e) => {
-                  onSearchSubmit(e);
-                  setSlideBar(false);
+                नहीं
+              </Button>
+
+              <Button
+                className="bg-red-600 hover:bg-red-700"
+                onClick={() => {
+                  setUserConfirmLogout(false);
+                  logoutHandler();
                 }}
-                className="flex gap-2"
               >
-                <input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="उत्पाद खोजें..."
-                  className="flex-1 px-3 py-2 rounded border"
-                />
-                <Button type="submit">Go</Button>
-              </form>
-              {/* <Link
-                to="/cart"
-                onClick={() => setSlideBar(false)}
-                className="flex items-center gap-2"
-              >
-                कार्ट{" "}
-                <span className="ml-2  top-2 right-2 inline-block bg-red-500 text-white rounded-full w-7 h-full text-center">
-                  {cartCount}
-                </span>
-              </Link> */}
-              {userData || supplierData ? (
-                <>
-                  <Link
-                    to={`/profile/${(supplierData || userData)._id}`}
-                    onClick={() => setSlideBar(false)}
-                  >
-                    प्रोफ़ाइल
-                  </Link>
-
-                  <Link
-                    to={supplierData ? "/admin-dashboard" : "/orders"}
-                    onClick={() => setSlideBar(false)}
-                  >
-                    {supplierData ? "डैशबोर्ड" : "सभी ऑर्डर"}
-                  </Link>
-
-                  <Button
-                    onClick={logoutHandler}
-                    disabled={loading}
-                    className="mt-4 bg-emerald-600"
-                  >
-                    {loading ? <Loader2 className="animate-spin" /> : "Logout"}
-                  </Button>
-                </>
-              ) : (
-                <div className="flex gap-2 mt-4">
-                  <Button
-                    onClick={() => {
-                      setSlideBar(false);
-                      navigate("/signup");
-                    }}
-                    className="flex-1"
-                  >
-                    Sign Up
-                  </Button>
-
-                  <Button
-                    onClick={() => {
-                      setSlideBar(false);
-                      navigate("/login");
-                    }}
-                    className="flex-1"
-                  >
-                    Login
-                  </Button>
-                </div>
-              )}
+                हाँ
+              </Button>
             </div>
           </div>
         </div>

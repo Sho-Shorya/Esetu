@@ -17,7 +17,7 @@ catRouter.post(
   "/add-cat",
   isAuthenticated,
   isSupp,
-  singleUpload,
+  singleUpload("image"),
   createCategory,
 );
 catRouter.put("/update-cat/:id", isAuthenticated, isSupp, updateCategory);

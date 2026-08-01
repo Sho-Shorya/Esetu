@@ -1,0 +1,21 @@
+{
+  "name": "e-Setu",
+  "short_name": "eSetu",
+  "description": "E-Setu grocery ordering app",
+  "icons": [
+    {
+      "src": "/logo2.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo2.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#0f766e",
+  "background_color": "#ffffff"
+}

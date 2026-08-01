@@ -55,8 +55,9 @@ const ProductsList = () => {
     setSelectedProduct(product);
     setQty(1);
 
-    setSelectedCompany(product.companies?.[0] || "");
-    setSelectedMeasurement(product.measurement?.[0] || "");
+    const firstVariant = product?.variants?.[0];
+    setSelectedCompany(firstVariant?.company || "");
+    setSelectedMeasurement(firstVariant?.measurement || "");
   };
   const selectedVariant = selectedProduct?.variants.find(
     (variant) =>

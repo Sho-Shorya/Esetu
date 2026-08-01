@@ -78,14 +78,14 @@ const AdminProductView = ({ tailwind, condition }) => {
               >
                 {/* Product Header */}
 
-                <div className="relative flex gap-4 p-4">
+                <div className="relative flex gap-4 p-4 z-1">
                   <img
                     src={product.image}
                     alt={product.name}
                     className="w-20 h-20 rounded-xl object-cover border"
                   />
 
-                  <div className="flex-1">
+                  <div className="flex-1 ">
                     <h2 className="text-lg font-bold text-gray-800">
                       {product.name} / {product.hinglishName}
                     </h2>
@@ -103,7 +103,7 @@ const AdminProductView = ({ tailwind, condition }) => {
                     उपलब्ध वेरिएंट ({product.variants.length})
                   </h3>
 
-                  <div className="space-y-3 overflow-auto max-h-[180px]">
+                  <div className="space-y-3 max-h-52 overflow-y-auto pr-1">
                     {product.variants.map((variant, index) => (
                       <div
                         key={index}
