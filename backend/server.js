@@ -25,27 +25,41 @@ app.use(express.json());
 
 const allowedOrigins = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
-  : ["*"];
+  : [
+      "https://esetu.vercel.app",
+      "http://localhost:5173",
+      "http://localhost:3000",
+      "*",
+    ];
 
-const corsOptions = {
-  origin: (origin, callback) => {
-    if (
-      !origin ||
-      allowedOrigins.includes("*") ||
-      allowedOrigins.includes(origin)
-    ) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true,
-};
+app.use((req, res, next) => {
+  const requestOrigin = req.headers.origin;
+  const originAllowed =
+    !requestOrigin ||
+    allowedOrigins.includes("*") ||
+    allowedOrigins.includes(requestOrigin);
 
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+  if (requestOrigin && originAllowed) {
+    res.setHeader("Access-Control-Allow-Origin", requestOrigin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+    );
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      req.headers["access-control-request-headers"] ||
+        "Content-Type,Authorization",
+    );
+    res.setHeader("Vary", "Origin");
+  }
+
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(204);
+  }
+
+  next();
+});
 
 app.use((req, res, next) => {
   syncTodayOrderFlags().catch(() => {});
