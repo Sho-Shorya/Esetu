@@ -1,4 +1,5 @@
 import AppSetting from "../models/appSettingModel.js";
+import { Order } from "../models/orderModel.js";
 
 export const getAppSettings = async (req, res) => {
   try {
@@ -21,6 +22,20 @@ export const getAppSettings = async (req, res) => {
   }
 };
 
+export const getPublicAppSettings = async (req, res) => {
+  try {
+    const setting = await AppSetting.findOne({ key: "dailyOrderCutoff" });
+    return res.status(200).json({
+      success: true,
+      settings: {
+        dailyOrderCutoff: setting?.value || "12:00",
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
 export const updateAppSetting = async (req, res) => {
   try {
     const { key } = req.params;
@@ -33,6 +48,7 @@ export const updateAppSetting = async (req, res) => {
       });
     }
 
+    // Update the setting
     const setting = await AppSetting.findOneAndUpdate(
       { key },
       { value: String(value) },
@@ -41,6 +57,23 @@ export const updateAppSetting = async (req, res) => {
         upsert: true,
       },
     );
+
+    // If the cutoff time was changed, update today's active orders
+    if (key === "dailyOrderCutoff") {
+      const [hour, minute] = value.split(":").map(Number);
+
+      const cutoffTime = new Date();
+      cutoffTime.setHours(hour, minute, 0, 0);
+
+      await Order.updateMany(
+        { isTodayOrder: true },
+        {
+          $set: {
+            cutoffTime,
+          },
+        },
+      );
+    }
 
     return res.status(200).json({
       success: true,

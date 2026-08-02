@@ -123,7 +123,7 @@ export const addOrder = async (req, res) => {
     if (!(await isWithinOrderingWindow())) {
       return res.status(400).json({
         success: false,
-        message: "ऑर्डर कटऑफ समय से पहले ही दिन में रखें।",
+        message: "ऑर्डर कटऑफ समय से पहले ही रखें।",
       });
     }
 
