@@ -1,73 +1,39 @@
 import express from "express";
 import "dotenv/config";
+import cors from "cors";
+import dns from "dns";
+
 import { connectDb } from "./database/db.js";
+
 import userRoute from "./routes/userRoute.js";
 import productRoute from "./routes/productRoute.js";
 import cartRoute from "./routes/cartRoute.js";
 import debugRoute from "./routes/debugRoute.js";
-import categoryRoute from "./routes/categoryRoute.js";
-import offerRoute from "./routes/offerRoute.js";
-import cors from "cors";
-import dns from "dns";
 import catRouter from "./routes/categoryRoute.js";
 import comRouter from "./routes/companyRoutes.js";
 import orderRouter from "./routes/orderRoutes.js";
 import settingsRouter from "./routes/settingsRoute.js";
-import { syncTodayOrderFlags } from "./controllers/OrderController.js";
+import offerRoute from "./routes/offerRoute.js";
+
+import { syncTodayOrderFlags } from "./controllers/OrderController.js"; // <-- make sure this matches the filename exactly
+
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 process.env.TZ = process.env.TZ || "Asia/Kolkata";
 
-//middleware
+app.use(cors());
 app.use(express.json());
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(",").map((origin) => origin.trim())
-  : [
-      "https://esetu.vercel.app",
-      "http://localhost:5173",
-      "http://localhost:3000",
-      "*",
-    ];
-
 app.use((req, res, next) => {
-  const requestOrigin = req.headers.origin;
-  const originAllowed =
-    !requestOrigin ||
-    allowedOrigins.includes("*") ||
-    allowedOrigins.includes(requestOrigin);
-
-  if (requestOrigin && originAllowed) {
-    res.setHeader("Access-Control-Allow-Origin", requestOrigin);
-    res.setHeader("Access-Control-Allow-Credentials", "true");
-    res.setHeader(
-      "Access-Control-Allow-Methods",
-      "GET,POST,PUT,PATCH,DELETE,OPTIONS",
-    );
-    res.setHeader(
-      "Access-Control-Allow-Headers",
-      req.headers["access-control-request-headers"] ||
-        "Content-Type,Authorization",
-    );
-    res.setHeader("Vary", "Origin");
-  }
-
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(204);
-  }
-
-  next();
-});
-
-app.use((req, res, next) => {
-  syncTodayOrderFlags().catch(() => {});
+  syncTodayOrderFlags().catch(console.error);
   next();
 });
 
 app.get("/", (req, res) => {
-  res.status(200).json({
+  res.json({
     success: true,
     message: "e-Setu Backend is running 🚀",
   });
@@ -93,8 +59,8 @@ const scheduleMidnightSync = () => {
   setTimeout(async () => {
     try {
       await syncTodayOrderFlags();
-    } catch (error) {
-      console.error("[order-sync] Midnight sync failed:", error);
+    } catch (err) {
+      console.error(err);
     }
 
     scheduleMidnightSync();
@@ -102,10 +68,13 @@ const scheduleMidnightSync = () => {
 };
 
 app.listen(PORT, async () => {
-  await connectDb();
-  await syncTodayOrderFlags();
-  scheduleMidnightSync();
+  try {
+    await connectDb();
+    await syncTodayOrderFlags();
+    scheduleMidnightSync();
 
-  console.log("Server started successfully");
-  console.log(`Server running on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
+  } catch (err) {
+    console.error("Server startup failed:", err);
+  }
 });

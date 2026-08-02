@@ -3,7 +3,6 @@ import { Cart } from "../models/cartModel.js";
 import { User } from "../models/userModel.js";
 import Company from "../models/companiesModel.js";
 import AppSetting from "../models/appSettingModel.js";
-import { sendMobileNotification } from "../utils/sendMobileNotification.js";
 
 const DEFAULT_ORDER_CUTOFF = "12:00";
 
