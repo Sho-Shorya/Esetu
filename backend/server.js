@@ -15,7 +15,7 @@ import orderRouter from "./routes/orderRoutes.js";
 import settingsRouter from "./routes/settingsRoute.js";
 import offerRoute from "./routes/offerRoute.js";
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
-import scheduleMidnightSync from "./controllers/orderController.js";
+import { scheduleMidnightSync } from "./controllers/orderController.js";
 const app = express();
 const PORT = process.env.PORT || 5000;
 
