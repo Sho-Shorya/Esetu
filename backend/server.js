@@ -14,11 +14,8 @@ import comRouter from "./routes/companyRoutes.js";
 import orderRouter from "./routes/orderRoutes.js";
 import settingsRouter from "./routes/settingsRoute.js";
 import offerRoute from "./routes/offerRoute.js";
-
-import { syncTodayOrderFlags } from "./controllers/OrderController.js"; // <-- make sure this matches the filename exactly
-
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
-
+import scheduleMidnightSync from "./controllers/orderController.js";
 const app = express();
 const PORT = process.env.PORT || 5000;
 
