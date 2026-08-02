@@ -189,7 +189,7 @@ const MyTodayOrder = () => {
                     {order.status === "Approved" && (
                       <span className="bg-green-100 text-green-700 text-sm font-semibold px-4 py-2 rounded-full">
                         Approved
-                        <Dot className="top-6 -left-6 absolute h-7 w-7" />
+                        <Check className="h-3 -top-1 -right-1 absolute " />
                       </span>
                     )}
 

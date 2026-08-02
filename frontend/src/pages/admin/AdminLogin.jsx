@@ -51,7 +51,7 @@ const AdminLogin = () => {
         dispatch(setUserData(null));
         dispatch(setSupplierData(res.data.user));
         localStorage.setItem("token", res.data.token);
-        toast.success(res.data.message);
+        toast.success(res.data.message, { duration: 1000 });
       }
     } catch (error) {
       toast.error(error.response?.data?.message);

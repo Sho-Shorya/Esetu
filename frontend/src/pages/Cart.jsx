@@ -141,7 +141,7 @@ const Cart = () => {
       if (res.data.success) {
         syncCart(res.data.cart);
       } else {
-        toast.error(res.data.message, { duration: 2000 });
+        toast.error(res.data.message, { duration: 1000 });
       }
     } catch (err) {
       toast.error(err.response?.data?.message || "मात्रा अपडेट नहीं हो सकी");
@@ -214,7 +214,9 @@ const Cart = () => {
         toast.error(res.data.message);
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || "ऑर्डर पूरा नहीं हो सका");
+      toast.error(error.response?.data?.message || "ऑर्डर पूरा नहीं हो सका", {
+        duration: 3000,
+      });
     } finally {
       setCheckoutLoading(false);
     }

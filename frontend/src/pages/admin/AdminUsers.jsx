@@ -3,7 +3,18 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { API_BASE_URL } from "@/lib/constants";
-import { ArrowRight, Users, UserPlus } from "lucide-react";
+import {
+  ArrowRight,
+  Users,
+  UserPlus,
+  Phone,
+  LocateIcon,
+  MapPin,
+  House,
+  CircleUser,
+  Check,
+  X,
+} from "lucide-react";
 
 const AdminUsers = () => {
   const [users, setUsers] = useState([]);
@@ -34,21 +45,19 @@ const AdminUsers = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-white px-4 py-24 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-white px-4 py-20 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl rounded-3xl bg-white p-6 shadow-lg border border-emerald-100">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              उपयोगकर्ता प्रबंधन
-            </h1>
+            <h1 className="text-3xl font-bold text-gray-900">खरीदार प्रबंधन</h1>
             <p className="mt-2 text-gray-600">
-              यहाँ आप सभी उपयोगकर्ताओं को देख सकते हैं और उनके आदेश प्रोफ़ाइल
-              खोल सकते हैं।
+              यहाँ आप सभी खरीददारों को देख सकते हैं और उनके order प्रोफ़ाइल खोल
+              सकते हैं।
             </p>
           </div>
           <div className="inline-flex items-center gap-2 rounded-2xl bg-emerald-100 px-4 py-2 text-emerald-800">
             <Users className="h-5 w-5" />
-            {users.length} उपयोगकर्ता
+            {users.length} खरीदार
           </div>
         </div>
 
@@ -61,34 +70,87 @@ const AdminUsers = () => {
             कोई उपयोगकर्ता उपलब्ध नहीं है।
           </div>
         ) : (
-          <div className="mt-8 grid gap-4">
+          <div className="mt-6 grid gap-3">
             {users.map((user) => (
               <button
                 key={user._id}
                 onClick={() => navigate(`/admin/user/${user._id}`)}
-                className="group flex w-full flex-col gap-4 rounded-3xl border border-gray-200 bg-white p-5 text-left shadow-sm transition hover:-translate-y-1 hover:border-emerald-200"
+                className="group w-full rounded-3xl border border-gray-200 bg-white p-4 shadow-sm transition-all hover:border-emerald-300 hover:shadow-lg"
               >
-                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h2 className="text-xl font-semibold text-gray-900">
-                      {user.firstName} {user.lastName}
-                    </h2>
-                    <p className="text-sm text-gray-500">{user.phoneNumber}</p>
+                <div className="flex items-center justify-between">
+                  {/* Left */}
+                  <div className="flex items-center overflow-hidden gap-4">
+                    {/* Profile */}
+                    {user.profilePic ? (
+                      <img
+                        src={user.profilePic}
+                        alt={user.firstName}
+                        className="h-16 w-16 rounded-full border-2 border-emerald-200 object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-2xl font-bold text-emerald-700">
+                        {user.firstName?.charAt(0)}
+                      </div>
+                    )}
+
+                    {/* User Info */}
+                    <div className="text-left">
+                      <h2 className="text-lg font-bold text-gray-900">
+                        {user.firstName.toUpperCase()}{" "}
+                        {user.lastName.toUpperCase()}
+                      </h2>
+
+                      <p className="flex text-sm text-gray-500">
+                        <Phone className="h-4 text-green-500" />{" "}
+                        {user.phoneNumber}
+                      </p>
+
+                      <p className="text-sm flex text-gray-500">
+                        <MapPin className="h-4 text-blue-600" />{" "}
+                        {user.place || "स्थान उपलब्ध नहीं"}
+                      </p>
+                    </div>
                   </div>
-                  <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700">
-                    प्रोफ़ाइल देखें <ArrowRight className="h-4 w-4" />
-                  </span>
+
+                  {/* View Button */}
+                  <div className="rounded-full bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700 group-hover:bg-emerald-600 group-hover:text-white">
+                    Open →
+                  </div>
                 </div>
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <div className="rounded-2xl bg-gray-50 p-3 text-sm text-gray-700">
-                    पता: {user.address || "निरਧारित"}
-                  </div>
-                  <div className="rounded-2xl bg-gray-50 p-3 text-sm text-gray-700">
-                    शहर: {user.place || "निर्धारित"}
-                  </div>
-                  <div className="rounded-2xl bg-gray-50 p-3 text-sm text-gray-700">
-                    ज़िप: {user.zipCode || "N/A"}
-                  </div>
+
+                {/* Bottom Info */}
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="flex items-center rounded-full bg-blue-100 px-3 py-1 text-sm font-semibold text-blue-700">
+                    <House className="h-4" /> {user.address || "No Address"}
+                  </span>
+
+                  <span className="flex items-center rounded-full bg-orange-100 px-3 py-1 text-sm font-semibold text-orange-700">
+                    <MapPin className="h-4" /> {user.zipCode || "N/A"}
+                  </span>
+
+                  <span className="flex items-center rounded-full bg-purple-100 px-3 py-1 text-sm font-semibold text-purple-700">
+                    <CircleUser className="h-4" /> {user.gender || "Unknown"}
+                  </span>
+
+                  <span
+                    className={`rounded-full px-3 py-1 text-sm font-semibold ${
+                      user.isVerified
+                        ? "bg-green-100 text-green-700"
+                        : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {user.isVerified ? (
+                      <div className="flex items-center">
+                        <Check className="h-4" />
+                        Verified
+                      </div>
+                    ) : (
+                      <div className="flex items-center">
+                        <X className="h-4" />
+                        Not Verified
+                      </div>
+                    )}
+                  </span>
                 </div>
               </button>
             ))}

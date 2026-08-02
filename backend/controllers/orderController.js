@@ -543,6 +543,19 @@ export const updateOrderStatus = async (req, res) => {
         message: "Order not found.",
       });
     }
+    const canMoveTo = (currentStatus, nextStatus) => {
+      const transitions = {
+        Pending: ["Approved", "Declined"],
+        Approved: ["Preparing"],
+        Preparing: ["Out For Delivery"],
+        "Out For Delivery": ["Delivered"],
+        Delivered: [],
+        Declined: [],
+        Cancelled: [],
+      };
+
+      return transitions[currentStatus]?.includes(nextStatus);
+    };
 
     // Valid status transitions
     if (!canMoveTo(order.status, status)) {
@@ -580,16 +593,16 @@ export const updateOrderStatus = async (req, res) => {
 
     await order.save();
 
-    if (order.userId) {
-      const notifiedUser = await User.findById(order.userId);
-      if (notifiedUser?.phoneNumber) {
-        await sendMobileNotification({
-          phone: notifiedUser.phoneNumber,
-          title: "ऑर्डर स्टेटस अपडेट",
-          body: `ऑर्डर #${order._id?.slice(-6)} अब ${status} है।`,
-        });
-      }
-    }
+    // if (order.userId) {
+    //   const notifiedUser = await User.findById(order.userId);
+    //   if (notifiedUser?.phoneNumber) {
+    //     await sendMobileNotification({
+    //       phone: notifiedUser.phoneNumber,
+    //       title: "ऑर्डर स्टेटस अपडेट",
+    //       body: `ऑर्डर #${order._id?.slice(-6)} अब ${status} है।`,
+    //     });
+    //   }
+    // }
 
     return res.status(200).json({
       success: true,

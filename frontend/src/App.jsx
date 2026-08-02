@@ -30,32 +30,6 @@ function App() {
   const dispatch = useDispatch();
   getCurrentUser();
   useGetAllProducts();
-
-  // 1. Grab your location path strings
-  const { pathname } = useLocation();
-  const scrollRegistry = useRef({});
-
-  useEffect(() => {
-    // 2. Select the scrollable layout div container
-    const scrollContainer = document.querySelector(".overflow-y-auto");
-    if (!scrollContainer) return;
-
-    // 3. RESTORE: If we have a saved height position, jump there; if not, go to the top
-    if (scrollRegistry.current[pathname] !== undefined) {
-      scrollContainer.scrollTo(0, scrollRegistry.current[pathname]);
-    } else {
-      scrollContainer.scrollTo(0, 0);
-    }
-
-    // 4. SAVE: Track manual scrolling actions in real-time to log active heights
-    const handleScroll = () => {
-      scrollRegistry.current[pathname] = scrollContainer.scrollTop;
-    };
-
-    scrollContainer.addEventListener("scroll", handleScroll);
-    return () => scrollContainer.removeEventListener("scroll", handleScroll);
-  }, [pathname]); // Fires cleanly every single time you navigate paths
-
   return (
     <Routes>
       <Route
@@ -127,7 +101,6 @@ function App() {
               <Nav />
               <Navbar />
               <AdminDashboard />
-              <Footer />
             </>
           ) : (
             <Navigate to="/admin-login" replace />
@@ -157,7 +130,7 @@ function App() {
               <Nav />
               <Navbar />
               <div className="pb-20">
-                <AdminProductView tailwind="mt-18" />
+                <AdminProductView />
               </div>
               <Footer />
             </>
@@ -186,7 +159,9 @@ function App() {
           supplierData ? (
             <>
               <Nav />
-              <AdminTodayOrders />
+              <div className="mx-5 mt-18 mb-20">
+                <AdminTodayOrders />
+              </div>
               <Navbar />
             </>
           ) : (
