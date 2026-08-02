@@ -12,6 +12,7 @@ import {
   updateOrderItems,
 } from "../redux/orderSlice";
 import { Check, Dot } from "lucide-react";
+import Timer from "@/components/Timer";
 
 const getCountdown = (cutoffTime, now) => {
   const diff = Math.max(0, new Date(cutoffTime).getTime() - now.getTime());
@@ -118,10 +119,10 @@ const MyTodayOrder = () => {
     );
   }
   return (
-    <div className="min-h-screen bg-gray-100 pb-28 pt-18">
+    <div className="min-h-screen bg-gray-100 pb-30 pt-18">
       <div className="max-w-6xl mx-auto px-3">
         {/* Header */}
-
+        <Timer />
         <div className="bg-white rounded-3xl shadow-md border border-gray-200 p-5 mb-5">
           <div className="flex items-center justify-between">
             <div>
@@ -141,7 +142,6 @@ const MyTodayOrder = () => {
             </div>
           </div>
         </div>
-
         {todayOrders.length === 0 ? (
           <div className="bg-white rounded-3xl shadow-md border border-gray-200 p-12 text-center">
             <img src="/empty-cart.png" alt="" className="w-44 mx-auto" />
@@ -193,27 +193,9 @@ const MyTodayOrder = () => {
                       </span>
                     )}
 
-                    {order.status === "Preparing" && (
-                      <span className="bg-blue-100 text-blue-700 text-sm font-semibold px-4 py-2 rounded-full">
-                        Preparing
-                      </span>
-                    )}
-
-                    {order.status === "Out For Delivery" && (
-                      <span className="bg-purple-100 text-purple-700 text-sm font-semibold px-4 py-2 rounded-full">
-                        Out For Delivery
-                      </span>
-                    )}
-
-                    {order.status === "Delivered" && (
-                      <span className="bg-emerald-100 text-emerald-700 text-sm font-semibold px-4 py-2 rounded-full">
-                        Delivered
-                      </span>
-                    )}
-
-                    {order.status === "Cancelled" && (
+                    {order.status === "Declined" && (
                       <span className="bg-red-100 text-red-700 text-sm font-semibold px-4 py-2 rounded-full">
-                        Cancelled
+                        Declined
                       </span>
                     )}
                   </div>
@@ -237,7 +219,7 @@ const MyTodayOrder = () => {
 
                 {/* Items */}
 
-                <div className="divide-y">
+                <div className="divide-y ">
                   {order.items.map((item) => (
                     <div key={item._id} className="p-5 flex gap-4">
                       <div className="flex-1">
@@ -305,7 +287,6 @@ const MyTodayOrder = () => {
                       )}
                     </div>
                   </div> */}
-
                   {/* Order Footer */}
 
                   <div className="border-t bg-gray-50 px-5 py-4">

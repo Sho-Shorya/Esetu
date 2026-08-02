@@ -21,7 +21,7 @@ const Nav = () => {
   return (
     <div>
       {userData && (
-        <div className="flex justify-around items-center bg-red-600 text-[15px] text-white h-[70px] fixed left-0 right-0 bottom-0">
+        <div className="flex justify-around items-center bg-red-600 text-[15px] text-white h-[70px] z-100 fixed left-0 right-0 bottom-0">
           <Link to="/">
             <div className="flex flex-col items-center">
               <Home className="mb-[5px] h-6" />

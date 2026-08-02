@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { API_BASE_URL } from "@/lib/constants";
+import Timer from "@/components/Timer";
 
 const OrderHistory = () => {
   const [orders, setOrders] = useState([]);
@@ -35,6 +36,7 @@ const OrderHistory = () => {
 
   return (
     <div className="min-h-screen bg-gray-100 px-4 py-20 sm:px-6 lg:px-8">
+      <Timer />
       <div className="mx-auto max-w-6xl rounded-3xl bg-white p-4 shadow-sm sm:p-6">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-800 sm:text-3xl">

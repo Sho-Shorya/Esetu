@@ -214,7 +214,7 @@ const ProductsList = () => {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setSelectedProduct(null)}
-              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
+              className="fixed inset-0  bg-black/40 backdrop-blur-sm z-40"
             />
 
             {/* Bottom Sheet */}
@@ -228,7 +228,7 @@ const ProductsList = () => {
                 stiffness: 260,
                 damping: 28,
               }}
-              className="fixed bottom-0 left-0 right-0 z-50 bg-white rounded-t-[30px] p-5 max-h-[85vh] overflow-y-auto"
+              className="fixed bottom-0 left-0 right-0 mb-15 z-50 bg-white rounded-t-[30px] p-5 max-h-[85vh] overflow-y-auto"
             >
               <div className="w-14 h-1.5 bg-gray-300 rounded-full mx-auto mb-5" />
 

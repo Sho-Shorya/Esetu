@@ -3,9 +3,9 @@ import Hero from "@/components/Hero";
 import React, { useState } from "react";
 import ProductsList from "@/pages/ProductsList";
 import { useSelector } from "react-redux";
-import { Search } from "lucide-react";
 import { BsSearch } from "react-icons/bs";
 import { useNavigate } from "react-router-dom";
+import Timer from "@/components/Timer";
 
 const Home = () => {
   const [search, setSearch] = useState("");
@@ -23,6 +23,7 @@ const Home = () => {
 
   return (
     <div className="w-full overflow-hidden pt-14">
+      <Timer />
       {userData ? (
         <div className="w-full">
           <div className="w-full">

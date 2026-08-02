@@ -17,6 +17,7 @@ import {
   Check,
 } from "lucide-react";
 
+import Timer from "@/components/Timer";
 import { Button } from "@/components/ui/button";
 import { setCartData, clearCart } from "@/redux/ProductSlice";
 import { API_BASE_URL } from "@/lib/constants";
@@ -114,6 +115,7 @@ const Cart = () => {
   useEffect(() => {
     fetchCart();
   }, []);
+
   const updateQuantity = async (item, type) => {
     if (!token) {
       toast.error("कृपया पहले लॉगिन करें", { duration: 1000 });
@@ -315,6 +317,7 @@ const Cart = () => {
 
   return (
     <div className="mx-auto mt-20 max-w-7xl px-4 pb-10 lg:px-6">
+      <Timer />
       <motion.div
         initial={{ opacity: 0, y: -25 }}
         animate={{ opacity: 1, y: 0 }}
@@ -559,7 +562,7 @@ const Cart = () => {
             exit={{
               opacity: 0,
             }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+            className="fixed inset-0 z-50  flex items-center justify-center bg-black/50 p-4"
           >
             <motion.div
               initial={{

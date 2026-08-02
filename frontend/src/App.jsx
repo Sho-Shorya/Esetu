@@ -25,6 +25,7 @@ import Cart from "./pages/Cart";
 import ProductsList from "./pages/ProductsList";
 import MyTodayOrder from "./pages/MyTodayOrder";
 import OrderHistory from "./pages/Orders";
+import Timer from "./components/Timer";
 function App() {
   const { userData, supplierData } = useSelector((state) => state.user);
   const dispatch = useDispatch();
@@ -132,6 +133,7 @@ function App() {
               <div className="pb-20">
                 <AdminProductView />
               </div>
+
               <Footer />
             </>
           ) : (
