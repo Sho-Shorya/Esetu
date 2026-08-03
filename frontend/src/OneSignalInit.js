@@ -16,16 +16,22 @@ export async function initOneSignal(token) {
     });
 
     await OneSignal.Notifications.requestPermission();
+
+    const subscriptionId = OneSignal.User.PushSubscription.id;
+
     console.log("Permission:", OneSignal.Notifications.permission);
     console.log("Opted In:", OneSignal.User.PushSubscription.optedIn);
-    console.log("Subscription ID:", OneSignal.User.PushSubscription.id);
+    console.log("Subscription ID:", subscriptionId);
     console.log("Token:", token);
 
-    await axios.put(
+    if (!subscriptionId || !token) {
+      console.log("Subscription ID or token missing.");
+      return;
+    }
+
+    const res = await axios.put(
       `${API_BASE_URL}/api/v1/user/save-subscription`,
-      {
-        subscriptionId,
-      },
+      { subscriptionId },
       {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -33,8 +39,8 @@ export async function initOneSignal(token) {
       },
     );
 
-    console.log("Subscription saved.");
+    console.log("Subscription saved:", res.data);
   } catch (err) {
-    console.error(err);
+    console.error("Save Subscription Error:", err);
   }
 }
