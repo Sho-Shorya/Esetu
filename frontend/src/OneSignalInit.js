@@ -16,12 +16,10 @@ export async function initOneSignal(token) {
     });
 
     await OneSignal.Notifications.requestPermission();
-
-    const subscriptionId = OneSignal.User.PushSubscription.id;
-
-    console.log("Subscription ID:", subscriptionId);
-
-    if (!subscriptionId || !token) return;
+    console.log("Permission:", OneSignal.Notifications.permission);
+    console.log("Opted In:", OneSignal.User.PushSubscription.optedIn);
+    console.log("Subscription ID:", OneSignal.User.PushSubscription.id);
+    console.log("Token:", token);
 
     await axios.put(
       `${API_BASE_URL}/api/v1/user/save-subscription`,

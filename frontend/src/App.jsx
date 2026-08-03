@@ -28,7 +28,7 @@ import OrderHistory from "./pages/Orders";
 import Timer from "./components/Timer";
 import { initOneSignal } from "./OneSignalInit";
 function App() {
-  const { token } = useSelector((state) => state.user);
+  const token = localStorage.getItem("token");
 
   useEffect(() => {
     if (token) {
