@@ -16,6 +16,7 @@ import {
   adminLogout,
   adminRegister,
 } from "../controllers/AdminController.js";
+import { saveSubscriptionId } from "../controllers/saveSubscriptionId.js";
 
 const userRouter = Router();
 

@@ -300,3 +300,43 @@ export const updateUser = async (req, res) => {
     });
   }
 };
+
+export const saveSubscriptionId = async (req, res) => {
+  try {
+    const { subscriptionId } = req.body;
+
+    if (!subscriptionId) {
+      return res.status(400).json({
+        success: false,
+        message: "Subscription ID is required",
+      });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        oneSignalSubscriptionId: subscriptionId,
+      },
+      { new: true },
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Subscription ID saved successfully",
+    });
+  } catch (error) {
+    console.error("Save Subscription Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
