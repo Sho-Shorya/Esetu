@@ -5,6 +5,7 @@ import { Session } from "../models/sessionMedel.js";
 import { sendOptMail } from "../emailVerify/sendOptMail.js";
 import cloudinary from "../utils/cloudinary.js";
 import { generateToken } from "../utils/token.js";
+import { sendNotification } from "../services/oneSignalService.js";
 
 export const register = async (req, res) => {
   try {
@@ -30,6 +31,11 @@ export const register = async (req, res) => {
       phoneNumber,
       place,
       password: hashedPassword,
+    });
+    await sendNotification({
+      subscriptionId: user.oneSignalSubscriptionId,
+      title: "Esetu आपका स्वागत करता है।",
+      message: "आप यहाँ आसानी से ऑर्डर कर सकते हैं।",
     });
 
     await newUser.save();

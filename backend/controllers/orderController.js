@@ -196,8 +196,8 @@ export const addOrder = async (req, res) => {
       await order.save();
       await sendNotification({
         subscriptionId: user.oneSignalSubscriptionId,
-        title: "🛒 ऑर्डर सफल",
-        message: "आपका ऑर्डर सफलतापूर्वक प्राप्त हो गया है।",
+        title: "🛒 ऑर्डर अपडेट किया गया",
+        message: "आपका ऑर्डर सफलतापूर्वक अपडेट हो गया है।",
       });
     } else {
       /* ===========================================
@@ -251,6 +251,12 @@ export const addOrder = async (req, res) => {
         cutoffTime,
       });
     }
+    console.log(user.oneSignalSubscriptionId);
+    await sendNotification({
+      subscriptionId: user.oneSignalSubscriptionId,
+      title: "🛒 ऑर्डर सफल",
+      message: "आपका ऑर्डर सफलतापूर्वक प्राप्त हो गया है।",
+    });
 
     /* ===========================================
        CLEAR USER CART

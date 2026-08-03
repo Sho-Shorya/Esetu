@@ -28,9 +28,13 @@ import OrderHistory from "./pages/Orders";
 import Timer from "./components/Timer";
 import { initOneSignal } from "./OneSignalInit";
 function App() {
+  const { token } = useSelector((state) => state.user);
+
   useEffect(() => {
-    initOneSignal();
-  }, []);
+    if (token) {
+      initOneSignal(token);
+    }
+  }, [token]);
   const { userData, supplierData } = useSelector((state) => state.user);
   const dispatch = useDispatch();
   getCurrentUser();
