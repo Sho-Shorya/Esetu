@@ -196,7 +196,7 @@ export const addOrder = async (req, res) => {
 
       // Send notification
       await sendNotification({
-        userId: req.user._id,
+        userId: userId,
         title: "🛒 ऑर्डर सफल",
         message: "आपका ऑर्डर प्राप्त हो गया है।",
       });
