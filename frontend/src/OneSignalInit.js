@@ -6,11 +6,12 @@ console.log(API_BASE_URL);
 
 let initialized = false;
 
-export async function initOneSignal(token) {
+export async function initOneSignal() {
   if (initialized) return;
   initialized = true;
 
   try {
+    const token = localStorage.getItem("token");
     await OneSignal.init({
       appId: "d62603a2-aad9-431a-a1c9-a86ec46e4a5b",
       allowLocalhostAsSecureOrigin: true,

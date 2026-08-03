@@ -32,7 +32,7 @@ function App() {
 
   useEffect(() => {
     if (token) {
-      initOneSignal(token);
+      initOneSignal();
     }
   }, [token]);
   const { userData, supplierData } = useSelector((state) => state.user);

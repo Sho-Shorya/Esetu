@@ -1,4 +1,4 @@
-import { User } from "../models/userModel";
+import User from "../models/userModel";
 
 export const saveSubscriptionId = async (req, res) => {
   try {
