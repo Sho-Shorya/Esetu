@@ -1,5 +1,9 @@
 export const saveSubscriptionId = async (req, res) => {
   try {
+    console.log("===== SAVE SUBSCRIPTION =====");
+    console.log("User ID:", req.userId);
+    console.log("Body:", req.body);
+
     const { subscriptionId } = req.body;
 
     if (!subscriptionId) {
@@ -9,9 +13,15 @@ export const saveSubscriptionId = async (req, res) => {
       });
     }
 
-    await User.findByIdAndUpdate(req.user._id, {
-      oneSignalSubscriptionId: subscriptionId,
-    });
+    const user = await User.findByIdAndUpdate(
+      req.userId,
+      {
+        oneSignalSubscriptionId: subscriptionId,
+      },
+      { new: true },
+    );
+
+    console.log("Updated User:", user);
 
     res.status(200).json({
       success: true,
