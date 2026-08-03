@@ -193,6 +193,13 @@ export const addOrder = async (req, res) => {
       order.totalAmount += cart.totalPrice;
 
       await order.save();
+
+      // Send notification
+      await sendNotification({
+        userId: req.user._id,
+        title: "🛒 ऑर्डर सफल",
+        message: "आपका ऑर्डर प्राप्त हो गया है।",
+      });
     } else {
       /* ===========================================
        CREATE NEW ORDER
@@ -405,6 +412,11 @@ export const setOrderCutoffTime = async (req, res) => {
 
     order.cutoffTime = newCutoff;
     await order.save();
+    await sendNotification({
+      userId: order.userId,
+      title: `✅ नया कट-ऑफ़ समय -${newCutoff.getTime()}`,
+      message: "कट-ऑफ समय अपडेट कर दिया गया है।।",
+    });
 
     return res.status(200).json({
       success: true,
@@ -592,17 +604,6 @@ export const updateOrderStatus = async (req, res) => {
     }
 
     await order.save();
-
-    // if (order.userId) {
-    //   const notifiedUser = await User.findById(order.userId);
-    //   if (notifiedUser?.phoneNumber) {
-    //     await sendMobileNotification({
-    //       phone: notifiedUser.phoneNumber,
-    //       title: "ऑर्डर स्टेटस अपडेट",
-    //       body: `ऑर्डर #${order._id?.slice(-6)} अब ${status} है।`,
-    //     });
-    //   }
-    // }
 
     return res.status(200).json({
       success: true,
