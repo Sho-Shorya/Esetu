@@ -3,7 +3,7 @@ import { Cart } from "../models/cartModel.js";
 import { User } from "../models/userModel.js";
 import Company from "../models/companiesModel.js";
 import AppSetting from "../models/appSettingModel.js";
-import { sendNotification } from "../services/OneSignalService.js";
+import { sendNotification } from "../services/oneSignalService.js";
 
 const DEFAULT_ORDER_CUTOFF = "12:00";
 
