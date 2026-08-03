@@ -1,3 +1,5 @@
+import { User } from "../models/userModel";
+
 export const saveSubscriptionId = async (req, res) => {
   try {
     console.log("===== SAVE SUBSCRIPTION =====");
