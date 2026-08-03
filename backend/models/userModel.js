@@ -21,6 +21,10 @@ const userSchema = new mongoose.Schema(
     place: { type: String, default: "" },
     zipCode: { type: String, default: "" },
     gender: { type: String, default: "" },
+    oneSignalSubscriptionId: {
+      type: String,
+      default: "",
+    },
   },
   { timestamps: true },
 ); //gives timeStamps for "Created at" and "updated at"

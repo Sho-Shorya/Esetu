@@ -3,6 +3,7 @@ import { Cart } from "../models/cartModel.js";
 import { User } from "../models/userModel.js";
 import Company from "../models/companiesModel.js";
 import AppSetting from "../models/appSettingModel.js";
+import { sendNotification } from "../services/OneSignalService.js";
 
 const DEFAULT_ORDER_CUTOFF = "12:00";
 
@@ -194,11 +195,10 @@ export const addOrder = async (req, res) => {
 
       await order.save();
 
-      // Send notification
       await sendNotification({
-        userId: userId,
+        subscriptionId: user.oneSignalSubscriptionId,
         title: "🛒 ऑर्डर सफल",
-        message: "आपका ऑर्डर प्राप्त हो गया है।",
+        message: "आपका ऑर्डर सफलतापूर्वक प्राप्त हो गया है।",
       });
     } else {
       /* ===========================================
