@@ -1,38 +1,31 @@
-import {
-  DefaultApi,
-  Configuration,
-  Notification,
-} from "@onesignal/node-onesignal";
-
-const configuration = new Configuration({
-  appKey: process.env.ONESIGNAL_REST_API_KEY,
-});
-
-const client = new DefaultApi(configuration);
+import axios from "axios";
 
 export const sendNotification = async ({ subscriptionId, title, message }) => {
   try {
-    const notification = new Notification();
-
-    notification.app_id = process.env.ONESIGNAL_APP_ID;
-
-    // Send to one specific device/subscription
-    notification.include_subscription_ids = [subscriptionId];
-
-    notification.headings = {
-      en: title,
-      hi: title,
-    };
-
-    notification.contents = {
-      en: message,
-      hi: message,
-    };
-
-    await client.createNotification(notification);
+    await axios.post(
+      "https://api.onesignal.com/notifications",
+      {
+        app_id: process.env.ONESIGNAL_APP_ID,
+        include_subscription_ids: [subscriptionId],
+        headings: {
+          en: title,
+          hi: title,
+        },
+        contents: {
+          en: message,
+          hi: message,
+        },
+      },
+      {
+        headers: {
+          Authorization: `Key ${process.env.ONESIGNAL_REST_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+      },
+    );
 
     console.log("✅ Notification sent");
-  } catch (error) {
-    console.error("❌ OneSignal Error:", error.body || error);
+  } catch (err) {
+    console.error("❌ OneSignal Error:", err.response?.data || err.message);
   }
 };

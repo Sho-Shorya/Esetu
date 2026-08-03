@@ -37,5 +37,6 @@ userRouter.put(
   singleUpload("profilePic"),
   updateUser,
 );
+userRouter.put("/save-subscription", isAuthenticated, saveSubscriptionId);
 
 export default userRouter;

@@ -194,7 +194,6 @@ export const addOrder = async (req, res) => {
       order.totalAmount += cart.totalPrice;
 
       await order.save();
-
       await sendNotification({
         subscriptionId: user.oneSignalSubscriptionId,
         title: "🛒 ऑर्डर सफल",
