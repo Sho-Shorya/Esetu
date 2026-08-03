@@ -26,7 +26,11 @@ import ProductsList from "./pages/ProductsList";
 import MyTodayOrder from "./pages/MyTodayOrder";
 import OrderHistory from "./pages/Orders";
 import Timer from "./components/Timer";
+import { initOneSignal } from "./OneSignalInit";
 function App() {
+  useEffect(() => {
+    initOneSignal();
+  }, []);
   const { userData, supplierData } = useSelector((state) => state.user);
   const dispatch = useDispatch();
   getCurrentUser();
