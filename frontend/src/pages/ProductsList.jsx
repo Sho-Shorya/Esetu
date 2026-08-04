@@ -103,6 +103,11 @@ const ProductsList = () => {
       console.log(error);
     }
   };
+  const handleCross = () => {
+    setSelectedProduct(null);
+    setSelectedCompany("");
+    setSelectedMeasurement("");
+  };
 
   const currentPrice = (selectedVariant?.price || 0) * qty;
 
@@ -113,7 +118,7 @@ const ProductsList = () => {
   const discount = Math.round(((fakeMrp - currentPrice) / fakeMrp) * 100);
 
   return (
-    <div className="min-h-screen bg-gray-100 pb-24">
+    <div onClick={handleCross} className="min-h-screen bg-gray-100 pb-24 ">
       {/* Search Result */}
 
       {searchQuery && (
@@ -276,11 +281,7 @@ const ProductsList = () => {
                 </div>
 
                 <button
-                  onClick={() => {
-                    setSelectedProduct(null);
-                    setSelectedCompany("");
-                    setSelectedMeasurement("");
-                  }}
+                  onClick={handleCross}
                   className="h-10 w-10 absolute right-4 top-11 rounded-full bg-gray-100 flex justify-center items-center"
                 >
                   <X />

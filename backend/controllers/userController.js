@@ -63,16 +63,20 @@ export const login = async (req, res) => {
       });
     }
     const existingUser = await User.findOne({ phoneNumber });
+
     if (!existingUser) {
-      return res.status(400).json({ message: "यह यूज़र मौजूद नहीं है!" });
+      return res.status(400).json({
+        success: false,
+        message: "यह यूज़र मौजूद नहीं है!",
+      });
     }
 
-    if (!existingUser.role == "user") {
-      return res
-        .status(400)
-        .json({ message: "आप सप्लायर के तौर पर रजिस्टर्ड हैं!" });
+    if (existingUser.role !== "user") {
+      return res.status(403).json({
+        success: false,
+        message: "यह लॉगिन केवल खरीददारों के लिए है।",
+      });
     }
-
     const isPasswordValid = await bcrypt.compare(
       password,
       existingUser.password,

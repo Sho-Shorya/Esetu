@@ -159,8 +159,7 @@ const AdminTodayOrders = (page) => {
                   <div>
                     <div className="text-lg flex gap-2 font-bold items-center mt-2 text-gray-700">
                       <p className="text-gray-600 text-sm">खरीददार : </p>{" "}
-                      {order.userId?.firstName.toUpperCase()}{" "}
-                      {order.userId?.lastName.toUpperCase()}
+                      {order.userId?.firstName} {order.userId?.lastName}
                     </div>
                     <div className="text-lg flex gap-2 text-[16px] font-bold items-center  ">
                       <p className="text-gray-600 text-sm">फोन: </p>

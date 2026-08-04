@@ -66,7 +66,7 @@ export const adminLogin = async (req, res) => {
     if (!existingUser) {
       return res.status(400).json({ message: "Supplier don't exists!" });
     }
-    if (!existingUser.role == "supplier") {
+    if (existingUser.role !== "supplier") {
       return res.status(400).json({
         message: "आप सप्लायर नहीं हैं, दुकानदार के तौर पर लॉग इन करें।",
       });

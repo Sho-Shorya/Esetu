@@ -156,7 +156,7 @@ const Profile = () => {
     }
   };
   return (
-    <div className="min-h-screen bg-gray-100 px-3 py-20 sm:px-4 lg:px-6">
+    <div className=" relative min-h-screen bg-gray-100 px-3 py-20 sm:px-4 lg:px-6">
       <Tabs defaultValue="profile" className="mx-auto w-full max-w-5xl">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger
@@ -326,7 +326,7 @@ const Profile = () => {
         </TabsContent>
       </Tabs>
       {updateLoading && (
-        <div className="w-full h-full bg-black/50 flex items-center justify-center">
+        <div className="absolute w-full h-full bg-black/70 flex items-center justify-center">
           <div className="w-[80%] text-black h-[40%] bg-red-50 flex flex-col items-center justify-center">
             <Loader2 className="animate-spin h-10 w-10" />
             <p className="text-[15px] font-semibold">प्रोफ़ाइल सेव हो रही है</p>
