@@ -31,6 +31,8 @@ export const fetchAllProducts = async (dispatch) => {
     dispatch(setCartData(resCart.data.cart));
   } catch (error) {
     console.log(error);
+  } finally {
+    setLoading(false);
   }
 };
 
