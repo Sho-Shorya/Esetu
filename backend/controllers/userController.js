@@ -13,14 +13,14 @@ export const register = async (req, res) => {
     if (!firstName || !lastName || !phoneNumber || !place || !password) {
       return res.status(400).json({
         success: false,
-        message: "All fields are required",
+        message: "सभी फ़ील्ड आवश्यक हैं!",
       });
     }
     const user = await User.findOne({ phoneNumber });
     if (user) {
       return res.status(400).json({
         success: false,
-        message: "User already exists!",
+        message: "यह यूज़र मौजूद है!, कृपया लॉगिन करें!",
       });
     }
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -34,15 +34,16 @@ export const register = async (req, res) => {
     });
     await sendNotification({
       subscriptionId: newUser.oneSignalSubscriptionId,
-      title: "Esetu आपका स्वागत करता है।",
-      message: "आप यहाँ आसानी से ऑर्डर कर सकते हैं।",
+      title: "🙏 E-SETU आपका स्वागत करता है।",
+      message:
+        "यहाँ आप आसानी से ऑर्डर कर सकते हैं और अपने ऑर्डर को मैनेज कर सकते हैं।",
     });
 
     await newUser.save();
 
     return res.status(201).json({
       success: true,
-      message: "User registered successfully",
+      message: "यूज़र रजिस्ट्रेशन पूरा हो गया है, कृपया लॉग इन करें।",
       user: newUser,
     });
   } catch (error) {
@@ -58,12 +59,18 @@ export const login = async (req, res) => {
     const { phoneNumber, password } = req.body;
     if (!phoneNumber || !password) {
       return res.status(400).json({
-        message: "All fields are required!",
+        message: "सभी फ़ील्ड आवश्यक हैं!",
       });
     }
     const existingUser = await User.findOne({ phoneNumber });
     if (!existingUser) {
-      return res.status(400).json({ message: "User don't exists!" });
+      return res.status(400).json({ message: "यह यूज़र मौजूद नहीं है!" });
+    }
+
+    if (!existingUser.role == "user") {
+      return res
+        .status(400)
+        .json({ message: "आप सप्लायर के तौर पर रजिस्टर्ड हैं!" });
     }
 
     const isPasswordValid = await bcrypt.compare(
@@ -73,7 +80,7 @@ export const login = async (req, res) => {
     if (!isPasswordValid) {
       return res.status(400).json({
         success: false,
-        message: "Invalid credentials!",
+        message: "गलत पासवर्ड डाला गया!",
       });
     }
 
@@ -141,8 +148,8 @@ export const getCurrentUser = async (req, res) => {
 export const changePassword = async (req, res) => {
   try {
     const { newPassword, confirmPassword } = req.body;
-    const { email } = req.params;
-    const user = await User.findOne({ email });
+    const { phoneNumber } = req.params;
+    const user = await User.findOne({ phoneNumber });
     if (!user) {
       return res.status(400).json({
         success: false,
@@ -152,13 +159,13 @@ export const changePassword = async (req, res) => {
     if (!newPassword || !confirmPassword) {
       return res.status(400).json({
         success: false,
-        message: "Please enter new password and confirm",
+        message: "कृपया नया पासवर्ड डालें और कन्फर्म करें।",
       });
     }
     if (newPassword !== confirmPassword) {
       return res.status(400).json({
         success: false,
-        message: "Password do not match",
+        message: "पासवर्ड मेल नहीं खाता ❌",
       });
     }
     const hashedPassword = await bcrypt.hash(newPassword, 10);
@@ -166,7 +173,7 @@ export const changePassword = async (req, res) => {
     await user.save();
     return res.status(200).json({
       success: true,
-      message: "Password changed successfully!",
+      message: "पासवर्ड सफलतापूर्वक बदला गया! ✅",
     });
   } catch (error) {
     return res.status(500).json({
@@ -230,7 +237,7 @@ export const updateUser = async (req, res) => {
       });
     }
 
-    const { firstName, lastName, address, city, zipCode, country, gender } =
+    const { firstName, lastName, address, zipCode, place, country, gender } =
       req.body;
 
     if (loggedInUser._id.toString() !== userIdToUpdate) {
@@ -285,7 +292,7 @@ export const updateUser = async (req, res) => {
     user.firstName = firstName || user.firstName;
     user.lastName = lastName || user.lastName;
     user.address = address || user.address;
-    user.city = city || user.city;
+    user.place = place || user.place;
     user.zipCode = zipCode || user.zipCode;
     user.country = country !== undefined ? country : user.country;
     user.gender = gender !== undefined ? gender : user.gender;

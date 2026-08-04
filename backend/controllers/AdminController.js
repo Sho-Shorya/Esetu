@@ -65,6 +65,11 @@ export const adminLogin = async (req, res) => {
     if (!existingUser) {
       return res.status(400).json({ message: "Supplier don't exists!" });
     }
+    if (!existingUser.role == "supplier") {
+      return res.status(400).json({
+        message: "आप सप्लायर नहीं हैं, दुकानदार के तौर पर लॉग इन करें।",
+      });
+    }
 
     const isPasswordValid = await bcrypt.compare(
       password,
@@ -73,7 +78,7 @@ export const adminLogin = async (req, res) => {
     if (!isPasswordValid) {
       return res.status(400).json({
         success: false,
-        message: "Invalid credentials!",
+        message: "डाला गया पासवर्ड गलत है। ❌",
       });
     }
 
@@ -215,17 +220,19 @@ export const getUserById = async (req, res) => {
   }
 };
 
+import cloudinary from "../utils/cloudinary.js";
+import { User } from "../models/userModel.js";
+import { sendNotification } from "../services/oneSignalService.js";
+
 export const updateUser = async (req, res) => {
   try {
     const userIdToUpdate = req.params.userId;
-    //the id of the user we want to update
-    const loggedInUser = req.user; //from isAuthenticated middleware
+    const loggedInUser = req.user;
 
-    // Validate that userIdToUpdate is provided and not "undefined"
     if (!userIdToUpdate || userIdToUpdate === "undefined") {
       return res.status(400).json({
         success: false,
-        message: "User ID is required for profile update",
+        message: "User ID is required.",
       });
     }
 
@@ -233,7 +240,7 @@ export const updateUser = async (req, res) => {
       firstName,
       lastName,
       address,
-      city,
+      place,
       zipCode,
       phoneNumber,
       role,
@@ -241,48 +248,63 @@ export const updateUser = async (req, res) => {
       gender,
     } = req.body;
 
+    // User can update only their own profile.
+    // Supplier/Admin can update anyone.
     if (
       loggedInUser._id.toString() !== userIdToUpdate &&
-      loggedInUser.role !== "admin"
+      loggedInUser.role !== "supplier"
     ) {
       return res.status(403).json({
         success: false,
-        message: "You are not allowed to update this profile",
+        message: "You are not allowed to update this profile.",
       });
     }
-    let user = await User.findById(userIdToUpdate);
+
+    const user = await User.findById(userIdToUpdate);
+
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User not found!",
+        message: "User not found.",
       });
     }
-    // use the fields that actually exist on the model
+
     let profilePicUrl = user.profilePic || "";
     let profilePicPublicId = user.profilePicPublicId || "";
 
-    // if files are present, enforce a single-file upload for profile updates
+    // Only one image allowed
     if (Array.isArray(req.files) && req.files.length > 1) {
       return res.status(400).json({
         success: false,
-        message: "Only one file allowed for profile update",
+        message: "Only one profile image is allowed.",
       });
     }
-    // accept either req.file (single) or the single element in req.files
+
     const fileToUpload =
       req.file ||
-      (Array.isArray(req.files) && req.files.length === 1 && req.files[0]);
+      (Array.isArray(req.files) && req.files.length === 1
+        ? req.files[0]
+        : null);
+
     if (fileToUpload) {
+      // Delete previous image
       if (profilePicPublicId) {
-        await cloudinary.uploader.destroy(profilePicPublicId);
+        try {
+          await cloudinary.uploader.destroy(profilePicPublicId);
+        } catch (err) {
+          console.log("Old image delete failed:", err.message);
+        }
       }
 
+      // Upload new image
       const uploadResult = await new Promise((resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
-          { folder: "profile" },
+          {
+            folder: "profile",
+          },
           (error, result) => {
-            if (error) reject(error);
-            else resolve(result);
+            if (error) return reject(error);
+            resolve(result);
           },
         );
 
@@ -293,26 +315,45 @@ export const updateUser = async (req, res) => {
       profilePicPublicId = uploadResult.public_id;
     }
 
-    user.firstName = firstName || user.firstName;
-    user.lastName = lastName || user.lastName;
-    user.address = address || user.address;
-    user.city = city || user.city;
-    user.zipCode = zipCode || user.zipCode;
-    user.phoneNo = phoneNo || user.phoneNo;
-    user.role = role || user.role;
-    user.country = country !== undefined ? country : user.country;
-    user.gender = gender !== undefined ? gender : user.gender;
+    // Update fields
+    if (firstName !== undefined) user.firstName = firstName;
+    if (lastName !== undefined) user.lastName = lastName;
+    if (address !== undefined) user.address = address;
+    if (place !== undefined) user.place = place;
+    if (zipCode !== undefined) user.zipCode = zipCode;
+    if (phoneNumber !== undefined) user.phoneNumber = phoneNumber;
+    if (country !== undefined) user.country = country;
+    if (gender !== undefined) user.gender = gender;
+
+    // Only supplier/admin can change role
+    if (loggedInUser.role === "supplier" && role) {
+      user.role = role;
+    }
+
     user.profilePic = profilePicUrl;
+    user.profilePicPublicId = profilePicPublicId;
 
     const updatedUser = await user.save();
 
+    // Notification
+    if (updatedUser.oneSignalSubscriptionId) {
+      const updatedBy = loggedInUser.role === "supplier" ? "एडमिन" : "आपने";
+
+      await sendNotification({
+        subscriptionId: updatedUser.oneSignalSubscriptionId,
+        title: "👤 प्रोफ़ाइल अपडेट हुई",
+        message: `${updatedBy} आपकी प्रोफ़ाइल सफलतापूर्वक अपडेट की है।`,
+      });
+    }
+
     return res.status(200).json({
       success: true,
-      message: "Profile Updated Successfully",
+      message: "प्रोफ़ाइल सफलतापूर्वक अपडेट हो गई। ✅",
       user: updatedUser,
     });
   } catch (error) {
-    console.error("Profile update error:", error.message);
+    console.error("Update User Error:", error);
+
     return res.status(500).json({
       success: false,
       message: error.message,

@@ -15,6 +15,8 @@ import orderRouter from "./routes/orderRoutes.js";
 import settingsRouter from "./routes/settingsRoute.js";
 import offerRoute from "./routes/offerRoute.js";
 import { syncTodayOrderFlags } from "./controllers/orderController.js";
+import { startReminderCron } from "./services/reminderCron.js";
+
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -67,10 +69,15 @@ const scheduleMidnightSync = () => {
 app.listen(PORT, async () => {
   try {
     await connectDb();
+
     await syncTodayOrderFlags();
+
     scheduleMidnightSync();
 
-    console.log(`Server running on port ${PORT}`);
+    // ✅ Start reminder cron
+    startReminderCron();
+
+    console.log(`🚀 Server running on port ${PORT}`);
   } catch (err) {
     console.error("Server startup failed:", err);
   }

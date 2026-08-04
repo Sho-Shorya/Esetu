@@ -8,10 +8,12 @@ import axios, { Axios } from "axios";
 import { setSupplierData, setUserData } from "@/redux/userSlice";
 import { API_BASE_URL } from "@/lib/constants";
 import { useNavigate } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 
 const Profile = () => {
   const { userData, supplierData } = useSelector((store) => store.user);
   const [displayUser, setDisplayUser] = useState(null);
+  const [updateLoading, setUpdateLoading] = useState(false);
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
@@ -89,6 +91,7 @@ const Profile = () => {
   };
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setUpdateLoading(true);
 
     if (!displayUser || !displayUser._id) {
       toast.error(
@@ -120,7 +123,7 @@ const Profile = () => {
       formData.append("gender", updateUser.gender || "");
 
       if (file) {
-        formData.append("file", file); //image file for backend multer
+        formData.append("profilePic", file); //image file for backend multer
       }
 
       const res = await axios.put(
@@ -148,6 +151,8 @@ const Profile = () => {
       toast.error(
         error?.response?.data?.message || "प्रोफ़ाइल अपडेट करने में विफल",
       );
+    } finally {
+      setUpdateLoading(false);
     }
   };
   return (
@@ -319,78 +324,15 @@ const Profile = () => {
             </div>
           </div>
         </TabsContent>
-
-        <TabsContent value="order">
-          <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm sm:p-6">
-            <div className="mb-4 flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-semibold text-gray-800">
-                  Recent Orders
-                </h2>
-                <p className="text-sm text-gray-500">
-                  Your latest processed orders appear here.
-                </p>
-              </div>
-            </div>
-
-            {orders.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-500">
-                No orders yet. Place an order to see it here.
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {orders.map((order, index) => (
-                  <div
-                    key={order._id || index}
-                    className="rounded-xl border border-gray-200 p-4"
-                  >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <p className="font-semibold overflow-hidden text-[23px] text-gray-800">
-                          {order._id || `Order ${index + 1}`}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          {new Date(order.createdAt).toLocaleString()}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`rounded-full px-3 py-1 text-sm font-medium ${order.status === "Delivered" ? "bg-emerald-100 text-emerald-700" : order.status === "Cancelled" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}
-                        >
-                          {order.status || "Processing"}
-                        </span>
-                        <span className="text-sm font-semibold text-gray-700">
-                          ₹{order.totalAmount || 0}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      {order.items?.slice(0, 3).map((item, itemIndex) => (
-                        <div
-                          key={`${order._id || index}-${itemIndex}`}
-                          className="flex items-center gap-3 rounded-lg bg-gray-50 p-2"
-                        >
-                          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gray-200 text-xs text-gray-500">
-                            {item.name?.charAt(0) || "P"}
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-gray-700">
-                              {item.name}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              Qty: {item.quantity || 1}
-                            </p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </TabsContent>
       </Tabs>
+      {updateLoading && (
+        <div className="w-full h-full bg-black/50 flex items-center justify-center">
+          <div className="w-[80%] text-black h-[40%] bg-red-50 flex flex-col items-center justify-center">
+            <Loader2 className="animate-spin h-10 w-10" />
+            <p className="text-[15px] font-semibold">प्रोफ़ाइल सेव हो रही है</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

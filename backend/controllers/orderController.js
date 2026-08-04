@@ -257,7 +257,18 @@ export const addOrder = async (req, res) => {
       title: "🛒 ऑर्डर सफल",
       message: "आपका ऑर्डर सफलतापूर्वक प्राप्त हो गया है।",
     });
+    const admins = await User.find({
+      role: "supplier", // or "admin" if that's your role
+      oneSignalSubscriptionId: { $ne: "" },
+    });
 
+    for (const admin of admins) {
+      await sendNotification({
+        subscriptionId: admin.oneSignalSubscriptionId,
+        title: "🛒 नया ऑर्डर आया है",
+        message: `${user.firstName} ${user.lastName} ने नया ऑर्डर किया है।`,
+      });
+    }
     /* ===========================================
        CLEAR USER CART
     =========================================== */
@@ -269,7 +280,7 @@ export const addOrder = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Order placed successfully.",
+      message: "ऑर्डर सफलतापूर्वक प्लेस हो गया। ✅",
       order,
     });
   } catch (error) {
@@ -420,12 +431,20 @@ export const setOrderCutoffTime = async (req, res) => {
 
     const user = await User.findById(order.userId);
 
-    await sendNotification({
-      subscriptionId: user.oneSignalSubscriptionId,
-      title: "✅ नया कट-ऑफ़ समय",
-      message: "कट-ऑफ समय अपडेट कर दिया गया है।",
-    });
+    const formattedTime = new Date(order.cutoffTime).toLocaleTimeString(
+      "en-IN",
+      {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      },
+    );
 
+    await sendNotification({
+      sendToAll: true,
+      title: "⏰ नया कट-ऑफ़ समय",
+      message: `आज का ऑर्डर कट-ऑफ़ समय ${formattedTime} कर दिया गया है।`,
+    });
     return res.status(200).json({
       success: true,
       order,
@@ -555,6 +574,14 @@ export const updateOrderStatus = async (req, res) => {
     const { orderId } = req.params;
     const { status } = req.body;
 
+    // Admin can only approve or decline
+    if (!["Approved", "Declined"].includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Only Approved or Declined status is allowed.",
+      });
+    }
+
     const order = await Order.findById(orderId);
 
     if (!order) {
@@ -563,59 +590,57 @@ export const updateOrderStatus = async (req, res) => {
         message: "Order not found.",
       });
     }
-    const canMoveTo = (currentStatus, nextStatus) => {
-      const transitions = {
-        Pending: ["Approved", "Declined"],
-        Approved: ["Preparing"],
-        Preparing: ["Out For Delivery"],
-        "Out For Delivery": ["Delivered"],
-        Delivered: [],
-        Declined: [],
-        Cancelled: [],
-      };
 
-      return transitions[currentStatus]?.includes(nextStatus);
-    };
-
-    // Valid status transitions
-    if (!canMoveTo(order.status, status)) {
+    // Already processed
+    if (order.status !== "Pending") {
       return res.status(400).json({
         success: false,
-        message: `Cannot change order from "${order.status}" to "${status}".`,
+        message: "Only pending orders can be updated.",
       });
     }
 
     order.status = status;
 
-    switch (status) {
-      case "Approved":
-        order.approvedAt = new Date();
-        break;
+    if (status === "Approved") {
+      order.approvedAt = new Date();
+    }
 
-      case "Delivered":
-        order.deliveredAt = new Date();
-        order.isTodayOrder = false;
-        break;
-
-      case "Cancelled":
-        order.cancelledAt = new Date();
-        order.isTodayOrder = false;
-        break;
-
-      case "Declined":
-        order.declinedAt = new Date();
-        order.isTodayOrder = false;
-        break;
-
-      default:
-        break;
+    if (status === "Declined") {
+      order.declinedAt = new Date();
+      order.isTodayOrder = false;
     }
 
     await order.save();
 
+    // ==========================
+    // Send Notification
+    // ==========================
+
+    const user = await User.findById(order.userId);
+
+    if (user?.oneSignalSubscriptionId) {
+      if (status === "Approved") {
+        await sendNotification({
+          subscriptionId: user.oneSignalSubscriptionId,
+          title: "✅ आपका ऑर्डर स्वीकार कर लिया गया",
+          message:
+            "आपका ऑर्डर सफलतापूर्वक Approved हो गया है। जल्द ही इसकी तैयारी शुरू होगी।",
+        });
+      }
+
+      if (status === "Declined") {
+        await sendNotification({
+          subscriptionId: user.oneSignalSubscriptionId,
+          title: "❌ आपका ऑर्डर अस्वीकार कर दिया गया",
+          message:
+            "क्षमा करें, आपका ऑर्डर स्वीकार नहीं किया जा सका। अधिक जानकारी के लिए कृपया एडमिन से संपर्क करें।",
+        });
+      }
+    }
+
     return res.status(200).json({
       success: true,
-      message: `Order marked as ${status}.`,
+      message: `Order ${status.toLowerCase()} successfully.`,
       order,
     });
   } catch (error) {

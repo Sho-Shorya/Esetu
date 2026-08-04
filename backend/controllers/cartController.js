@@ -72,6 +72,8 @@ export const addToCart = async (req, res) => {
       });
     }
 
+    // Add the new item...
+
     const existingIndex = cart.items.findIndex(
       (item) =>
         item.productId.toString() === productId &&

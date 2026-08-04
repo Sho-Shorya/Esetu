@@ -276,7 +276,11 @@ const ProductsList = () => {
                 </div>
 
                 <button
-                  onClick={() => setSelectedProduct(null)}
+                  onClick={() => {
+                    setSelectedProduct(null);
+                    setSelectedCompany("");
+                    setSelectedMeasurement("");
+                  }}
                   className="h-10 w-10 absolute right-4 top-11 rounded-full bg-gray-100 flex justify-center items-center"
                 >
                   <X />

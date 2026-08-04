@@ -76,23 +76,28 @@ const AdminTodayOrders = (page) => {
     };
     fetchUsers();
   }, []);
-
   const handleStatus = async (orderId, status) => {
-    if (!token) return;
+    if (!token || updatingOrderId) return;
+
     setUpdatingOrderId(orderId);
+
     try {
       const res = await axios.put(
         `${API_BASE_URL}/api/v1/order/update-status/${orderId}`,
         { status },
         {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         },
       );
+
       if (res.data.success) {
         setOrders((prev) =>
           prev.map((order) => (order._id === orderId ? res.data.order : order)),
         );
-        toast.success(`Order ${status} कर दिया गया।`);
+
+        toast.success(res.data.message);
       }
     } catch (error) {
       toast.error(error.response?.data?.message || "स्टेटस बदलने में समस्या।");
