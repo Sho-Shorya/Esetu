@@ -273,7 +273,7 @@ const Cart = () => {
 
   if (loading) {
     return (
-      <div className="mt-24 flex min-h-[70vh] items-center justify-center">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/10 backdrop-blur-sm">
         <motion.div
           animate={{ rotate: 360 }}
           transition={{
@@ -281,7 +281,7 @@ const Cart = () => {
             duration: 1,
             ease: "linear",
           }}
-          className="h-14 w-14 rounded-full border-4 border-green-600 border-t-transparent"
+          className="h-14 w-14 rounded-full border-4 border-red-600 border-t-transparent"
         />
       </div>
     );

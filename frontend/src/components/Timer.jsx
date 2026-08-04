@@ -95,7 +95,18 @@ const Timer = () => {
   const isActive = status === "countdown" && countdown > 0;
   const display = isActive ? formatTime(countdown) : "00:00:00";
   const label = "कटऑफ़";
+  const diffSeconds = countdown;
+  const diffMinutes = Math.floor(diffSeconds / 60);
 
+  const bgColor =
+    diffMinutes <= 10
+      ? "from-red-500 to-red-700"
+      : diffMinutes <= 30
+        ? "from-orange-500 to-orange-700"
+        : "from-emerald-500 to-green-700";
+
+  const isLast10Minutes = diffSeconds <= 10 * 60 && diffSeconds > 0;
+  const isLastMinute = diffSeconds <= 60 && diffSeconds > 0;
   return (
     <motion.div
       initial={{ opacity: 0, y: 24, scale: 0.9 }}
@@ -104,15 +115,15 @@ const Timer = () => {
       drag
       dragConstraints={{ left: -160, right: 0, top: -90, bottom: 0 }}
       dragElastic={0.12}
-      className="fixed mb-20 right-4 bottom-10 z-50 flex h-20 w-20 cursor-grab items-center justify-center rounded-full border border-white/20 bg-gradient-to-br from-red-600 to-red-600 p-2 text-center text-white shadow-2xl"
+      className={`fixed mb-20 ${isLast10Minutes ? "animate-bounce" : ""}  right-4 bottom-8 z-50 flex h-25 w-25 cursor-grab items-center justify-center rounded-full border border-white/20 bg-gradient-to-br  ${bgColor} p-2 text-center text-white shadow-2xl`}
     >
       <div className="flex h-full w-full flex-col items-center justify-center gap-0 text-center">
-        <div className="relative flex items-center justify-center rounded-full bg-white/18 p-2 bg-red-500 text-white">
-          <div className="absolute border-2 border-yellow-600 animate-ping h-5 w-5 rounded-full"></div>
-          <Clock3 className={isActive ? "animate-spin h-5 w-5" : "h-5 w-5"} />
+        <div className="relative flex items-center justify-center rounded-full bg-white/18 p-[7px] bg-red-500 text-white">
+          <div className="absolute border-2 border-white-600 animate-ping h-7 w-7 rounded-full"></div>
+          <Clock3 className={isActive ? "animate-spin h-6 w-6" : "h-6 w-6"} />
         </div>
-        <div className="mt-1 text-xs font-semibold">{display}</div>
-        <div className="text-[10px] text-white/80">{label}</div>
+        <div className="mt-1 text-lg font-semibold">{display}</div>
+        <div className="text-[12px] font-semibold text-white/80">{label}</div>
       </div>
     </motion.div>
   );

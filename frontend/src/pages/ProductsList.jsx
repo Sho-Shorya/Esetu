@@ -2,7 +2,14 @@ import React, { useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Package, CircleCheck, X, ShoppingCart } from "lucide-react";
+import {
+  Search,
+  Package,
+  CircleCheck,
+  X,
+  ShoppingCart,
+  Loader2,
+} from "lucide-react";
 import axios from "axios";
 import { setCartData } from "@/redux/ProductSlice";
 import { API_BASE_URL } from "@/lib/constants";
@@ -56,22 +63,24 @@ const ProductsList = () => {
     setQty(1);
 
     const firstVariant = product?.variants?.[0];
-    setSelectedCompany(firstVariant?.company || "");
-    setSelectedMeasurement(firstVariant?.measurement || "");
+    setSelectedCompany("");
+    setSelectedMeasurement("");
   };
   const selectedVariant = selectedProduct?.variants.find(
     (variant) =>
       variant.company._id === selectedCompany?._id &&
       variant.measurement === selectedMeasurement,
   );
+  const [addLoading, setAddLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!selectedVariant) {
-      toast.error("Please select company and measurement", { duration: 1000 });
+      toast.error("कृपया कंपनी और माप चुनें।", { duration: 2000 });
       return;
     }
+    setAddLoading(true);
 
     const cartItem = {
       productId: selectedProduct._id,
@@ -101,6 +110,8 @@ const ProductsList = () => {
       }
     } catch (error) {
       console.log(error);
+    } finally {
+      setAddLoading(false);
     }
   };
   const handleCross = () => {
@@ -118,7 +129,7 @@ const ProductsList = () => {
   const discount = Math.round(((fakeMrp - currentPrice) / fakeMrp) * 100);
 
   return (
-    <div onClick={handleCross} className="min-h-screen bg-gray-100 pb-24 ">
+    <div className="min-h-screen bg-gray-100 pb-24 ">
       {/* Search Result */}
 
       {searchQuery && (
@@ -218,7 +229,7 @@ const ProductsList = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={() => setSelectedProduct(null)}
+              onClick={handleCross}
               className="fixed inset-0  bg-black/40 backdrop-blur-sm z-40"
             />
 
@@ -298,7 +309,7 @@ const ProductsList = () => {
                   ).values(),
                 ].length > 0 && (
                   <div>
-                    <h3 className="font-semibold mb-2">Company</h3>
+                    <h3 className="font-semibold mb-2">कंपनी चुनें</h3>
 
                     <div className="flex flex-wrap gap-2">
                       {[
@@ -327,7 +338,7 @@ const ProductsList = () => {
                 )}
                 {selectedCompany && (
                   <div>
-                    <h3 className="font-semibold mb-2">Measurement</h3>
+                    <h3 className="font-semibold mb-2">माप चुनें</h3>
 
                     <div className="flex flex-wrap gap-2">
                       {selectedProduct.variants
@@ -357,7 +368,7 @@ const ProductsList = () => {
                 {/* Quantity */}
 
                 <div>
-                  <h3 className="font-semibold mb-3">Quantity</h3>
+                  <h3 className="font-semibold mb-3">मात्रा</h3>
 
                   <div className="flex items-center justify-between bg-gray-100 rounded-2xl p-3">
                     <button
@@ -437,9 +448,13 @@ const ProductsList = () => {
                     whileTap={{ scale: 0.97 }}
                     whileHover={{ scale: 1.01 }}
                     type="submit"
-                    className="w-full h-14 rounded-2xl bg-red-600 text-white text-lg font-semibold shadow-lg hover:bg-red-700 transition"
+                    className="w-full h-14 rounded-2xl bg-red-600 flex justify-center items-center text-white text-lg font-semibold shadow-lg hover:bg-red-700 transition"
                   >
-                    ऑर्डर करें • ₹{(selectedVariant?.price || 0) * qty}
+                    {addLoading ? (
+                      <Loader2 className="animate-spin h-10 w-10" />
+                    ) : (
+                      <>ऑर्डर करें • ₹{(selectedVariant?.price || 0) * qty}</>
+                    )}
                   </motion.button>
                 </div>
               </form>

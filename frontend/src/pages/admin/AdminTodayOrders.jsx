@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { API_BASE_URL } from "@/lib/constants";
-import { ArrowLeft, Check, Dot, LogIn, X } from "lucide-react";
+import { ArrowLeft, Check, Dot, Hash, LogIn, X } from "lucide-react";
 
 const AdminTodayOrders = (page) => {
   const [orders, setOrders] = useState([]);
@@ -121,7 +121,9 @@ const AdminTodayOrders = (page) => {
         <div className="rounded-3xl bg-white p-6 shadow-lg border border-emerald-100">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">आज के ऑर्डर</h1>
+              <h1 className="text-3xl font-bold   text-gray-900">
+                आज के ऑर्डर ({orders.length})
+              </h1>
               <p className="mt-2 text-gray-600">
                 यहाँ आप सभी आज के सक्रिय ऑर्डर देख सकते हैं।
               </p>
@@ -150,13 +152,46 @@ const AdminTodayOrders = (page) => {
           </div>
         ) : (
           <div className="grid gap-4">
-            {orders.map((order) => (
+            {orders.map((order, index) => (
               <div
                 key={order._id}
                 className=" relative rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"
               >
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
+                    <div className="mb-4 flex items-center justify-between">
+                      {/* Order Number */}
+                      <div className="flex items-center gap-2 rounded-2xl bg-emerald-600 px-4 py-2 shadow-md">
+                        <Hash className="h-5 w-5 text-white" />
+                        <div className="flex flex-col leading-none">
+                          <span className="text-[10px] font-medium uppercase tracking-wider text-emerald-100">
+                            Order
+                          </span>
+                          <span className="text-lg font-bold text-white">
+                            {orders.length - index}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Status */}
+                      <div
+                        className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-bold shadow-sm ${
+                          statusStyles[order.status] ||
+                          "bg-gray-100 text-gray-700"
+                        }`}
+                      >
+                        <div className="relative flex items-center gap-2">
+                          {order.status === "Pending" && (
+                            <>
+                              <span className="absolute -left-1 h-3 w-3 animate-ping rounded-full bg-red-500"></span>
+                              <span className="h-3 w-3 rounded-full bg-red-600"></span>
+                            </>
+                          )}
+
+                          {statusLabel[order.status] || order.status}
+                        </div>
+                      </div>
+                    </div>
                     <div className="text-lg flex gap-2 font-bold items-center mt-2 text-gray-700">
                       <p className="text-gray-600 text-sm">खरीददार : </p>{" "}
                       {order.userId?.firstName} {order.userId?.lastName}
@@ -165,9 +200,6 @@ const AdminTodayOrders = (page) => {
                       <p className="text-gray-600 text-sm">फोन: </p>
                       {order.userId?.phoneNumber}
                     </div>
-                    <p className="absolute right-5 top-18 text-[16px] bg-gray-50 rounded-full px-4 py-2 text-sm font-semibold text-gray-400">
-                      ऑर्डर #{order._id?.slice(-6)}
-                    </p>
                     <div className="flex items-center text-[16px] my-1 font-semibold font-semibold ">
                       <p className="mr-1 text-sm text-gray-600">जगह:</p>
                       <p className="text-md font-bold">
@@ -181,19 +213,10 @@ const AdminTodayOrders = (page) => {
                       </p>
                     </div>
 
+                    <p className="absolute top-46 right-5 text-[16px] bg-gray-50 rounded-full px-4 py-2 text-sm text-gray-400">
+                      ऑर्डर #{order._id?.slice(-6)}
+                    </p>
                     <p className="text-sm text-gray-500">{}</p>
-                  </div>
-                  <div
-                    className={`absolute right-5 top-6 inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold ${
-                      statusStyles[order.status] || "bg-gray-50 text-gray-700"
-                    }`}
-                  >
-                    <div className="relative">
-                      {statusLabel[order.status] || order.status}
-                      {order.status == "Pending" && (
-                        <Dot className="-top-6 animate-ping -right-7 absolute bg-red h-10 w-10" />
-                      )}
-                    </div>
                   </div>
                 </div>
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
@@ -209,7 +232,7 @@ const AdminTodayOrders = (page) => {
                   </p>
                 </div>
                 <div className="mt-2 rounded-3xl bg-slate-50 p-2 pt-4">
-                  <h3 className="mb-3 text-md font-semibold text-gray-800">
+                  <h3 className="mb-3 text-md font-bold text-gray-800">
                     ऑर्डर आइटम्स ({order.items.length})
                   </h3>
 
