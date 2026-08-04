@@ -18,8 +18,15 @@ import { toast } from "sonner";
 const ProductsList = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { productData } = useSelector((state) => state.product);
+  const { productData, loading } = useSelector((state) => state.product);
 
+  if (loading) {
+    return (
+      <div className="flex h-[60vh] items-center justify-center">
+        <div className="mt-8 h-12 w-12 animate-spin rounded-full border-4 border-gray-200 border-t-red-600"></div>
+      </div>
+    );
+  }
   const location = useLocation();
 
   const [selectedProduct, setSelectedProduct] = useState(null);

@@ -17,7 +17,7 @@ const SplashScreen = () => {
 
       <h1 className="mt-6 text-4xl font-black text-red-600">e-Setu</h1>
 
-      <p className="mt-2 text-gray-500">Connecting to your grocery store...</p>
+      <p className="mt-2 text-gray-500">आपका अपना ऑनलाइन स्टोर...</p>
 
       <div className="mt-8 h-12 w-12 animate-spin rounded-full border-4 border-gray-200 border-t-red-600"></div>
     </div>

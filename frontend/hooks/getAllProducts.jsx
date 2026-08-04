@@ -2,10 +2,16 @@ import { useEffect } from "react";
 import axios from "axios";
 import { API_BASE_URL } from "../src/lib/constants";
 import { useDispatch, useSelector } from "react-redux";
-import { setCartData, setProductData } from "../src/redux/ProductSlice";
+import {
+  setCartData,
+  setLoading,
+  setProductData,
+} from "../src/redux/ProductSlice";
 import { setUserData } from "../src/redux/userSlice";
 
 export const fetchAllProducts = async (dispatch) => {
+  dispatch(setLoading(true));
+
   try {
     const token = localStorage.getItem("token");
     if (!token) return;
