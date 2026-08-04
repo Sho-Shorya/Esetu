@@ -7,6 +7,7 @@ import {
   clearUserData,
   setUserData,
   setSupplierData,
+  setAppLoading,
 } from "../src/redux/userSlice";
 
 const getCurrentUser = () => {
@@ -14,12 +15,14 @@ const getCurrentUser = () => {
 
   useEffect(() => {
     const fetchUser = async () => {
+      dispatch(setAppLoading(true));
+
       const token = localStorage.getItem("token");
 
       if (!token) {
         dispatch(clearUserData());
         dispatch(clearSupplierData());
-
+        dispatch(setAppLoading(false));
         return;
       }
 
@@ -41,8 +44,11 @@ const getCurrentUser = () => {
         }
       } catch (error) {
         console.log(error);
+
         dispatch(clearUserData());
         dispatch(clearSupplierData());
+      } finally {
+        dispatch(setAppLoading(false));
       }
     };
 

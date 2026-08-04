@@ -27,6 +27,7 @@ import MyTodayOrder from "./pages/MyTodayOrder";
 import OrderHistory from "./pages/Orders";
 import Timer from "./components/Timer";
 import { initOneSignal } from "./OneSignalInit";
+import SplashScreen from "./components/SplashScreen";
 function App() {
   const token = localStorage.getItem("token");
 
@@ -36,11 +37,15 @@ function App() {
       initOneSignal();
     }
   }, [token]);
-
-  const { userData, supplierData } = useSelector((state) => state.user);
+  const { userData, supplierData, appLoading } = useSelector(
+    (state) => state.user,
+  );
   const dispatch = useDispatch();
   getCurrentUser();
   useGetAllProducts();
+  if (appLoading) {
+    return <SplashScreen />;
+  }
   return (
     <Routes>
       <Route
