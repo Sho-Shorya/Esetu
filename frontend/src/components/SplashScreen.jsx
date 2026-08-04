@@ -1,11 +1,9 @@
 import { motion } from "framer-motion";
-import logo from "@/assets/logo.png";
-
 const SplashScreen = () => {
   return (
     <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white">
       <motion.img
-        src={logo}
+        src="./logo.png"
         alt="e-Setu"
         className="h-28 w-28 rounded-3xl shadow-xl"
         initial={{ scale: 0.8 }}
@@ -13,7 +11,7 @@ const SplashScreen = () => {
         transition={{
           repeat: Infinity,
           repeatType: "reverse",
-          duration: 1,
+          duration: 4,
         }}
       />
 
