@@ -32,7 +32,7 @@ export const fetchAllProducts = async (dispatch) => {
   } catch (error) {
     console.log(error);
   } finally {
-    setLoading(false);
+    dispatch(setLoading(false));
   }
 };
 
