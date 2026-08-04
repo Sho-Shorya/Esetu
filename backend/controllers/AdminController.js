@@ -5,6 +5,7 @@ import { Session } from "../models/sessionMedel.js";
 import { sendOptMail } from "../emailVerify/sendOptMail.js";
 import cloudinary from "../utils/cloudinary.js";
 import { generateToken } from "../utils/token.js";
+import { sendNotification } from "../services/oneSignalService.js";
 
 export const adminRegister = async (req, res) => {
   try {
@@ -219,10 +220,6 @@ export const getUserById = async (req, res) => {
     });
   }
 };
-
-import cloudinary from "../utils/cloudinary.js";
-import { User } from "../models/userModel.js";
-import { sendNotification } from "../services/oneSignalService.js";
 
 export const updateUser = async (req, res) => {
   try {
