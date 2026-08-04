@@ -33,7 +33,7 @@ export const register = async (req, res) => {
       password: hashedPassword,
     });
     await sendNotification({
-      subscriptionId: user.oneSignalSubscriptionId,
+      subscriptionId: newUser.oneSignalSubscriptionId,
       title: "Esetu आपका स्वागत करता है।",
       message: "आप यहाँ आसानी से ऑर्डर कर सकते हैं।",
     });

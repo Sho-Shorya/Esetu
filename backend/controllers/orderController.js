@@ -417,10 +417,13 @@ export const setOrderCutoffTime = async (req, res) => {
 
     order.cutoffTime = newCutoff;
     await order.save();
+
+    const user = await User.findById(order.userId);
+
     await sendNotification({
-      userId: order.userId,
-      title: `✅ नया कट-ऑफ़ समय -${newCutoff.getTime()}`,
-      message: "कट-ऑफ समय अपडेट कर दिया गया है।।",
+      subscriptionId: user.oneSignalSubscriptionId,
+      title: "✅ नया कट-ऑफ़ समय",
+      message: "कट-ऑफ समय अपडेट कर दिया गया है।",
     });
 
     return res.status(200).json({

@@ -30,11 +30,13 @@ import { initOneSignal } from "./OneSignalInit";
 function App() {
   const token = localStorage.getItem("token");
 
+  //notification initialisation
   useEffect(() => {
     if (token) {
       initOneSignal();
     }
   }, [token]);
+
   const { userData, supplierData } = useSelector((state) => state.user);
   const dispatch = useDispatch();
   getCurrentUser();
