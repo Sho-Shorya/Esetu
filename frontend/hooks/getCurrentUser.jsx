@@ -10,7 +10,7 @@ import {
   setAppLoading,
 } from "../src/redux/userSlice";
 
-const getCurrentUser = () => {
+const useGetCurrentUser = () => {
   const dispatch = useDispatch();
 
   useEffect(() => {
@@ -58,4 +58,4 @@ const getCurrentUser = () => {
   return null;
 };
 
-export default getCurrentUser;
+export default useGetCurrentUser;

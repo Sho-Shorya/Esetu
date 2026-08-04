@@ -6,7 +6,6 @@ import Profile from "./pages/Profile.jsx";
 import EditProfile from "./pages/EditProfile";
 import { useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import getCurrentUser from "../hooks/getCurrentUser";
 import useGetAllProducts from "../hooks/getAllProducts";
 import Nav from "./components/Nav";
 import Footer from "./components/Footer";
@@ -28,6 +27,7 @@ import OrderHistory from "./pages/Orders";
 import Timer from "./components/Timer";
 import { initOneSignal } from "./OneSignalInit";
 import SplashScreen from "./components/SplashScreen";
+import useGetCurrentUser from "../hooks/getCurrentUser";
 function App() {
   const token = localStorage.getItem("token");
 
@@ -41,7 +41,7 @@ function App() {
     (state) => state.user,
   );
   const dispatch = useDispatch();
-  getCurrentUser();
+  useGetCurrentUser();
   useGetAllProducts();
   if (appLoading) {
     return <SplashScreen />;

@@ -6,8 +6,6 @@ const userSlice = createSlice({
   initialState: {
     userData: null,
     supplierData: null,
-
-    // NEW
     appLoading: true,
   },
 

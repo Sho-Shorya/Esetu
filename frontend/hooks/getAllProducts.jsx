@@ -32,7 +32,6 @@ export const fetchAllProducts = async (dispatch) => {
   } catch (error) {
     console.log(error);
   } finally {
-    dispatch(setLoading(false));
   }
 };
 
@@ -42,6 +41,7 @@ const useGetAllProducts = () => {
   useEffect(() => {
     fetchAllProducts(dispatch);
   }, [dispatch, userData]);
+  dispatch(setLoading(false));
 };
 
 export default useGetAllProducts;
