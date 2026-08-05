@@ -2,8 +2,7 @@ import axios from "axios";
 import dotenv from "dotenv";
 
 dotenv.config();
-import { User } from "../models/userModel";
-
+import User from "../models/userModel.js";
 export const sendNotification = async ({
   subscriptionId,
   sendToAll = false,
