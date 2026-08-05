@@ -1,5 +1,6 @@
 import AppSetting from "../models/appSettingModel.js";
 import { Order } from "../models/orderModel.js";
+import { sendNotification } from "../services/oneSignalService.js";
 
 export const getAppSettings = async (req, res) => {
   try {
@@ -53,7 +54,7 @@ export const updateAppSetting = async (req, res) => {
       { key },
       { value: String(value) },
       {
-        new: true,
+        returnDocument: "after",
         upsert: true,
       },
     );
@@ -74,6 +75,17 @@ export const updateAppSetting = async (req, res) => {
         },
       );
     }
+    const formattedTime = new Date(cutoffTime).toLocaleTimeString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+
+    await sendNotification({
+      sendToAll: true,
+      title: `⏰ नया कट-ऑफ़ समय`,
+      message: `आज का ऑर्डर कट-ऑफ़ समय ${formattedTime} कर दिया गया है।`,
+    });
 
     return res.status(200).json({
       success: true,
