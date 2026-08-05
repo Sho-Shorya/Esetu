@@ -74,18 +74,17 @@ export const updateAppSetting = async (req, res) => {
           },
         },
       );
+      const formattedTime = new Date(cutoffTime).toLocaleTimeString("en-IN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+      await sendNotification({
+        sendToAll: true,
+        title: `⏰ ${formattedTime} नया कट-ऑफ़ `,
+        message: `आज का ऑर्डर कट-ऑफ़ समय ${formattedTime} कर दिया गया है।`,
+      });
     }
-    const formattedTime = new Date(cutoffTime).toLocaleTimeString("en-IN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
-
-    await sendNotification({
-      sendToAll: true,
-      title: `⏰ नया कट-ऑफ़ समय`,
-      message: `आज का ऑर्डर कट-ऑफ़ समय ${formattedTime} कर दिया गया है।`,
-    });
 
     return res.status(200).json({
       success: true,
