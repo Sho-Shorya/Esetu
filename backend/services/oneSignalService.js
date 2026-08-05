@@ -45,7 +45,14 @@ export const sendNotification = async ({
         },
       },
     );
+    console.log("================================");
+    console.log("BODY:");
+    console.log(body);
 
+    console.log("================================");
+    console.log("ONESIGNAL RESPONSE:");
+    console.log(JSON.stringify(response.data, null, 2));
+    console.log("================================");
     console.log("✅ Notification Sent");
     console.log(response.data);
 
