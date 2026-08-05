@@ -3,7 +3,7 @@ const SplashScreen = () => {
   return (
     <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white">
       <motion.img
-        src="./logo.png"
+        src="./logolow.png"
         alt="e-Setu"
         className="h-28 w-28 rounded-3xl shadow-xl"
         initial={{ scale: 0.8 }}

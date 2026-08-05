@@ -3,7 +3,17 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { API_BASE_URL } from "@/lib/constants";
-import { ArrowLeft, Check, Dot, Hash, LogIn, X } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  Dot,
+  Hash,
+  Loader2,
+  LocationEditIcon,
+  LogIn,
+  Phone,
+  X,
+} from "lucide-react";
 
 const AdminTodayOrders = (page) => {
   const [orders, setOrders] = useState([]);
@@ -116,8 +126,8 @@ const AdminTodayOrders = (page) => {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-white rounded-2xl sm:px-6 lg:px-8">
-      <div className="mx-auto  max-w-7xl space-y-6">
+    <div className="min-h-auto rounded-2xl sm:px-5 lg:px-8 ">
+      <div className="mt-20  max-w-7xl space-y-4">
         <div className="rounded-3xl bg-white p-6 shadow-lg border border-emerald-100">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -125,37 +135,48 @@ const AdminTodayOrders = (page) => {
                 आज के ऑर्डर ({orders.length})
               </h1>
               <p className="mt-2 text-gray-600">
-                यहाँ आप सभी आज के सक्रिय ऑर्डर देख सकते हैं।
+                यहाँ आप सभी आज के सभी ऑर्डर देख सकते हैं।
               </p>
             </div>
             <div className="grid gap-3 grid-cols-3">
               <div className="rounded-3xl bg-amber-50 p-4 flex flex-col text-center text-sm font-semibold text-amber-700">
-                <p>Pending:</p> {counts.pending}
+                <p>Pending:</p> <p className="text-[18px] ">{counts.pending}</p>
               </div>
               <div className="rounded-3xl bg-emerald-50 p-4 flex-col flex text-center text-sm font-semibold text-emerald-700">
-                <p>Approved:</p> {counts.approved}
+                <p>Approved:</p>{" "}
+                <p className="text-[18px] ">{counts.approved}</p>
               </div>
               <div className="rounded-3xl bg-red-50 p-4 flex-col flex text-center text-sm font-semibold text-red-700">
-                <p>Declined:</p> {counts.declined}
+                <p>Declined:</p>{" "}
+                <p className="text-[18px] ">{counts.declined}</p>
               </div>
             </div>
           </div>
         </div>
 
         {loading ? (
-          <div className="rounded-3xl bg-gray-50 p-10 text-center text-gray-600">
-            लोड हो रहा है...
+          <div className="rounded-3xl gap-4 flex items-center text-md justify-center bg-gray-50 p-10 text-center text-gray-600">
+            <Loader2 className="animate-spin h-10 w-10" />
+            लोड हो रहा है!
           </div>
         ) : orders.length === 0 ? (
           <div className="rounded-3xl border border-dashed border-gray-200 bg-gray-50 p-10 text-center text-gray-600">
             कोई आज का ऑर्डर उपलब्ध नहीं है।
           </div>
         ) : (
-          <div className="grid gap-4">
+          <div className="grid gap-4 ">
             {orders.map((order, index) => (
               <div
                 key={order._id}
-                className=" relative rounded-3xl border border-gray-200 bg-white p-5 shadow-sm"
+                className={`relative rounded-3xl border bg-white p-5 shadow-sm ${
+                  order.status === "Pending"
+                    ? "border-orange-300"
+                    : order.status === "Approved"
+                      ? "border-emerald-400"
+                      : order.status === "Declined"
+                        ? "border-red-400"
+                        : "border-gray-200"
+                }`}
               >
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div>
@@ -183,8 +204,7 @@ const AdminTodayOrders = (page) => {
                         <div className="relative flex items-center gap-2">
                           {order.status === "Pending" && (
                             <>
-                              <span className="absolute -left-1 h-3 w-3 animate-ping rounded-full bg-red-500"></span>
-                              <span className="h-3 w-3 rounded-full bg-red-600"></span>
+                              <span className="h-3 w-3 rounded-full animate-ping bg-red-600"></span>
                             </>
                           )}
 
@@ -192,16 +212,18 @@ const AdminTodayOrders = (page) => {
                         </div>
                       </div>
                     </div>
-                    <div className="text-lg flex gap-2 font-bold items-center mt-2 text-gray-700">
+                    <div className="text-lg flex gap-2 font-bold items-center mt-2 text-red-700">
                       <p className="text-gray-600 text-sm">खरीददार : </p>{" "}
                       {order.userId?.firstName} {order.userId?.lastName}
                     </div>
-                    <div className="text-lg flex gap-2 text-[16px] font-bold items-center  ">
-                      <p className="text-gray-600 text-sm">फोन: </p>
+                    <div className="text-lg flex gap-1 text-[13px] font-bold items-center  ">
+                      <p className="text-gray-600 mr-1  text-sm">फोन:</p>
+                      <Phone className="h-5 w-4 text-red-600" />{" "}
                       {order.userId?.phoneNumber}
                     </div>
-                    <div className="flex items-center text-[16px] my-1 font-semibold font-semibold ">
+                    <div className="flex items-center text-[13px] gap-1 my-1 font-semibold font-semibold ">
                       <p className="mr-1 text-sm text-gray-600">जगह:</p>
+                      <LocationEditIcon className="h-5 w-4 text-red-600" />{" "}
                       <p className="text-md font-bold">
                         {users
                           .find(

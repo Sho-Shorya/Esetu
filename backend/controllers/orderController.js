@@ -254,24 +254,23 @@ export const addOrder = async (req, res) => {
     console.log(user.oneSignalSubscriptionId);
     await sendNotification({
       subscriptionId: user.oneSignalSubscriptionId,
-      title: "🛒 ऑर्डर सफल",
+      title: "🟠 ऑर्डर सफल",
       message: "आपका ऑर्डर सफलतापूर्वक प्राप्त हो गया है।",
     });
-    const admins = await User.find({
+
+    const suppliers = await User.find({
       role: "supplier", // or "admin" if that's your role
       oneSignalSubscriptionId: { $ne: "" },
     });
 
-    for (const admin of admins) {
+    for (const supp of suppliers) {
       await sendNotification({
-        subscriptionId: admin.oneSignalSubscriptionId,
-        title: "🛒 नया ऑर्डर आया है",
-        message: `${user.firstName} ${user.lastName} ने नया ऑर्डर किया है।`,
+        subscriptionId: supp.oneSignalSubscriptionId,
+        title: "🟢 ${user.firstName} ${user.lastName} का ऑर्डर आया है",
+        message: `कृपया चेक करके, मंज़ूर या अस्वीकार करें।`,
+        sendToAll: false,
       });
     }
-    /* ===========================================
-       CLEAR USER CART
-    =========================================== */
 
     cart.items = [];
     cart.totalPrice = 0;
@@ -280,7 +279,7 @@ export const addOrder = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "ऑर्डर सफलतापूर्वक प्लेस हो गया। ✅",
+      message: "ऑर्डर हो गया। ✅",
       order,
     });
   } catch (error) {
@@ -442,13 +441,13 @@ export const setOrderCutoffTime = async (req, res) => {
 
     await sendNotification({
       sendToAll: true,
-      title: "⏰ नया कट-ऑफ़ समय",
-      message: `आज का ऑर्डर कट-ऑफ़ समय ${formattedTime} कर दिया गया है।`,
+      title: "⏰ ${formattedTime} नया कट-ऑफ़ ",
+      message: `ऑर्डर का कट-ऑफ़ समय ${formattedTime} कर दिया गया है।`,
     });
     return res.status(200).json({
       success: true,
       order,
-      message: "Cutoff time updated successfully.",
+      message: "कट-ऑफ़ समय अपडेट कर दिया गया है।.",
     });
   } catch (error) {
     console.log(error);
@@ -515,14 +514,14 @@ export const removeOrderItem = async (req, res) => {
     if (order.status !== "Pending") {
       return res.status(400).json({
         success: false,
-        message: "Order is already locked.",
+        message: "ऑर्डर पहले ही लॉक हो चुका है।",
       });
     }
 
     if (isCutoffPassed(order.cutoffTime)) {
       return res.status(400).json({
         success: false,
-        message: "Cutoff time has passed.",
+        message: "समय बीत चुका है।",
       });
     }
 
@@ -556,7 +555,7 @@ export const removeOrderItem = async (req, res) => {
     return res.status(200).json({
       success: true,
       deleted: false,
-      message: "Item removed successfully.",
+      message: "आइटम हटा दिया गया।",
       order,
     });
   } catch (error) {
@@ -611,10 +610,17 @@ export const updateOrderStatus = async (req, res) => {
     }
 
     await order.save();
+    await order.save();
 
-    // ==========================
-    // Send Notification
-    // ==========================
+    // Fetch populated order
+    const updatedOrder = await Order.findById(order._id)
+      .populate({
+        path: "userId",
+        select: "firstName lastName phoneNumber place profilePic",
+      })
+      .populate({
+        path: "items.productId",
+      });
 
     const user = await User.findById(order.userId);
 
@@ -622,16 +628,15 @@ export const updateOrderStatus = async (req, res) => {
       if (status === "Approved") {
         await sendNotification({
           subscriptionId: user.oneSignalSubscriptionId,
-          title: "✅ आपका ऑर्डर स्वीकार कर लिया गया",
-          message:
-            "आपका ऑर्डर सफलतापूर्वक Approved हो गया है। जल्द ही इसकी तैयारी शुरू होगी।",
+          title: "🟢आपका ऑर्डर Approve हो गया! ✅",
+          message: "ऑर्डर जल्द ही आपकी लोकेशन पर डिलीवर कर दिया जाएगा!",
         });
       }
 
       if (status === "Declined") {
         await sendNotification({
           subscriptionId: user.oneSignalSubscriptionId,
-          title: "❌ आपका ऑर्डर अस्वीकार कर दिया गया",
+          title: "🔴आपका ऑर्डर Decline कर दिया गया ❌",
           message:
             "क्षमा करें, आपका ऑर्डर स्वीकार नहीं किया जा सका। अधिक जानकारी के लिए कृपया एडमिन से संपर्क करें।",
         });
@@ -641,7 +646,7 @@ export const updateOrderStatus = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: `Order ${status.toLowerCase()} successfully.`,
-      order,
+      order: updatedOrder,
     });
   } catch (error) {
     console.log("Update Order Status Error:", error);

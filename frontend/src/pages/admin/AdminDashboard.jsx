@@ -9,6 +9,7 @@ import {
   Check,
   CircleAlert,
   Clock10,
+  Loader2,
   Package,
   Plus,
   ShoppingCart,
@@ -99,23 +100,31 @@ const AdminDashboard = () => {
           <div className="mt-6 grid gap-4 grid-cols-2 ">
             <div
               onClick={() => navigate("/today-orders")}
-              className="rounded-3xl bg-emerald-50 p-5 shadow-sm border border-slate-200"
+              className="rounded-3xl bg-emerald-500 p-5 shadow-sm border border-slate-200"
             >
-              <p className="text-sm font-medium text-slate-500">आज के ऑर्डर</p>
-              <p className="mt-4 text-3xl font-semibold text-slate-900 flex gap-4 items-center">
+              <p className="text-sm font-medium text-white">आज के ऑर्डर</p>
+              <div className="min-h-[35px] mt-4 text-3xl font-bold text-white flex gap-4 items-center">
                 <Package className="animate-pulse" />
-                {loadingStats ? "..." : todayOrdersCount}
-              </p>
+                {loadingStats ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  todayOrdersCount
+                )}
+              </div>
             </div>
             <div
               onClick={() => navigate("/admin-users")}
               className="rounded-3xl bg-white p-5 shadow-sm border border-slate-200"
             >
               <p className="text-sm font-medium text-slate-500">कुल खरीददार</p>
-              <p className="mt-4 text-3xl font-semibold text-slate-900 flex gap-4 items-center">
+              <div className="min-h-[35px] mt-4 text-3xl  font-semibold text-slate-900 flex gap-4 items-center">
                 <Users className="animate-pulse" />
-                {loadingStats ? "..." : userCount}
-              </p>
+                {loadingStats ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  userCount
+                )}
+              </div>
             </div>
             <div
               onClick={() => navigate("/product-page")}
@@ -129,7 +138,7 @@ const AdminDashboard = () => {
             </div>
             <div className="rounded-3xl bg-white p-5 shadow-sm border border-slate-200">
               <p className="text-sm font-medium text-slate-500">काटऑफ समय</p>
-              <p className="mt-4 text-3xl font-semibold text-slate-900 flex gap-3 items-center">
+              <p className="mt-4 text-3xl font-semibold text-emerald-700 flex gap-3 items-center">
                 <Clock10 className="animate-spin" />
                 {cutoffTime}
               </p>
@@ -140,52 +149,58 @@ const AdminDashboard = () => {
             <h2 className="text-xl font-semibold text-slate-900">
               कटऑफ समय सेट करें
             </h2>
-            <p className="mt-2 flex gap-2 items-start text-slate-600">
+            <p className="mt-1 flex gap-1 items-start text-slate-600">
               <CircleAlert className="h-4 mt-[5px]" />
-              खरीददार हर दिन इस समय तक ही ऑर्डर कर सकते हैं।
+              खरीददार इस समय तक ही ऑर्डर करेंगे!
             </p>
-            <div className="mt-5 grid gap-3 sm:grid-cols-[1fr_auto] items-end">
-              <label className="flex flex-col gap-2">
-                <span className="text-sm font-medium text-slate-700">
+            <div className=" grid gap-3 sm:grid-cols-[1fr_auto] items-end">
+              <label className=" mt-3 flex flex-col gap-2">
+                <span className="text-sm  font-medium text-slate-700">
                   नया कटऑफ समय*
                 </span>
-                <input
-                  type="time"
-                  value={cutoffTime}
-                  onChange={(e) => setCutoffTime(e.target.value)}
-                  className="w-full rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-emerald-500"
-                />
+                <div className=" grid grid-cols-4 gap-4">
+                  <input
+                    type="time"
+                    value={cutoffTime}
+                    onChange={(e) => setCutoffTime(e.target.value)}
+                    className="col-span-3 rounded-3xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-900 shadow-sm outline-none transition focus:border-emerald-500"
+                  />
+                  <button
+                    onClick={async () => {
+                      const token = localStorage.getItem("token");
+                      if (!token) return;
+                      setSavingSettings(true);
+                      setSettingsMessage("");
+                      try {
+                        const res = await axios.put(
+                          `${API_BASE_URL}/api/v1/settings/app-settings/dailyOrderCutoff`,
+                          { value: cutoffTime },
+                          {
+                            headers: {
+                              Authorization: `Bearer ${token}`,
+                            },
+                          },
+                        );
+                        if (res.data.success) {
+                          setSettingsMessage("कटऑफ समय अपडेट हो गया।");
+                        }
+                      } catch (error) {
+                        setSettingsMessage("कटऑफ समय अपडेट नहीं हुआ।");
+                      } finally {
+                        setSavingSettings(false);
+                      }
+                    }}
+                    disabled={savingSettings || settingsLoading}
+                    className="rounded-3xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 items-center justify-center flex"
+                  >
+                    {savingSettings ? (
+                      <Loader2 className="animate-spin" />
+                    ) : (
+                      "सेव"
+                    )}
+                  </button>
+                </div>
               </label>
-              <button
-                onClick={async () => {
-                  const token = localStorage.getItem("token");
-                  if (!token) return;
-                  setSavingSettings(true);
-                  setSettingsMessage("");
-                  try {
-                    const res = await axios.put(
-                      `${API_BASE_URL}/api/v1/settings/app-settings/dailyOrderCutoff`,
-                      { value: cutoffTime },
-                      {
-                        headers: {
-                          Authorization: `Bearer ${token}`,
-                        },
-                      },
-                    );
-                    if (res.data.success) {
-                      setSettingsMessage("कटऑफ समय अपडेट हो गया।");
-                    }
-                  } catch (error) {
-                    setSettingsMessage("कटऑफ समय अपडेट नहीं हुआ।");
-                  } finally {
-                    setSavingSettings(false);
-                  }
-                }}
-                disabled={savingSettings || settingsLoading}
-                className="rounded-3xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {savingSettings ? "सेव कर रहे हैं..." : "सेव करें"}
-              </button>
             </div>
             {settingsMessage ? (
               <p className="mt-4 text-sm text-emerald-700">{settingsMessage}</p>

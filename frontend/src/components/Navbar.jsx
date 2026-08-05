@@ -520,8 +520,6 @@ const Navbar = () => {
                     }
                     if (userData) {
                       setUserConfirmLogout(true);
-                    } else {
-                      logoutHandler();
                     }
                   }}
                   disabled={loading}
