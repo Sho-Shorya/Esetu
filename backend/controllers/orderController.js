@@ -440,7 +440,7 @@ export const setOrderCutoffTime = async (req, res) => {
     );
 
     await sendNotification({
-      subscriptionId: user.,
+      sendToAll: true,
       title: `⏰ ${formattedTime} नया कट-ऑफ़ `,
       message: `ऑर्डर का कट-ऑफ़ समय ${formattedTime} कर दिया गया है।`,
     });
