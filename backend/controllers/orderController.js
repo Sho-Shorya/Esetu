@@ -439,8 +439,16 @@ export const setOrderCutoffTime = async (req, res) => {
       },
     );
 
+    const allUsers = await User.find({
+      oneSignalSubscriptionId: { $exists: true, $ne: null },
+    });
+
+    const subscriptionIds = allUsers.map(
+      (user) => user.oneSignalSubscriptionId,
+    );
+
     await sendNotification({
-      sendToAll: true,
+      subscriptionIds,
       title: `⏰ ${formattedTime} नया कट-ऑफ़ `,
       message: `ऑर्डर का कट-ऑफ़ समय ${formattedTime} कर दिया गया है।`,
     });
