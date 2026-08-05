@@ -266,7 +266,7 @@ export const addOrder = async (req, res) => {
     for (const supp of suppliers) {
       await sendNotification({
         subscriptionId: supp.oneSignalSubscriptionId,
-        title: "🟢 ${user.firstName} ${user.lastName} का ऑर्डर आया है",
+        title: `🟢 ${user.firstName} ${user.lastName} का ऑर्डर आया है`,
         message: `कृपया चेक करके, मंज़ूर या अस्वीकार करें।`,
         sendToAll: false,
       });
@@ -441,9 +441,10 @@ export const setOrderCutoffTime = async (req, res) => {
 
     await sendNotification({
       sendToAll: true,
-      title: "⏰ ${formattedTime} नया कट-ऑफ़ ",
+      title: `⏰ ${formattedTime} नया कट-ऑफ़ `,
       message: `ऑर्डर का कट-ऑफ़ समय ${formattedTime} कर दिया गया है।`,
     });
+
     return res.status(200).json({
       success: true,
       order,
@@ -628,7 +629,7 @@ export const updateOrderStatus = async (req, res) => {
       if (status === "Approved") {
         await sendNotification({
           subscriptionId: user.oneSignalSubscriptionId,
-          title: "🟢आपका ऑर्डर Approve हो गया! ✅",
+          title: "🟢 ऑर्डर Approve हो गया!",
           message: "ऑर्डर जल्द ही आपकी लोकेशन पर डिलीवर कर दिया जाएगा!",
         });
       }
@@ -636,7 +637,7 @@ export const updateOrderStatus = async (req, res) => {
       if (status === "Declined") {
         await sendNotification({
           subscriptionId: user.oneSignalSubscriptionId,
-          title: "🔴आपका ऑर्डर Decline कर दिया गया ❌",
+          title: "🔴 ऑर्डर Decline कर दिया गया",
           message:
             "क्षमा करें, आपका ऑर्डर स्वीकार नहीं किया जा सका। अधिक जानकारी के लिए कृपया एडमिन से संपर्क करें।",
         });

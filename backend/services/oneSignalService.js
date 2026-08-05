@@ -14,34 +14,46 @@ export const sendNotification = async ({
       app_id: process.env.ONESIGNAL_APP_ID,
       headings: {
         en: title,
-        hi: title,
       },
       contents: {
         en: message,
-        hi: message,
       },
     };
 
     if (sendToAll) {
       body.included_segments = ["Subscribed Users"];
+
+      console.log("📢 Sending notification to ALL subscribed users");
     } else {
       if (!subscriptionId) {
         console.log("❌ Subscription ID missing");
-        return;
+        return false;
       }
 
       body.include_subscription_ids = [subscriptionId];
+
+      console.log(`📨 Sending notification to ${subscriptionId}`);
     }
 
-    await axios.post("https://api.onesignal.com/notifications", body, {
-      headers: {
-        Authorization: `Key ${process.env.ONESIGNAL_REST_API_KEY}`,
-        "Content-Type": "application/json",
+    const response = await axios.post(
+      "https://api.onesignal.com/notifications",
+      body,
+      {
+        headers: {
+          Authorization: `Key ${process.env.ONESIGNAL_REST_API_KEY}`,
+          "Content-Type": "application/json",
+        },
       },
-    });
+    );
 
-    console.log("✅ Notification sent");
+    console.log("✅ Notification Sent");
+    console.log(response.data);
+
+    return response.data;
   } catch (err) {
-    console.error("❌ OneSignal Error:", err.response?.data || err.message);
+    console.error("❌ OneSignal Error");
+    console.error(err.response?.data || err.message);
+
+    return null;
   }
 };
