@@ -2,6 +2,7 @@ import axios from "axios";
 import dotenv from "dotenv";
 
 dotenv.config();
+import { User } from "../models/userModel";
 
 export const sendNotification = async ({
   subscriptionId,
@@ -21,18 +22,21 @@ export const sendNotification = async ({
     };
 
     if (sendToAll) {
-      body.included_segments = ["Subscribed Users"];
+      // Get all users
+      const users = await User.find({
+        oneSignalSubscriptionId: { $exists: true, $ne: null },
+      });
 
-      console.log("📢 Sending notification to ALL subscribed users");
+      body.include_subscription_ids = users.map(
+        (user) => user.oneSignalSubscriptionId,
+      );
     } else {
       if (!subscriptionId) {
         console.log("❌ Subscription ID missing");
-        return false;
+        return;
       }
 
       body.include_subscription_ids = [subscriptionId];
-
-      console.log(`📨 Sending notification to ${subscriptionId}`);
     }
 
     const response = await axios.post(
@@ -45,22 +49,10 @@ export const sendNotification = async ({
         },
       },
     );
-    console.log("================================");
-    console.log("BODY:");
-    console.log(body);
 
-    console.log("================================");
-    console.log("ONESIGNAL RESPONSE:");
-    console.log(JSON.stringify(response.data, null, 2));
-    console.log("================================");
     console.log("✅ Notification Sent");
     console.log(response.data);
-
-    return response.data;
   } catch (err) {
-    console.error("❌ OneSignal Error");
     console.error(err.response?.data || err.message);
-
-    return null;
   }
 };
