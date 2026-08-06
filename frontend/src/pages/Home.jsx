@@ -6,7 +6,7 @@ import { useSelector } from "react-redux";
 import { BsSearch } from "react-icons/bs";
 import { useNavigate } from "react-router-dom";
 import Timer from "@/components/Timer";
-import SearchBar from "@/components/home/Searchbar";
+import SearchBar from "@/components/home/SearchBar";
 import WelcomeCard from "@/components/home/WelcomeCard";
 import CategoryScroller from "@/components/home/CategoryScroller";
 import CompanyScroller from "@/components/home/CompanyScroller";
