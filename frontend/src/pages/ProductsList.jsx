@@ -480,9 +480,9 @@ import { toast } from "sonner";
 import { API_BASE_URL } from "@/lib/constants";
 import { setCartData } from "@/redux/ProductSlice";
 
-import WelcomeCard from "@/components/home/WelcomeCard";
-import SearchBar from "@/components/home/SearchBar";
-import CompanyScroller from "@/components/home/CompanyScroller";
+import WelcomeCard from "../components/home/WelcomeCard";
+import SearchBar from "../components/home/Searchbar";
+import CompanyScroller from "../components/home/CompanyScroller";
 
 const ProductsList = () => {
   const dispatch = useDispatch();
