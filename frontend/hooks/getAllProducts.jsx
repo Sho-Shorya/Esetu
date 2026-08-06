@@ -4,18 +4,20 @@ import { API_BASE_URL } from "../src/lib/constants";
 import { useDispatch, useSelector } from "react-redux";
 import {
   setCartData,
-  setLoading,
+  setProdLoading,
   setProductData,
 } from "../src/redux/ProductSlice";
-import { setUserData } from "../src/redux/userSlice";
 
 export const fetchAllProducts = async (dispatch) => {
-  dispatch(setLoading(true));
+  dispatch(setProdLoading(true));
 
   try {
     const token = localStorage.getItem("token");
-    if (!token) return;
 
+    if (!token) {
+      dispatch(setProdLoading(false));
+      return;
+    }
     const res = await axios.get(`${API_BASE_URL}/api/v1/product/`, {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -32,6 +34,7 @@ export const fetchAllProducts = async (dispatch) => {
   } catch (error) {
     console.log(error);
   } finally {
+    dispatch(setProdLoading(false));
   }
 };
 
@@ -41,7 +44,6 @@ const useGetAllProducts = () => {
   useEffect(() => {
     fetchAllProducts(dispatch);
   }, [dispatch, userData]);
-  dispatch(setLoading(false));
 };
 
 export default useGetAllProducts;

@@ -28,6 +28,7 @@ import Timer from "./components/Timer";
 import { initOneSignal } from "./OneSignalInit";
 import SplashScreen from "./components/SplashScreen";
 import useGetCurrentUser from "../hooks/getCurrentUser";
+import VerifyOtp from "./pages/VerifyOtp";
 function App() {
   const token = localStorage.getItem("token");
 
@@ -57,6 +58,7 @@ function App() {
         path="/signup"
         element={userData ? <Navigate to="/" replace /> : <SignUp />}
       />
+      <Route path="/verify-otp" element={<VerifyOtp />} />
       <Route
         path="/admin-login"
         element={

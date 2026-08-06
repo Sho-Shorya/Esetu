@@ -8,6 +8,7 @@ import {
   getUserById,
   updateUser,
   getCurrentUser,
+  verifyOtp,
 } from "../controllers/userController.js";
 import { isAuthenticated, isSupp } from "../middleware/isAuthenticated.js";
 import { singleUpload } from "../middleware/multer.js";
@@ -21,6 +22,7 @@ import { saveSubscriptionId } from "../controllers/saveSubscriptionId.js";
 const userRouter = Router();
 
 userRouter.post("/register", register);
+userRouter.put("/verify", verifyOtp);
 userRouter.post("/login", login);
 userRouter.post("/logout", isAuthenticated, logout);
 userRouter.get("/current", isAuthenticated, getCurrentUser);

@@ -37,6 +37,7 @@ const Signup = () => {
       [name]: value,
     }));
   };
+
   const submitHander = async (e) => {
     e.preventDefault();
     console.log(formData);
@@ -48,7 +49,11 @@ const Signup = () => {
         formData,
       );
       if (res.data.success) {
-        navigate("/login");
+        navigate("/verify-otp", {
+          state: {
+            phoneNumber: formData.phoneNumber,
+          },
+        });
         toast.success(res.data.message);
       } else console.log("Registration failed");
     } catch (error) {

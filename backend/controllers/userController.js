@@ -32,25 +32,67 @@ export const register = async (req, res) => {
       place,
       password: hashedPassword,
     });
-    await sendNotification({
-      subscriptionId: newUser.oneSignalSubscriptionId,
-      title: "🙏 E-SETU आपका स्वागत करता है।",
-      message:
-        "यहाँ आप आसानी से ऑर्डर कर सकते हैं और अपने ऑर्डर को मैनेज कर सकते हैं।",
-    });
 
     await newUser.save();
 
+    // await sendNotification({
+    //   subscriptionId: newUser.oneSignalSubscriptionId,
+    //   title: "🙏 E-SETU आपका स्वागत करता है।",
+    //   message:
+    //     "यहाँ आप आसानी से ऑर्डर कर सकते हैं और अपने ऑर्डर को मैनेज कर सकते हैं।",
+    // });
+
+    // return res.status(201).json({
+    //   success: true,
+    //   message: "यूज़र रजिस्ट्रेशन पूरा हो गया है, कृपया लॉग इन करें।",
+    //   user: newUser,
+    // });
+
     return res.status(201).json({
       success: true,
-      message: "यूज़र रजिस्ट्रेशन पूरा हो गया है, कृपया लॉग इन करें।",
-      user: newUser,
+      phoneNumber,
+      message: "OTP भेजा गया!",
     });
   } catch (error) {
     res.status(500).json({
       status: false,
       message: error.message,
     }); //internal server error
+  }
+};
+export const verifyOtp = async (req, res) => {
+  try {
+    const { phoneNumber } = req.body;
+
+    if (!phoneNumber) {
+      return res.status(400).json({
+        success: false,
+        message: "फोन नंबर आवश्यक हैं।",
+      });
+    }
+
+    const user = await User.findOne({ phoneNumber });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "यूज़र नहीं मिला।",
+      });
+    }
+
+    user.isVerified = true;
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "🟢 फ़ोन नंबर वेरिफ़ाई हो गया",
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
 
