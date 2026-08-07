@@ -6,11 +6,13 @@ import { sendOptMail } from "../emailVerify/sendOptMail.js";
 import cloudinary from "../utils/cloudinary.js";
 import { generateToken } from "../utils/token.js";
 import { sendNotification } from "../services/oneSignalService.js";
+import dotenv from "dotenv";
+dotenv.config();
 
 export const register = async (req, res) => {
   try {
-    const { firstName, lastName, phoneNumber, place, password } = req.body;
-    if (!firstName || !lastName || !phoneNumber || !place || !password) {
+    const { firstName, lastName, phoneNumber, shopKey, password } = req.body;
+    if (!firstName || !lastName || !phoneNumber || !shopKey || !password) {
       return res.status(400).json({
         success: false,
         message: "सभी फ़ील्ड आवश्यक हैं!",
@@ -23,13 +25,19 @@ export const register = async (req, res) => {
         message: "यह यूज़र मौजूद है!, कृपया लॉगिन करें!",
       });
     }
+    if (shopKey !== process.env.ShopKey) {
+      return res.status(400).json({
+        success: false,
+        message: "सीक्रेट की गलत है।",
+      });
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = await User.create({
       firstName,
       lastName,
       phoneNumber,
-      place,
       password: hashedPassword,
     });
 
@@ -42,17 +50,17 @@ export const register = async (req, res) => {
     //     "यहाँ आप आसानी से ऑर्डर कर सकते हैं और अपने ऑर्डर को मैनेज कर सकते हैं।",
     // });
 
-    // return res.status(201).json({
-    //   success: true,
-    //   message: "यूज़र रजिस्ट्रेशन पूरा हो गया है, कृपया लॉग इन करें।",
-    //   user: newUser,
-    // });
-
     return res.status(201).json({
       success: true,
-      phoneNumber,
-      message: "OTP भेजा गया!",
+      message: "यूज़र रजिस्ट्रेशन पूरा हो गया है, कृपया लॉग इन करें।",
+      user: newUser,
     });
+
+    // return res.status(201).json({
+    //   success: true,
+    //   phoneNumber,
+    //   message: "OTP भेजा गया!",
+    // });
   } catch (error) {
     res.status(500).json({
       status: false,

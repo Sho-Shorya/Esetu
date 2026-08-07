@@ -17,6 +17,7 @@ import React, { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { API_BASE_URL } from "@/lib/constants";
+import { BiLeftArrow } from "react-icons/bi";
 
 const Signup = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -25,7 +26,7 @@ const Signup = () => {
     firstName: "",
     lastName: "",
     phoneNumber: "",
-    place: "",
+    shopKey: "",
     password: "",
   });
   const navigate = useNavigate();
@@ -40,8 +41,6 @@ const Signup = () => {
 
   const submitHander = async (e) => {
     e.preventDefault();
-    console.log(formData);
-
     try {
       setLoading(true);
       const res = await axios.post(
@@ -49,12 +48,8 @@ const Signup = () => {
         formData,
       );
       if (res.data.success) {
-        navigate("/verify-otp", {
-          state: {
-            phoneNumber: formData.phoneNumber,
-          },
-        });
-        toast.success(res.data.message);
+        navigate("/login");
+        toast.success(res.data.message, { duration: 2000 });
       } else console.log("Registration failed");
     } catch (error) {
       toast.error(error.response?.data?.message);
@@ -65,8 +60,7 @@ const Signup = () => {
   return (
     <div className="flex justify-center items-center min-h-screen bg-gray-100">
       <Card className="w-full max-w-sm relative">
-        <img
-          src="arrow-left.png"
+        <BiLeftArrow
           onClick={() => navigate("/")}
           className=" absolute top-7 -left-13 h-[18px] cursor-pointer "
         />
@@ -116,15 +110,15 @@ const Signup = () => {
                 onChange={handleChange}
               />
             </div>
-            <div className="grid gap-2">
-              <Label htmlFor="place">Place</Label>
+            <div className="grid  text-red-600 gap-2">
+              <Label htmlFor="place">Shopkeeper Secret Key*</Label>
               <Input
-                id="place"
+                id="shopKey"
                 type="text"
-                name="place"
-                placeholder="Enter city/village"
+                name="shopKey"
+                placeholder="Enter Shopkepper Secret Key here"
                 required
-                value={formData.place}
+                value={formData.shopKey}
                 onChange={handleChange}
               />
             </div>

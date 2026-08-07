@@ -157,178 +157,158 @@ const Profile = () => {
   };
   return (
     <div className=" relative min-h-screen bg-gray-100 px-3 py-20 sm:px-4 lg:px-6">
-      <Tabs defaultValue="profile" className="mx-auto w-full max-w-5xl">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger
-            className="cursor-pointer text-sm sm:text-base"
-            value="profile"
-          >
-            Profile
-          </TabsTrigger>
-          <TabsTrigger
-            className="cursor-pointer text-sm sm:text-base"
-            value="order"
-          >
-            Orders
-          </TabsTrigger>
-        </TabsList>
-        <TabsContent value="profile">
-          <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm sm:p-6">
-            <div className="flex flex-col items-center justify-center">
-              <h2 className="mb-6 text-xl font-bold text-gray-800">
-                Update Profile
-              </h2>
-              <div className="flex w-full max-w-2xl flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-                <div className="flex flex-col items-center justify-center lg:min-w-[180px]">
-                  <img
-                    src={updateUser?.profilePic || userLogo}
-                    alt="pfp"
-                    className="h-24 w-24 rounded-full border-4 border-emerald-400 object-cover p-[2px] sm:h-28 sm:w-28"
-                  />
-                  <label className="mt-4 w-full cursor-pointer rounded-lg bg-emerald-600 px-4 py-2 text-center text-sm text-white hover:bg-emerald-700 sm:w-auto">
-                    Change Picture
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={handleFileChange}
-                    />
-                  </label>
-                </div>
-                <form
-                  onSubmit={handleSubmit}
-                  className="w-full space-y-3 rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5 lg:max-w-xl"
-                >
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className="text-sm font-medium text-gray-700">
-                        First Name
-                      </label>
-                      <input
-                        className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-                        type="text"
-                        name="firstName"
-                        value={updateUser.firstName || ""}
-                        onChange={handleChange}
-                        placeholder="john"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-700">
-                        Last Name
-                      </label>
-                      <input
-                        className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-                        value={updateUser.lastName || ""}
-                        onChange={handleChange}
-                        type="text"
-                        name="lastName"
-                        placeholder="doe"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">
-                      Phone Number
-                    </label>
-                    <input
-                      className="mt-1 w-full rounded-lg border bg-gray-300 text-gray-500 px-3 py-2 text-sm"
-                      value={updateUser.phoneNumber || ""}
-                      onChange={handleChange}
-                      type="text"
-                      disabled
-                      name="phoneNumber"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">
-                      Role
-                    </label>
-                    <input
-                      className="mt-1 w-full rounded-lg border bg-gray-300 text-gray-500 px-3 py-2 text-sm"
-                      value={updateUser.role || ""}
-                      onChange={handleChange}
-                      type="text"
-                      disabled
-                      name="role"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm font-medium text-gray-700">
-                      Address
-                    </label>
-                    <input
-                      className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-                      value={updateUser.address || ""}
-                      onChange={handleChange}
-                      type="text"
-                      placeholder="Enter your address"
-                      name="address"
-                    />
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className="text-sm font-medium text-gray-700">
-                        Place
-                      </label>
-                      <input
-                        className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-                        value={updateUser.place || ""}
-                        onChange={handleChange}
-                        type="text"
-                        placeholder="Enter your place"
-                        name="place"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-700">
-                        Zipcode
-                      </label>
-                      <input
-                        className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-                        value={updateUser.zipCode || ""}
-                        onChange={handleChange}
-                        type="text"
-                        placeholder="Enter your zipcode"
-                        name="zipCode"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div>
-                      <label className="text-sm font-medium text-gray-700">
-                        Gender
-                      </label>
-                      <select
-                        className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-                        value={updateUser.gender || ""}
-                        onChange={handleChange}
-                        name="gender"
-                      >
-                        <option value="">Select</option>
-                        <option value="Male">Male</option>
-                        <option value="Female">Female</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="mt-2 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-                  >
-                    Update Profile
-                  </button>
-                </form>
-              </div>
+      <div className="mt-4 rounded-2xl bg-white p-4 shadow-sm sm:p-6">
+        <div className="flex flex-col items-center justify-center">
+          <h2 className="mb-6 text-xl font-bold text-gray-800">
+            अपडेट प्रोफ़ाइल
+          </h2>
+          <div className="flex w-full max-w-2xl flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex flex-col items-center justify-center lg:min-w-[180px]">
+              <img
+                src={updateUser?.profilePic || userLogo}
+                alt="pfp"
+                className="h-24 w-24 rounded-full border-4 border-emerald-400 object-cover p-[2px] sm:h-28 sm:w-28"
+              />
+              <label className="mt-4 w-full cursor-pointer rounded-lg bg-emerald-600 px-4 py-2 text-center text-sm text-white hover:bg-emerald-700 sm:w-auto">
+                चित्र बदलें
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+              </label>
             </div>
+            <form
+              onSubmit={handleSubmit}
+              className="w-full space-y-3 rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5 lg:max-w-xl"
+            >
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">
+                    पहला नाम
+                  </label>
+                  <input
+                    className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                    type="text"
+                    name="firstName"
+                    value={updateUser.firstName || ""}
+                    onChange={handleChange}
+                    placeholder="john"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">
+                    सरनेम
+                  </label>
+                  <input
+                    className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                    value={updateUser.lastName || ""}
+                    onChange={handleChange}
+                    type="text"
+                    name="lastName"
+                    placeholder="doe"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  फ़ोन नंबर
+                </label>
+                <input
+                  className="mt-1 w-full rounded-lg border bg-gray-300 text-gray-500 px-3 py-2 text-sm"
+                  value={updateUser.phoneNumber || ""}
+                  onChange={handleChange}
+                  type="text"
+                  disabled
+                  name="phoneNumber"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">
+                  Role
+                </label>
+                <input
+                  className="mt-1 w-full rounded-lg border bg-gray-300 text-gray-500 px-3 py-2 text-sm"
+                  value={updateUser.role || ""}
+                  onChange={handleChange}
+                  type="text"
+                  disabled
+                  name="role"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700">पता</label>
+                <input
+                  className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                  value={updateUser.address || ""}
+                  onChange={handleChange}
+                  type="text"
+                  placeholder="Enter your address"
+                  name="address"
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">
+                    जगह
+                  </label>
+                  <input
+                    className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                    value={updateUser.place || ""}
+                    onChange={handleChange}
+                    type="text"
+                    placeholder="Enter your place"
+                    name="place"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">
+                    Zipcode
+                  </label>
+                  <input
+                    className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                    value={updateUser.zipCode || ""}
+                    onChange={handleChange}
+                    type="text"
+                    placeholder="Enter your zipcode"
+                    name="zipCode"
+                  />
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">
+                    लिंग
+                  </label>
+                  <select
+                    className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
+                    value={updateUser.gender || ""}
+                    onChange={handleChange}
+                    name="gender"
+                  >
+                    <option value="">चुनें</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                className="mt-2 w-full rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+              >
+                प्रोफ़ाइल अपडेट करें!
+              </button>
+            </form>
           </div>
-        </TabsContent>
-      </Tabs>
+        </div>
+      </div>
       {updateLoading && (
-        <div className="absolute w-full h-full bg-black/70 flex items-center justify-center">
-          <div className="w-[80%] text-black h-[40%] bg-red-50 flex flex-col items-center justify-center">
-            <Loader2 className="animate-spin h-10 w-10" />
+        <div className="fixed top-0 left-0 w-full h-full bg-black/50 flex items-center justify-center">
+          <div className="w-[80%] text-black h-[20%] bg-red-50  gap-3 flex flex-col rounded-2xl items-center justify-center">
+            <Loader2 className="animate-spin text-red-600 h-10 w-10" />
             <p className="text-[15px] font-semibold">प्रोफ़ाइल सेव हो रही है</p>
           </div>
         </div>
