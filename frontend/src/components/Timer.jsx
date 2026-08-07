@@ -115,7 +115,7 @@ const Timer = () => {
       drag
       dragConstraints={{ left: -160, right: 0, top: -90, bottom: 0 }}
       dragElastic={0.12}
-      className={`fixed mb-20 ${isLast10Minutes ? "animate-bounce" : ""}  right-4 bottom-8 z-50 flex h-25 w-25 cursor-grab items-center justify-center rounded-full border border-white/20 bg-gradient-to-br  ${bgColor} p-2 text-center text-white shadow-2xl`}
+      className={`fixed mb-20 ${isLast10Minutes ? "animate-bounce" : ""}  right-4 border-2 border-red-500 bottom-8 z-50 flex h-25 w-25 cursor-grab items-center justify-center rounded-full bg-gradient-to-br  ${bgColor} p-2 text-center text-white shadow-2xl`}
     >
       <div className="flex h-full w-full flex-col items-center justify-center gap-0 text-center">
         <div className="relative flex items-center justify-center rounded-full bg-white/18 p-[7px] bg-red-500 text-white">

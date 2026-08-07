@@ -15,12 +15,14 @@ import {
   CircleAlert,
   ChevronLeft,
   Check,
+  MoveLeft,
 } from "lucide-react";
 
 import Timer from "@/components/Timer";
 import { Button } from "@/components/ui/button";
 import { setCartData, clearCart } from "@/redux/ProductSlice";
 import { API_BASE_URL } from "@/lib/constants";
+import { BiLeftArrow } from "react-icons/bi";
 
 const containerVariants = {
   hidden: {},
@@ -229,7 +231,9 @@ const Cart = () => {
     navigate("/");
   };
   const { productData } = useSelector((state) => state.product);
-  const fetchCompanyName = (companyId) => {
+  const fetchCompanyName = (company) => {
+    const companyId = typeof company === "object" ? company._id : company;
+
     for (const product of productData) {
       const variant = product.variants?.find(
         (v) => v.company?._id === companyId,
@@ -242,7 +246,6 @@ const Cart = () => {
 
     return "";
   };
-
   if (!token) {
     return (
       <div className="mt-24 flex min-h-[60vh] items-center justify-center px-4">
@@ -295,7 +298,7 @@ const Cart = () => {
           animate={{ opacity: 1, scale: 1 }}
           className="max-w-md rounded-[32px] bg-white p-10 text-center shadow-xl"
         >
-          <ShoppingBag size={80} className="mx-auto mb-5 text-green-600" />
+          <img src="./cart.png" className="mx-auto h-20 mb-5 text-red-600" />
 
           <h2 className="text-3xl font-bold">आपका कार्ट खाली है</h2>
 
@@ -306,8 +309,9 @@ const Cart = () => {
 
           <Button
             onClick={() => navigate("/")}
-            className="mt-8 h-12 w-full rounded-2xl text-lg"
+            className="mt-8 h-12 w-full rounded-2xl bg-red-600 text-white font-bold border-2 border-yellow-400 text-lg"
           >
+            <MoveLeft />
             खरीदारी शुरू करें
           </Button>
         </motion.div>
@@ -321,12 +325,12 @@ const Cart = () => {
       <motion.div
         initial={{ opacity: 0, y: -25 }}
         animate={{ opacity: 1, y: 0 }}
-        className="mb-6 overflow-hidden rounded-3xl border border-red-100 bg-gradient-to-tr from-green-400 via-black to-green-700 shadow-sm"
+        className="mb-6 overflow-hidden rounded-3xl border border-red-100 bg-gradient-to-tr from-red-400  to-red-700 shadow-sm"
       >
         <div className="flex flex-col gap-5 p-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex items-center gap-3">
-              <div className="rounded-2xl p-3 text-green-400">
+              <div className="rounded-2xl p-3 text-white">
                 <ShoppingBag size={24} />
               </div>
               <div>
@@ -334,7 +338,7 @@ const Cart = () => {
                   आपका कार्ट ({items.length})
                 </h1>
 
-                <p className="mt-1 text-sm text-gray-400">
+                <p className="mt-1 text-sm text-white/70">
                   आपका कार्ट आज के ऑर्डर में जोड़ दिया जाएगा,कृपया इसे सावधानी
                   से जोड़ें।
                 </p>
@@ -388,7 +392,7 @@ const Cart = () => {
                     <div className="flex flex-1 flex-col px-1  justify-between">
                       <div>
                         <div>
-                          <span className="inline-flex rounded-full bg-blue-100 px-2 text-[15px] font-semibold text-blue-700">
+                          <span className="inline-flex rounded-full bg-blue-100 px-2 text-[14px] font-semibold text-blue-700">
                             {fetchCompanyName(item.company)}
                           </span>
 
@@ -511,7 +515,7 @@ const Cart = () => {
             <Button
               onClick={handleCheckout}
               disabled={checkoutLoading}
-              className="mt-6 h-14 w-full rounded-2xl bg-gradient-to-tr from-green-900 via-black to-green-700 text-[20px] text-white font-semibold"
+              className="mt-6 h-14 w-full rounded-2xl bg-gradient-to-tr from-red-900 via-red-600 to-red-400 border-2 border-yellow-600 text-[20px] text-white font-semibold"
             >
               {checkoutLoading ? (
                 <>

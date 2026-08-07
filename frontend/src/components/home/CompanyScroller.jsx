@@ -87,7 +87,7 @@ const CompanyScroller = ({ onSelect }) => {
                 scale: 0.95,
               }}
               onClick={() => handleSelect(company._id)}
-              className={`flex min-w-[90px] flex-col items-center rounded-3xl p-3 transition-all duration-300 ${
+              className={`flex min-w-[90px]  flex-col items-center rounded-3xl p-3 transition-all duration-300 ${
                 active
                   ? "bg-gradient-to-br from-red-600 to-red-500 text-white shadow-xl"
                   : "bg-white text-gray-700 shadow-md"

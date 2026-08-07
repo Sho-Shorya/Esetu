@@ -462,7 +462,7 @@
 
 // export default ProductsList;
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { AnimatePresence, motion } from "framer-motion";
@@ -479,13 +479,13 @@ import { toast } from "sonner";
 
 import { API_BASE_URL } from "@/lib/constants";
 import { setCartData } from "@/redux/ProductSlice";
-
 import WelcomeCard from "../components/home/WelcomeCard";
 import SearchBar from "../components/home/Searchbar";
 import CompanyScroller from "../components/home/CompanyScroller";
-
+import Fuse from "fuse.js";
 const ProductsList = () => {
   const dispatch = useDispatch();
+  const [search, setSearch] = useState("");
 
   const { productData, prodLoading } = useSelector((state) => state.product);
 
@@ -501,45 +501,72 @@ const ProductsList = () => {
 
   const [qty, setQty] = useState(1);
 
+  const productsRef = useRef(null);
   const [addLoading, setAddLoading] = useState(false);
+  const fuse = useMemo(() => {
+    return new Fuse(productData, {
+      threshold: 0.35,
+      ignoreLocation: true,
+      keys: [
+        "name",
+        "hinglishName",
+        "category.name",
+        "keywords",
+        "variants.company.name",
+        "variants.measurement",
+      ],
+    });
+  }, [productData]);
+  const hasScrolled = useRef(false);
 
-  const searchQuery =
-    new URLSearchParams(location.search).get("search")?.trim().toLowerCase() ||
-    "";
+  useEffect(() => {
+    if (search.trim() && !hasScrolled.current) {
+      window.scrollTo({
+        top: 223,
+        behavior: "smooth",
+      });
 
+      hasScrolled.current = true;
+    }
+
+    if (!search.trim()) {
+      window.scrollTo({
+        top: 0,
+        behavior: "smooth",
+      });
+
+      hasScrolled.current = false;
+    }
+  }, [search]);
+  useEffect(() => {
+    if (location.pathname.includes("/products")) {
+      window.scrollTo({
+        top: 208,
+        behavior: "smooth",
+      });
+    }
+  }, [location.pathname]);
   const products = useMemo(() => {
     let list = [...productData];
 
-    // Company Filter
+    // Company filter
     if (selectedCompany !== "all") {
       list = list.filter((product) =>
-        product.variants?.some(
+        product.variants.some(
           (variant) => variant.company?._id === selectedCompany,
         ),
       );
     }
 
-    // Search Filter
-    if (searchQuery) {
-      const terms = searchQuery.split(/\s+/).filter(Boolean);
-
-      list = list.filter((product) => {
-        const searchable = [
-          product.name,
-          product.hinglishName,
-          product.category?.name,
-          ...product.variants.map((variant) => variant.company?.name),
-          ...product.variants.map((variant) => variant.measurement),
-        ]
-          .join(" ")
-          .toLowerCase();
-
-        return terms.every((term) => searchable.includes(term));
-      });
+    // Search
+    if (search.trim()) {
+      list = fuse.search(search).map((result) => result.item);
     }
 
     return list;
-  }, [productData, searchQuery, selectedCompany]);
+  }, [productData, selectedCompany, search, fuse]);
+
+  <SearchBar value={search} onChange={setSearch} />;
 
   const handleProductClick = (product) => {
     setSelectedProduct(product);
@@ -608,7 +635,7 @@ const ProductsList = () => {
       if (res.data.success) {
         dispatch(setCartData(res.data.cart));
 
-        toast.success("कार्ट में जोड़ दिया गया");
+        toast.success("🟢 कार्ट में जोड़ दिया गया", { duration: 1000 });
 
         handleCross();
       } else {
@@ -660,12 +687,12 @@ const ProductsList = () => {
   }
 
   return (
-    <div className="pb-24">
+    <div className="pb-24 mt-6">
       <WelcomeCard />
 
-      <SearchBar />
+      <SearchBar value={search} onChange={setSearch} />
 
-      <CompanyScroller onSelect={setSelectedCompany} />
+      {/* <CompanyScroller onSelect={setSelectedCompany} /> */}
 
       {products.length === 0 ? (
         <motion.div
@@ -693,17 +720,8 @@ const ProductsList = () => {
         </motion.div>
       ) : (
         <motion.div
+          ref={productsRef}
           layout
-          initial="hidden"
-          animate="show"
-          variants={{
-            hidden: {},
-            show: {
-              transition: {
-                staggerChildren: 0.06,
-              },
-            },
-          }}
           className="grid grid-cols-2 gap-4 px-4 pb-10"
         >
           {products.map((item) => {
@@ -719,24 +737,22 @@ const ProductsList = () => {
               <motion.div
                 key={item._id}
                 layout
-                variants={{
-                  hidden: {
-                    opacity: 0,
-                    y: 20,
-                  },
-                  show: {
-                    opacity: 1,
-                    y: 0,
+                transition={{
+                  layout: {
+                    duration: 0.25,
                   },
                 }}
                 whileHover={{
-                  y: -5,
+                  y: -3,
+                  transition: {
+                    duration: 0.15,
+                  },
                 }}
                 whileTap={{
-                  scale: 0.97,
+                  scale: 0.98,
                 }}
                 onClick={() => handleProductClick(item)}
-                className="overflow-hidden rounded-3xl bg-white shadow-sm transition-all hover:shadow-xl cursor-pointer"
+                className="cursor-pointer overflow-hidden rounded-3xl bg-white shadow-sm transition-shadow duration-200 hover:shadow-lg"
               >
                 {/* Product Image */}
                 <div className="relative flex h-40 items-center justify-center overflow-hidden bg-gradient-to-br from-gray-50 to-red-50">
@@ -755,9 +771,6 @@ const ProductsList = () => {
                       scale: 1.08,
                       rotate: -2,
                     }}
-                    transition={{
-                      duration: 0.25,
-                    }}
                     src={item.image || "./sample_img.png"}
                     alt={item.name}
                     className="h-36 object-contain"
@@ -774,58 +787,34 @@ const ProductsList = () => {
                     {item.hinglishName}
                   </p>
 
-                  {/* Price */}
-                  <div className="mt-3 flex items-end gap-2">
-                    <span className="text-2xl font-bold text-red-600">
-                      ₹{lowestPrice}
-                    </span>
-
-                    <span className="pb-1 text-xs text-gray-400">से शुरू</span>
-                  </div>
-
                   {/* Companies */}
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {companies.slice(0, 2).map((company) => (
-                      <div
-                        key={company._id}
-                        className="flex items-center gap-1 rounded-full bg-red-50 px-2 py-1"
+                  <div className="flex gap-[8px]">
+                    {[
+                      ...new Map(
+                        item.variants.map((variant) => [
+                          variant.company._id,
+                          variant,
+                        ]),
+                      ).values(),
+                    ].map((variant) => (
+                      <span
+                        key={variant.company._id}
+                        className={`inline-flex mt-2 h-full items-center gap-1 px-3 py-1 rounded-full text-[10px] font-medium border transition-all duration-200
+         ${
+           variant.available
+             ? "bg-green-100 text-green-700 border-green-200"
+             : "bg-red-100 text-red-700 border-red-200"
+         }`}
                       >
-                        {company.logo ? (
-                          <img
-                            src={company.logo}
-                            alt={company.name}
-                            className="h-4 w-4 object-contain"
-                          />
-                        ) : (
-                          <div className="h-2 w-2 rounded-full bg-red-500" />
-                        )}
-
-                        <span className="max-w-[70px] truncate text-[10px] font-medium text-red-700">
-                          {company.name}
-                        </span>
-                      </div>
+                        <span
+                          className={`w-2 h-2 rounded-full ${
+                            variant.available ? "bg-green-500" : "bg-red-500"
+                          }`}
+                        />
+                        {variant.company.name}
+                      </span>
                     ))}
-
-                    {companies.length > 2 && (
-                      <div className="rounded-full bg-gray-100 px-2 py-1 text-[10px] font-semibold text-gray-600">
-                        +{companies.length - 2}
-                      </div>
-                    )}
                   </div>
-
-                  {/* Variants */}
-                  <div className="mt-3 flex items-center justify-between">
-                    <span className="text-xs text-gray-500">
-                      {item.variants.length} विकल्प
-                    </span>
-
-                    <div className="flex items-center gap-1 text-green-600">
-                      <Sparkles size={13} />
-
-                      <span className="text-[11px] font-semibold">ताज़ा</span>
-                    </div>
-                  </div>
-
                   {/* Add Button */}
                   <motion.button
                     whileHover={{
@@ -868,7 +857,7 @@ const ProductsList = () => {
                 stiffness: 260,
                 damping: 28,
               }}
-              className="fixed bottom-0 left-0 right-0 z-50 mb-15 max-h-[88vh] overflow-y-auto rounded-t-[34px] bg-white"
+              className="fixed bottom-0 left-0 right-0 z-50 max-h-[88vh] overflow-y-auto rounded-t-[34px] bg-white"
             >
               {/* Handle */}
               <div className="sticky top-0 z-20 bg-white pt-3">
@@ -906,17 +895,6 @@ const ProductsList = () => {
                       <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-600">
                         {selectedProduct.variants.length} विकल्प
                       </span>
-                    </div>
-
-                    <div className="mt-5">
-                      <p className="text-sm text-gray-500">शुरुआती कीमत</p>
-
-                      <h2 className="text-3xl font-bold text-red-600">
-                        ₹
-                        {Math.min(
-                          ...selectedProduct.variants.map((v) => v.price),
-                        )}
-                      </h2>
                     </div>
                   </div>
 

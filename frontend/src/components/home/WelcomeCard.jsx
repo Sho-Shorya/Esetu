@@ -31,7 +31,7 @@ const WelcomeCard = () => {
         duration: 0.65,
         ease: [0.22, 1, 0.36, 1],
       }}
-      className="relative mx-4 mt-3 overflow-hidden rounded-[32px] bg-gradient-to-br from-red-600 via-red-500 to-orange-500 shadow-xl"
+      className="relative mx-3 mt-6 overflow-hidden rounded-[32px] bg-gradient-to-br from-red-600 via-red-500 to-orange-500 shadow-xl"
     >
       {/* Background Blobs */}
       <div className="absolute -right-14 -top-14 h-56 w-56 rounded-full bg-white/10 blur-2xl" />
@@ -64,76 +64,53 @@ const WelcomeCard = () => {
           </h1>
 
           <p className="mt-2 text-sm leading-6 text-red-100">{message}</p>
-
-          <motion.button
-            whileHover={{
-              scale: 1.05,
-            }}
-            whileTap={{
-              scale: 0.96,
-            }}
-            className="mt-6 flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-bold text-red-600 shadow-lg"
-          >
-            अभी खरीदें
-            <ChevronRight size={18} />
-          </motion.button>
         </motion.div>
 
         {/* Character */}
-        <motion.div
-          initial={{
-            opacity: 0,
-            x: 35,
-            scale: 0.88,
-          }}
-          animate={{
-            opacity: 1,
-            x: 0,
-            scale: 1,
-            y: [0, -6, 0],
-            rotate: [0, 2, -2, 0],
-          }}
-          transition={{
-            opacity: {
-              duration: 0.55,
-              delay: 0.3,
-            },
-            x: {
-              duration: 0.55,
-              delay: 0.3,
-            },
-            scale: {
-              duration: 0.55,
-              delay: 0.3,
-            },
-            y: {
-              duration: 3,
-              repeat: Infinity,
-              ease: "easeInOut",
-            },
-            rotate: {
-              duration: 3,
-              repeat: Infinity,
-              ease: "easeInOut",
-            },
-          }}
-          className="relative"
-        >
-          <div className="relative flex h-36 w-36 items-center justify-center">
-            {/* Glow */}
-            <div className="absolute inset-5 rounded-full bg-white/20 blur-xl" />
+        <div className="relative flex h-40 w-40 items-center justify-center">
+          {/* Background Card */}
+          <div className="relative h-28 w-28 rounded-[28px] bg-gradient-to-br from-white via-red-50 to-red-100 shadow-[0_20px_60px_rgba(239,68,68,0.18)] ring-1 ring-red-100" />
 
-            {/* Character Card */}
-            <div className="relative flex h-32 w-32 items-center justify-center rounded-[28px] bg-gradient-to-br from-white to-red-50 shadow-2xl">
-              <img
-                src="./holdingGrocery.png"
-                alt="Shopping Character"
-                className="absolute bottom-0 h-40 w-40 object-contain"
-                draggable={false}
-              />
-            </div>
-          </div>
-        </motion.div>
+          {/* Character */}
+          <motion.img
+            src="./holdingGrocery.png"
+            alt="Shopping Character"
+            draggable={false}
+            className="absolute -bottom-15 h-80 w-80 object-contain pointer-events-none"
+            initial={{
+              opacity: 0,
+              y: 30,
+              scale: 0.75,
+              rotate: -8,
+            }}
+            animate={{
+              opacity: 1,
+              y: [0, -8, 0],
+              scale: [1, 1.03, 1],
+              rotate: [0, 1.5, -1.5, 0],
+            }}
+            transition={{
+              opacity: {
+                duration: 0.6,
+              },
+              scale: {
+                duration: 4,
+                repeat: Infinity,
+                ease: "easeInOut",
+              },
+              y: {
+                duration: 4,
+                repeat: Infinity,
+                ease: "easeInOut",
+              },
+              rotate: {
+                duration: 4,
+                repeat: Infinity,
+                ease: "easeInOut",
+              },
+            }}
+          />
+        </div>
       </div>
     </motion.section>
   );

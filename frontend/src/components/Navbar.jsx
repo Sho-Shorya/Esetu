@@ -177,9 +177,9 @@ const Navbar = () => {
               to={supplierData ? "/admin-dashboard" : "/"}
               className="flex items-center gap-3"
             >
-              <img src="/logo2.png" alt="logo" className="h-10" />
+              <img src="/logo.png" alt="logo" className="h-10" />
 
-              <span className="text-2xl font-bold">E-Setu</span>
+              <span className="text-2xl text-red-600 font-bold">ई-सेतु</span>
             </Link>
           </div>
 
@@ -190,13 +190,13 @@ const Navbar = () => {
                 Products
               </Link>
 
-              <Link to="/categories" className="hover:text-emerald-600">
+              {/* <Link to="/categories" className="hover:text-emerald-600">
                 Categories
               </Link>
 
               <Link to="/offers" className="hover:text-emerald-600">
                 Offers
-              </Link>
+              </Link> */}
             </nav>
 
             <form
@@ -414,7 +414,7 @@ const Navbar = () => {
               onClick={() => setSlideBar(false)}
               className="flex items-center gap-3"
             >
-              <img src="/logo2.png" alt="logo" className="h-8" />
+              <img src="/logo.png" alt="logo" className="h-8" />
               <span className="text-xl font-bold">E-Setu</span>
             </Link>
 
@@ -435,7 +435,7 @@ const Navbar = () => {
               <TrendingUp className="animate-pulse" /> प्रोडक्ट्स
             </Link>
 
-            <Link
+            {/* <Link
               to="/categories"
               onClick={() => setSlideBar(false)}
               className="rounded-md  flex gap-2 items-center px-3 py-2 text-lg hover:bg-emerald-50"
@@ -449,7 +449,7 @@ const Navbar = () => {
               className="rounded-md flex gap-2 items-center px-3 py-2 text-lg hover:bg-emerald-50"
             >
               <BadgePercent className="animate-pulse" /> ऑफर्स
-            </Link>
+            </Link> */}
 
             <form
               onSubmit={(e) => {

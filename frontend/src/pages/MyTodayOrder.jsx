@@ -119,26 +119,21 @@ const MyTodayOrder = () => {
     );
   }
   return (
-    <div className="min-h-screen bg-gray-100 pb-30 pt-18">
+    <div className="min-h-screen bg-gray-100 pb-60 pt-18">
       <div className="max-w-6xl mx-auto px-3">
         {/* Header */}
         <Timer />
         <div className="bg-white rounded-3xl shadow-md border border-gray-200 p-5 mb-5">
-          <div className="flex items-center justify-between">
+          <div className="flex  relative items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-800">आज का ऑर्डर</h1>
 
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-gray-500 mt-3">
                 आपके Pending और Approved ऑर्डर
               </p>
             </div>
-
-            <div className="bg-green-100 relative px-4 py-2 rounded-2xl">
-              <p className="text-xs text-gray-500">Total Orders</p>
-
-              <h2 className="text-2xl   flex items-center justify-center font-bold text-green-700">
-                {totalOrders}
-              </h2>
+            <div className="w-35 h-full relative">
+              <img src="./penpaper.png" className="z-5 h-30 w-35" />
             </div>
           </div>
         </div>
