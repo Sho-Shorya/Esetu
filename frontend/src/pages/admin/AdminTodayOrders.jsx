@@ -126,8 +126,8 @@ const AdminTodayOrders = (page) => {
   );
 
   return (
-    <div className="min-h-auto rounded-2xl sm:px-5 lg:px-8 ">
-      <div className="mt-20  max-w-7xl space-y-4">
+    <div className="min-h-auto rounded-2xl  pb-10  lg:px-8 ">
+      <div className="mt-20  max-w-7xl space-y-5">
         <div className="rounded-3xl bg-white p-6 shadow-lg border border-emerald-100">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>

@@ -15,6 +15,17 @@ const productSlice = createSlice({
     addProduct: (state, action) => {
       state.productData.unshift(action.payload);
     },
+    updateProduct: (state, action) => {
+      const updated = action.payload;
+      state.productData = state.productData.map((p) =>
+        p._id === updated._id ? updated : p,
+      );
+    },
+    removeProduct: (state, action) => {
+      state.productData = state.productData.filter(
+        (p) => p._id !== action.payload,
+      );
+    },
     setCartData: (state, action) => {
       state.cartData = action.payload;
     },
@@ -30,6 +41,8 @@ const productSlice = createSlice({
 export const {
   setProductData,
   addProduct,
+  updateProduct,
+  removeProduct,
   setCartData,
   clearCart,
   setProdLoading,

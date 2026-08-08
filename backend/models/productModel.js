@@ -58,6 +58,10 @@ const productSchema = new mongoose.Schema(
       type: [variantSchema],
       default: [],
     },
+    keyword: {
+      type: Array,
+      default: [],
+    },
 
     isActive: {
       type: Boolean,

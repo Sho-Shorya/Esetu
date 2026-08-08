@@ -1,5 +1,6 @@
 import {
   CircleAlert,
+  Edit,
   IndianRupee,
   MoveLeft,
   Pencil,
@@ -27,6 +28,14 @@ const AdminProductView = ({ tailwind, condition }) => {
 
     navigate(`/products?search=${encodeURIComponent(search)}`);
   };
+
+  const deleteProduct = (productId) => {
+    // if (window.confirm("Are you sure you want to delete this product?")) {
+    //   // Delete logic here
+    //   console.log(`Deleted product with ID: ${productId}`);
+    // }
+  };
+
   return (
     <div className={tailwind}>
       {tailwind == "mt-18" && (
@@ -94,6 +103,23 @@ const AdminProductView = ({ tailwind, condition }) => {
                       {product.category?.name}
                     </div>
                   </div>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/edit-product/${product._id}`)}
+                      className="p-3 rounded-full bg-emerald-600 text-white hover:bg-emerald-700"
+                    >
+                      <Edit size={18} />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => deleteProduct(product._id)}
+                      className="p-3 rounded-full bg-red-500 text-white hover:bg-red-700"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Variants */}
@@ -130,16 +156,6 @@ const AdminProductView = ({ tailwind, condition }) => {
                               </span>
                             </div>
                           </div>
-                        </div>
-
-                        <div className="flex gap-2">
-                          <button className="p-2 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200">
-                            <Pencil size={18} />
-                          </button>
-
-                          <button className="p-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200">
-                            <Trash2 size={18} />
-                          </button>
                         </div>
                       </div>
                     ))}

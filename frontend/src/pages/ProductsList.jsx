@@ -511,7 +511,7 @@ const ProductsList = () => {
         "name",
         "hinglishName",
         "category.name",
-        "keywords",
+        "keyword",
         "variants.company.name",
         "variants.measurement",
       ],

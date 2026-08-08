@@ -29,6 +29,7 @@ import { initOneSignal } from "./OneSignalInit";
 import SplashScreen from "./components/SplashScreen";
 import useGetCurrentUser from "../hooks/getCurrentUser";
 import VerifyOtp from "./pages/VerifyOtp";
+import EditProduct from "./components/EditProduct";
 function App() {
   const token = localStorage.getItem("token");
 
@@ -308,6 +309,15 @@ function App() {
           ) : (
             <Navigate to="/login" replace />
           )
+        }
+      />
+      <Route
+        path="/edit-product/:id"
+        element={
+          <>
+            <Navbar />
+            <EditProduct />
+          </>
         }
       />
     </Routes>

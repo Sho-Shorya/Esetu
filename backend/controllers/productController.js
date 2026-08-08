@@ -102,8 +102,7 @@ export const deleteProduct = async (req, res) => {
 export const updateProduct = async (req, res) => {
   try {
     const { productId } = req.params;
-
-    const { name, hinglishName, category } = req.body;
+    const { name, hinglishName, category, keyword } = req.body;
 
     let { variants } = req.body;
 
@@ -119,7 +118,7 @@ export const updateProduct = async (req, res) => {
     let image = product.image;
 
     if (req.file) {
-      const uploaded = await uploadOnCloudinary(req.file.path);
+      const uploaded = await uploadOnCloudinary(req.file.buffer);
 
       image = uploaded?.secure_url || product.image;
     }
@@ -131,18 +130,54 @@ export const updateProduct = async (req, res) => {
     product.name = name || product.name;
     product.hinglishName = hinglishName || product.hinglishName;
     product.category = category || product.category;
+    if (keyword) {
+      product.keyword = JSON.parse(keyword);
+    }
     product.image = image;
     product.variants = variants || product.variants;
 
     await product.save();
 
+    const updatedProduct = await Product.findById(product._id)
+      .populate("category")
+      .populate("variants.company");
+
     return res.status(200).json({
       success: true,
-      message: "Product Updated Successfully",
-      product,
+      message: "प्रोडक्ट अपडेट हो गया।",
+      product: updatedProduct,
     });
   } catch (error) {
     console.log(error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+export const getProductById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const product = await Product.findById(id)
+      .populate("category")
+      .populate("variants.company");
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: "Product not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      product,
+    });
+  } catch (error) {
+    console.error("Get Product Error:", error);
 
     return res.status(500).json({
       success: false,

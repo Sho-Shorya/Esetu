@@ -6,12 +6,14 @@ import {
   getallproducts,
   deleteProduct,
   updateProduct,
+  getProductById,
 } from "../controllers/productController.js";
 import { multipleUpload } from "../middleware/multer.js";
 
 const productRoute = Router();
 
 productRoute.get("/", isAuthenticated, getallproducts);
+productRoute.get("/:id", getProductById);
 
 productRoute.post(
   "/add",
@@ -27,7 +29,7 @@ productRoute.delete(
   deleteProduct,
 );
 productRoute.put(
-  "/update/:productId",
+  "/edit-product/:productId",
   isAuthenticated,
   isSupp,
   singleUpload("media"),

@@ -179,7 +179,11 @@ const Navbar = () => {
             >
               <img src="/logo.png" alt="logo" className="h-10" />
 
-              <span className="text-2xl text-red-600 font-bold">ई-सेतु</span>
+              <span
+                className={`text-2xl ${supplierData ? "text-emerald-600" : "text-red-600"} font-bold`}
+              >
+                ई-सेतु
+              </span>
             </Link>
           </div>
 
@@ -451,24 +455,6 @@ const Navbar = () => {
               <BadgePercent className="animate-pulse" /> ऑफर्स
             </Link> */}
 
-            <form
-              onSubmit={(e) => {
-                onSearchSubmit(e);
-                setSlideBar(false);
-              }}
-              className="mt-3 flex gap-2"
-            >
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="उत्पाद खोजें..."
-                className="flex-1 rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-
-              <Button type="submit">Go</Button>
-            </form>
-
             {!supplierData && userData && (
               <Link
                 to="/cart"
@@ -523,7 +509,7 @@ const Navbar = () => {
                     }
                   }}
                   disabled={loading}
-                  className="mt-4 bg-red-600"
+                  className={`mt-4 ${supplierData ? "bg-emerald-600" : "bg-red-600"} `}
                 >
                   {loading ? (
                     <Loader2 className="h-5 w-5 animate-spin" />
