@@ -154,18 +154,36 @@ const LiveTracking = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#fff7f7] flex items-center justify-center px-5">
-        <div className="text-center">
-          <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-red-100">
-            <Truck className="h-10 w-10 text-red-600 animate-pulse" />
+      <div className="relative min-h-screen bg-white flex items-center justify-center px-5 overflow-hidden">
+        <div className="w-full max-w-sm text-center">
+          {/* Animated truck */}
+          <div className="relative mx-auto mb-7 h-28 w-28">
+            <div className="absolute inset-0 rounded-full bg-red-100 animate-ping opacity-40" />
+
+            <div className="relative flex h-28 w-28 items-center justify-center rounded-full bg-white shadow-lg border border-red-100">
+              <Truck className="h-12 w-12 text-red-600 animate-pulse" />
+            </div>
           </div>
 
-          <h2 className="text-xl font-extrabold text-gray-900">
-            Finding your delivery...
+          {/* Loading dots */}
+          <div className="my-6 flex justify-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-red-500 animate-bounce [animation-delay:-0.3s]" />
+            <span className="h-2 w-2 rounded-full bg-red-500 animate-bounce [animation-delay:-0.15s]" />
+            <span className="h-2 w-2 rounded-full bg-red-500 animate-bounce" />
+          </div>
+          {/* Main text */}
+          <h2 className="text-2xl font-bold text-gray-900">
+            लाइव ट्रैकिंग उपलब्ध है! 🤗
           </h2>
 
-          <p className="mt-2 text-sm text-gray-500">
-            Connecting to your supplier
+          <p className="mt-3 text-sm text-gray-500 leading-6">
+            आपके सप्लायर से कनेक्ट किया जा रहा है...
+          </p>
+
+          {/* Footer */}
+          <p className="mt-30 text-xs text-gray-400">
+            Powered by{" "}
+            <span className="font-semibold text-gray-500">e-Setu</span>
           </p>
         </div>
       </div>
@@ -184,10 +202,12 @@ const LiveTracking = () => {
             <Truck className="h-8 w-8 text-red-600" />
           </div>
 
-          <h2 className="mt-5 text-xl font-extrabold">Tracking unavailable</h2>
+          <h2 className="mt-5 text-xl font-extrabold">
+            माफ़ करें, ट्रैकिंग उपलब्ध नहीं है। 😓
+          </h2>
 
           <p className="mt-2 text-sm text-gray-500">
-            We couldn't find the delivery right now.
+            हमें अभी डिलीवरी नहीं मिल पाई।
           </p>
 
           <button
@@ -260,13 +280,13 @@ const LiveTracking = () => {
           <div
             className={`flex items-center gap-2 rounded-full px-3 py-2 text-xs font-bold ${
               trackingActive
-                ? "bg-green-50 text-green-700"
+                ? "bg-red-50 text-red-700"
                 : "bg-gray-100 text-gray-500"
             }`}
           >
             <span
               className={`h-2 w-2 rounded-full ${
-                trackingActive ? "bg-green-500 animate-pulse" : "bg-gray-400"
+                trackingActive ? "bg-red-500 animate-pulse" : "bg-gray-400"
               }`}
             />
 
@@ -283,7 +303,7 @@ const LiveTracking = () => {
         {/* =================================================
             STATUS
         ================================================= */}
-
+        {/* 
         <section className="pt-6">
           <div className="rounded-[30px] bg-red-600 p-6 text-white shadow-xl shadow-red-200">
             <div className="flex items-start justify-between">
@@ -310,7 +330,7 @@ const LiveTracking = () => {
               </div>
             </div>
           </div>
-        </section>
+        </section> */}
 
         {/* =================================================
             JOURNEY

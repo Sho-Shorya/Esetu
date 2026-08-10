@@ -192,8 +192,8 @@ const ProductsList = () => {
   if (prodLoading) {
     return (
       <div className="space-y-5 pb-24">
-        <WelcomeCard />
         <SuppRouteComp />
+        <WelcomeCard />
         <SearchBar />
 
         {/* Products Skeleton */}
