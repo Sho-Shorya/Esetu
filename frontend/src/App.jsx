@@ -28,12 +28,13 @@ import Timer from "./components/Timer";
 import { initOneSignal } from "./OneSignalInit";
 import SplashScreen from "./components/SplashScreen";
 import useGetCurrentUser from "../hooks/getCurrentUser";
+import getRoutes from "../hooks/getRoutes";
 import VerifyOtp from "./pages/VerifyOtp";
 import EditProduct from "./components/EditProduct";
+import LiveTracking from "./components/LiveTracking";
 function App() {
   const token = localStorage.getItem("token");
 
-  //notification initialisation
   useEffect(() => {
     if (token) {
       initOneSignal();
@@ -45,6 +46,7 @@ function App() {
   const dispatch = useDispatch();
   useGetCurrentUser();
   useGetAllProducts();
+  getRoutes();
   if (appLoading) {
     return <SplashScreen />;
   }
@@ -320,6 +322,7 @@ function App() {
           </>
         }
       />
+      <Route path="/tracking/:supplierId" element={<LiveTracking />} />
     </Routes>
   );
 }

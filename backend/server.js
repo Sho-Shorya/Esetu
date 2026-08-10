@@ -16,6 +16,8 @@ import settingsRouter from "./routes/settingsRoute.js";
 import offerRoute from "./routes/offerRoute.js";
 import { syncTodayOrderFlags } from "./controllers/orderController.js";
 import { startReminderCron } from "./services/reminderCron.js";
+import trackingRoute from "./routes/trackingRoute.js";
+import routeRoute from "./routes/routeRoute.js";
 
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
 const app = express();
@@ -47,6 +49,8 @@ app.use("/api/v1/company", comRouter);
 app.use("/api/v1/order", orderRouter);
 app.use("/api/v1/settings", settingsRouter);
 app.use("/api/v1/offer", offerRoute);
+app.use("/api/v1/tracking", trackingRoute);
+app.use("/api/v1/route", routeRoute);
 
 const scheduleMidnightSync = () => {
   const now = new Date();

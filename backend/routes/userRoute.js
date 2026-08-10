@@ -16,6 +16,7 @@ import {
   adminLogin,
   adminLogout,
   adminRegister,
+  getSuppIds,
 } from "../controllers/AdminController.js";
 import { saveSubscriptionId } from "../controllers/saveSubscriptionId.js";
 
@@ -26,6 +27,7 @@ userRouter.put("/verify", verifyOtp);
 userRouter.post("/login", login);
 userRouter.post("/logout", isAuthenticated, logout);
 userRouter.get("/current", isAuthenticated, getCurrentUser);
+userRouter.get("/get-suppIds", isAuthenticated, getSuppIds);
 
 userRouter.post("/admin-register", adminRegister);
 userRouter.post("/admin-login", adminLogin);
