@@ -300,11 +300,6 @@ const ProductsList = () => {
                     ₹{lowestPrice} से
                   </div>
 
-                  {/* Category Badge */}
-                  <div className="absolute right-3 top-3 rounded-full bg-white/90 px-2 py-1 text-[10px] font-medium text-gray-600 shadow">
-                    {item.category?.name}
-                  </div>
-
                   <motion.img
                     whileHover={{
                       scale: 1.08,
@@ -427,10 +422,6 @@ const ProductsList = () => {
                     </p>
 
                     <div className="mt-4 flex items-center gap-2">
-                      <span className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
-                        ताज़ा सामान
-                      </span>
-
                       <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-600">
                         {selectedProduct.variants.length} विकल्प
                       </span>

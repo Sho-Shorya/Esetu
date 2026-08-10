@@ -6,6 +6,8 @@ import { RiImageUploadLine } from "react-icons/ri";
 import { Edit, Trash2, Plus } from "lucide-react";
 import { API_BASE_URL } from "@/lib/constants";
 import { toast } from "sonner";
+import { setProductData } from "@/redux/ProductSlice";
+import { useSelector } from "react-redux";
 
 const AddProduct = () => {
   const navigate = useNavigate();
@@ -75,12 +77,13 @@ const AddProduct = () => {
   const [companyName, setCompanyName] = useState("");
   const [companyLogo, setCompanyLogo] = useState(null);
   const [selectedCategories, setSelectedCategories] = useState([]);
-
   const addCompany = async () => {
+    // Validate company name
     if (!companyName.trim()) {
       return toast.error("कंपनी का नाम भरें");
     }
 
+    // Validate categories
     if (selectedCategories.length === 0) {
       return toast.error("कम से कम एक कैटेगरी चुनें");
     }
@@ -88,7 +91,7 @@ const AddProduct = () => {
     try {
       const formData = new FormData();
 
-      formData.append("name", companyName);
+      formData.append("name", companyName.trim());
 
       formData.append("categories", JSON.stringify(selectedCategories));
 
@@ -107,17 +110,31 @@ const AddProduct = () => {
       );
 
       if (res.data.success) {
+        const newCompany = res.data.company;
+
+        // Show success message
         toast.success("कंपनी जोड़ दी गई");
 
-        setCompanies((prev) => [...prev, res.data.company]);
+        // ⭐ Add company to Redux immediately
+        dispatch(addCompany(newCompany));
 
+        // If you're also maintaining local companies state
+        setCompanies((prev) => [...prev, newCompany]);
+
+        // Reset form
         setCompanyName("");
         setCompanyLogo(null);
         setSelectedCategories([]);
+
+        // Close modal
         setOpenCompanyModal(false);
       }
     } catch (err) {
-      toast.error(err.response?.data?.message || "कुछ गलत हो गया");
+      console.error("Add company error:", err);
+
+      toast.error(
+        err.response?.data?.message || "कंपनी जोड़ने में कुछ गलत हो गया",
+      );
     }
   };
 
@@ -184,17 +201,30 @@ const AddProduct = () => {
       fileInputRef.current.value = "";
     }
   };
-
   const addVariant = () => {
+    const { productData } = useSelector((state) => state.product);
     if (!variant.company || !variant.measurement || !variant.price) {
       return toast.error("सभी जानकारी भरें");
     }
 
-    setProduct((prev) => ({
-      ...prev,
-      variants: [...prev.variants, variant],
-    }));
+    const updatedProduct = {
+      ...product,
+      variants: [...product.variants, variant],
+    };
 
+    // Update local product
+    setProduct(updatedProduct);
+
+    // Update that product inside Redux productData array
+    dispatch(
+      setProductData(
+        productData.map((item) =>
+          item._id === product._id ? updatedProduct : item,
+        ),
+      ),
+    );
+
+    // Reset variant form
     setVariant({
       company: "",
       measurement: "",

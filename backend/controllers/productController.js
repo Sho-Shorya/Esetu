@@ -69,7 +69,6 @@ export const getallproducts = async (req, res) => {
     });
   }
 };
-
 export const deleteProduct = async (req, res) => {
   try {
     const { productId } = req.params;
@@ -87,10 +86,11 @@ export const deleteProduct = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "Product Deleted Successfully",
+      message: "प्रोडक्ट सफलतापूर्वक डिलीट हो गया।",
+      productId,
     });
   } catch (error) {
-    console.log(error);
+    console.log("Delete Product Error:", error);
 
     return res.status(500).json({
       success: false,

@@ -31,7 +31,6 @@ const AdminDashboard = () => {
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState("");
-
   const { productData } = useSelector((state) => state.product);
   const { supplierData } = useSelector((state) => state.user);
 
@@ -194,7 +193,7 @@ const AdminDashboard = () => {
                     className="rounded-3xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 items-center justify-center flex"
                   >
                     {savingSettings ? (
-                      <Loader2 className="animate-spin" />
+                      <Loader2 className=" h-3 w-3 animate-spin" />
                     ) : (
                       "सेव"
                     )}

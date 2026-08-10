@@ -40,10 +40,10 @@ export const fetchAllProducts = async (dispatch) => {
 
 const useGetAllProducts = () => {
   const dispatch = useDispatch();
-  const { userData } = useSelector((state) => state.user);
+  const { userData, supplierData } = useSelector((state) => state.user);
   useEffect(() => {
     fetchAllProducts(dispatch);
-  }, [dispatch, userData]);
+  }, [dispatch, userData, supplierData]);
 };
 
 export default useGetAllProducts;

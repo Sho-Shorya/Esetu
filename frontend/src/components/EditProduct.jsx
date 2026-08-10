@@ -326,18 +326,12 @@ const EditProduct = () => {
       return;
     }
 
-    if (newVariant.stock === "" || Number(newVariant.stock) < 0) {
-      toast.error("Please enter valid stock");
-      return;
-    }
-
     setVariants((prev) => [
       ...prev,
       {
         company: newVariant.company,
         measurement: newVariant.measurement,
         price: Number(newVariant.price),
-        stock: Number(newVariant.stock),
         available: newVariant.available,
       },
     ]);
@@ -346,11 +340,10 @@ const EditProduct = () => {
       company: "",
       measurement: "",
       price: "",
-      stock: "",
       available: true,
     });
 
-    toast.success("Variant added");
+    toast.success("वेरिएंट जोड़ा गया");
   };
 
   // ======================================================
@@ -462,7 +455,7 @@ const EditProduct = () => {
             ),
           ),
         );
-        toast.success("प्रोडक्ट अपडेट हो गया।",{duration:2000});
+        toast.success("प्रोडक्ट अपडेट हो गया।", { duration: 2000 });
 
         navigate("/product-page");
       } else {
@@ -991,7 +984,7 @@ const EditProduct = () => {
                 className="flex items-center gap-2 px-5 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 font-semibold"
               >
                 <Plus size={18} />
-                Add Variant
+                Variant जोड़ें
               </button>
             </div>
           </section>
