@@ -31,7 +31,7 @@ const WelcomeCard = () => {
         duration: 0.65,
         ease: [0.22, 1, 0.36, 1],
       }}
-      className="relative mx-3 mt-6 overflow-hidden rounded-[32px] bg-gradient-to-br from-red-600 via-red-500 to-orange-500 shadow-xl"
+      className="relative mx-3 mt-3 mb-1 pt-1 pb-2 overflow-hidden rounded-[32px] bg-gradient-to-br from-red-600 via-red-500 to-orange-500"
     >
       {/* Background Blobs */}
       <div className="absolute -right-14 -top-14 h-56 w-56 rounded-full bg-white/10 blur-2xl" />
@@ -76,7 +76,7 @@ const WelcomeCard = () => {
             src="./holdingGrocery.png"
             alt="Shopping Character"
             draggable={false}
-            className="absolute -bottom-15 h-80 w-80 object-contain pointer-events-none"
+            className="absolute -bottom-17 h-80 w-80 object-contain pointer-events-none"
             initial={{
               opacity: 0,
               y: 30,

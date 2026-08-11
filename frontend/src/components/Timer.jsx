@@ -214,7 +214,8 @@ const Timer = () => {
             rounded-full
             border
             border-white/20
-            bg-[#171717]/90
+            bg-white
+            text-black
             px-4
             shadow-[0_8px_30px_rgba(0,0,0,0.35)]
             backdrop-blur-xl
@@ -238,7 +239,7 @@ const Timer = () => {
             className="
               text-xs
               font-bold
-              text-white
+              text-red-800
             "
           >
             आज के ऑर्डर बंद

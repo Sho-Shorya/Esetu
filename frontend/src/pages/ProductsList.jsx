@@ -191,7 +191,7 @@ const ProductsList = () => {
   };
   if (prodLoading) {
     return (
-      <div className="space-y-5 pb-24">
+      <div className="space-y-3 pb-26 mt-2">
         <SuppRouteComp />
         <WelcomeCard />
         <SearchBar />
