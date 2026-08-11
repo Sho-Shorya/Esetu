@@ -64,7 +64,7 @@ const SuppRouteComp = () => {
 
         <div className="min-w-0 items-end gap-2 flex ">
           <p className="text-sm text-red-600">सप्लायर - </p>
-          <p className="font-semibold relative text-md truncate">
+          <p className="font-semibold relative text-sm truncate">
             {supplierName}
           </p>
         </div>
