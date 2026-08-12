@@ -57,7 +57,7 @@ const Nav = () => {
       }}
       className={`fixed bottom-0 left-0 right-0 z-50 ${
         userData
-          ? "bg-gradient-to-b from-red-500 via-red-600 to-red-700"
+          ? "bg-gradient-to-bl from-orange-600 via-red-600 to-red-700"
           : "bg-gradient-to-b from-emerald-500 via-emerald-600 to-emerald-700"
       }`}
     >

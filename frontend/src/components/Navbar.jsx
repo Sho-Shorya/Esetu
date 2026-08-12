@@ -175,6 +175,12 @@ const Navbar = () => {
 
             <Link
               to={supplierData ? "/admin-dashboard" : "/"}
+              onClick={() => {
+                window.scrollTo({
+                  top: 0,
+                  behavior: "smooth",
+                });
+              }}
               className="flex items-center gap-3"
             >
               <img src="/logo.png" alt="logo" className="h-10" />

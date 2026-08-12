@@ -1,55 +1,61 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertCircle, Check, Clock3 } from "lucide-react";
+import { AlertCircle, Check, Clock3, ShoppingBag } from "lucide-react";
 import { API_BASE_URL } from "@/lib/constants";
 
 const DEFAULT_CUTOFF = "12:00";
 
-// ==========================================
+// ======================================================
 // HELPERS
-// ==========================================
+// ======================================================
 
-const parseCutoff = (timeString, now) => {
+const pad = (value) => String(value).padStart(2, "0");
+
+const parseCutoff = (timeString, baseDate) => {
   const [hours = "12", minutes = "00"] = String(
     timeString || DEFAULT_CUTOFF,
   ).split(":");
 
-  const cutoff = new Date(now);
+  const date = new Date(baseDate);
 
-  cutoff.setHours(parseInt(hours, 10) || 12, parseInt(minutes, 10) || 0, 0, 0);
+  date.setHours(Number(hours) || 0, Number(minutes) || 0, 0, 0);
 
-  return cutoff;
+  return date;
 };
 
-const pad = (value) => String(value).padStart(2, "0");
-
 const formatTime = (seconds) => {
-  const hours = Math.floor(seconds / 3600);
+  const safeSeconds = Math.max(0, Math.floor(seconds));
 
-  const minutes = Math.floor((seconds % 3600) / 60);
-
-  const secs = seconds % 60;
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const secs = safeSeconds % 60;
 
   return `${pad(hours)}:${pad(minutes)}:${pad(secs)}`;
 };
 
-// ==========================================
+const getTomorrow = (date) => {
+  const tomorrow = new Date(date);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  return tomorrow;
+};
+
+// ======================================================
 // TIMER
-// ==========================================
+// ======================================================
 
 const Timer = () => {
   const [customCutoff, setCustomCutoff] = useState(null);
 
-  const [countdown, setCountdown] = useState(0);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
 
-  const [status, setStatus] = useState("countdown");
+  const [status, setStatus] = useState("loading");
 
   const [visible, setVisible] = useState(true);
 
-  // ========================================
-  // FETCH CUTOFF
-  // ========================================
+  // ====================================================
+  // FETCH CUT-OFF
+  // ====================================================
 
   useEffect(() => {
     let mounted = true;
@@ -63,7 +69,7 @@ const Timer = () => {
         if (
           mounted &&
           res.data?.success &&
-          res.data.settings?.dailyOrderCutoff
+          res.data?.settings?.dailyOrderCutoff
         ) {
           setCustomCutoff(res.data.settings.dailyOrderCutoff);
         }
@@ -79,56 +85,52 @@ const Timer = () => {
     };
   }, []);
 
-  // ========================================
-  // COUNTDOWN
-  // ========================================
+  // ====================================================
+  // CALCULATE TIMER
+  // ====================================================
 
   useEffect(() => {
     let mounted = true;
 
-    const tick = () => {
+    const updateTimer = () => {
       if (!mounted) return;
 
       const now = new Date();
 
-      const source = customCutoff || DEFAULT_CUTOFF;
+      const cutoffString = customCutoff || DEFAULT_CUTOFF;
 
-      const todayCutoff = parseCutoff(source, now);
+      const todayCutoff = parseCutoff(cutoffString, now);
 
-      const midnight = new Date(now);
+      // -----------------------------------------------
+      // BEFORE TODAY'S CUTOFF
+      // -----------------------------------------------
 
-      midnight.setHours(0, 0, 0, 0);
-
-      midnight.setDate(midnight.getDate() + 1);
-
-      // BEFORE CUTOFF
       if (now < todayCutoff) {
+        const diff = (todayCutoff.getTime() - now.getTime()) / 1000;
+
+        setRemainingSeconds(Math.max(0, diff));
         setStatus("countdown");
 
-        setCountdown(Math.max(0, Math.floor((todayCutoff - now) / 1000)));
-
         return;
       }
 
+      // -----------------------------------------------
       // AFTER CUTOFF
-      if (now >= todayCutoff && now < midnight) {
-        setStatus("timeout");
-        setCountdown(0);
+      // -----------------------------------------------
 
-        return;
-      }
+      const tomorrow = getTomorrow(now);
 
-      // NEXT DAY
-      const nextCutoff = parseCutoff(source, midnight);
+      const tomorrowCutoff = parseCutoff(cutoffString, tomorrow);
 
-      setStatus("countdown");
+      const diff = (tomorrowCutoff.getTime() - now.getTime()) / 1000;
 
-      setCountdown(Math.max(0, Math.floor((nextCutoff - now) / 1000)));
+      setRemainingSeconds(Math.max(0, diff));
+      setStatus("timeout");
     };
 
-    tick();
+    updateTimer();
 
-    const interval = setInterval(tick, 1000);
+    const interval = setInterval(updateTimer, 1000);
 
     return () => {
       mounted = false;
@@ -136,132 +138,220 @@ const Timer = () => {
     };
   }, [customCutoff]);
 
-  // ========================================
-  // SHOW / HIDE EVERY 10 SECONDS
-  // ========================================
+  // ====================================================
+  // AUTO HIDE / SHOW
+  //
+  // Visible 10 sec
+  // Hidden 5 sec
+  // Then repeat
+  // ====================================================
 
   useEffect(() => {
-    if (status === "timeout") return;
+    if (status === "loading") return;
 
-    let hideTimer;
-    let showTimer;
+    let hideTimeout;
+    let showTimeout;
 
-    const startCycle = () => {
-      // Visible for 10 seconds
-      hideTimer = setTimeout(() => {
+    const cycle = () => {
+      setVisible(true);
+
+      hideTimeout = setTimeout(() => {
         setVisible(false);
 
-        // Hidden for 10 seconds
-        showTimer = setTimeout(() => {
-          setVisible(true);
-
-          startCycle();
-        }, 10000);
+        showTimeout = setTimeout(() => {
+          cycle();
+        }, 5000);
       }, 10000);
     };
 
-    startCycle();
+    cycle();
 
     return () => {
-      clearTimeout(hideTimer);
-      clearTimeout(showTimer);
+      clearTimeout(hideTimeout);
+      clearTimeout(showTimeout);
     };
   }, [status]);
 
-  // ========================================
-  // STATES
-  // ========================================
+  // ====================================================
+  // TIMER STATES
+  // ====================================================
 
-  const isActive = status === "countdown" && countdown > 0;
+  const isCountdown = status === "countdown";
 
   const isTimeout = status === "timeout";
 
-  const isLast30 = isActive && countdown <= 30 * 60;
+  const isLast30 = isCountdown && remainingSeconds <= 30 * 60;
 
-  const isLast10 = isActive && countdown <= 10 * 60;
+  const isLast10 = isCountdown && remainingSeconds <= 10 * 60;
 
-  const isLastMinute = isActive && countdown <= 60;
+  const isLastMinute = isCountdown && remainingSeconds <= 60;
 
-  // ========================================
-  // CLOSED
-  // ========================================
+  // ====================================================
+  // NEXT CUTOFF TEXT
+  // ====================================================
+
+  const cutoffLabel = useMemo(() => {
+    const cutoff = customCutoff || DEFAULT_CUTOFF;
+
+    const [hours, minutes] = cutoff.split(":");
+
+    const date = new Date();
+
+    date.setHours(Number(hours), Number(minutes), 0, 0);
+
+    return date.toLocaleTimeString("en-IN", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
+    });
+  }, [customCutoff]);
+
+  // ====================================================
+  // LOADING
+  // ====================================================
+
+  if (status === "loading") {
+    return null;
+  }
+
+  // ====================================================
+  // CLOSED STATE
+  // ====================================================
 
   if (isTimeout) {
     return (
-      <motion.div
-        initial={{
-          opacity: 0,
-          y: 50,
-        }}
-        animate={{
-          opacity: 1,
-          y: 0,
-        }}
-        className="
-          fixed
-          bottom-[92px]
-          left-1/2
-          z-40
-          -translate-x-1/2
-        "
-      >
-        <div
-          className="
-            flex
-            h-11
-            items-center
-            gap-2.5
-            rounded-full
-            border
-            border-white/20
-            bg-white
-            text-black
-            px-4
-            shadow-[0_8px_30px_rgba(0,0,0,0.35)]
-            backdrop-blur-xl
-          "
-        >
-          <div
+      <AnimatePresence>
+        {visible && (
+          <motion.div
+            initial={{
+              opacity: 0,
+              y: 70,
+              scale: 0.92,
+            }}
+            animate={{
+              opacity: 1,
+              y: 0,
+              scale: 1,
+            }}
+            exit={{
+              opacity: 0,
+              y: 70,
+              scale: 0.92,
+            }}
+            transition={{
+              type: "spring",
+              stiffness: 320,
+              damping: 25,
+            }}
             className="
-              flex
-              h-7
-              w-7
-              items-center
-              justify-center
-              rounded-full
-              bg-emerald-500
+              fixed
+              bottom-[92px]
+              left-1/2
+              z-40
+              -translate-x-1/2
             "
           >
-            <Check size={15} strokeWidth={3} className="text-white" />
-          </div>
+            <div
+              className="
+                relative
+                flex
+                h-[48px]
+                items-center
+                gap-3
+                overflow-hidden
+                rounded-full
+                border
+                border-white/20
+                bg-black/70
+                px-2
+                pr-5
+                text-white
+                shadow-[0_10px_40px_rgba(0,0,0,0.45)]
+                backdrop-blur-2xl
+              "
+            >
+              {/* glow */}
+              <div
+                className="
+                  absolute
+                  -left-5
+                  top-1/2
+                  h-14
+                  w-14
+                  -translate-y-1/2
+                  rounded-full
+                  bg-gray-500/20
+                  blur-xl
+                "
+              />
 
-          <span
-            className="
-              text-xs
-              font-bold
-              text-red-800
-            "
-          >
-            आज के ऑर्डर बंद
-          </span>
-        </div>
-      </motion.div>
+              {/* icon */}
+              <div
+                className="
+                  relative
+                  flex
+                  h-9
+                  w-10
+                  items-center
+                  justify-center
+                  rounded-full
+                  bg-gray-400
+                  shadow-lg
+                  shadow-emerald-500/30
+                "
+              >
+                <Check size={17} strokeWidth={3} />
+              </div>
+
+              {/* text */}
+              <div className="relative leading-none min-w-[69px]">
+                <p className="text-[10px] font-medium text-white/50">
+                  आज के ऑर्डर
+                </p>
+
+                <p className="mt-[4px] text-[13px] font-bold">
+                  बंद हो चुके हैं
+                </p>
+              </div>
+
+              {/* tomorrow */}
+              <div
+                className="
+                  relative
+                  ml-1
+                  border-l
+                  border-white/10
+                  pl-3
+                  text-right
+                "
+              >
+                <p className="text-[9px] min-w-[60px] text-white/40">
+                  अगला कटऑफ
+                </p>
+
+                <p className="mt-[3px] text-[11px] font-bold text-emerald-400">
+                  {cutoffLabel.toUpperCase()}
+                </p>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     );
   }
 
-  // ========================================
+  // ====================================================
   // ACTIVE TIMER
-  // ========================================
+  // ====================================================
 
   return (
     <AnimatePresence>
       {visible && (
         <motion.div
-          key="timer"
           initial={{
             opacity: 0,
-            y: 65,
-            scale: 0.9,
+            y: 70,
+            scale: 0.88,
           }}
           animate={{
             opacity: 1,
@@ -270,13 +360,13 @@ const Timer = () => {
           }}
           exit={{
             opacity: 0,
-            y: 65,
-            scale: 0.9,
+            y: 70,
+            scale: 0.88,
           }}
           transition={{
             type: "spring",
-            stiffness: 300,
-            damping: 23,
+            stiffness: 320,
+            damping: 24,
           }}
           className="
             fixed
@@ -292,7 +382,9 @@ const Timer = () => {
                 ? {
                     scale: [1, 1.035, 1],
                   }
-                : {}
+                : {
+                    scale: 1,
+                  }
             }
             transition={
               isLastMinute
@@ -300,12 +392,14 @@ const Timer = () => {
                     repeat: Infinity,
                     duration: 0.8,
                   }
-                : {}
+                : {
+                    duration: 0.2,
+                  }
             }
             className={`
               relative
               flex
-              h-[46px]
+              h-[50px]
               items-center
               gap-2.5
               overflow-hidden
@@ -313,59 +407,66 @@ const Timer = () => {
               border
               px-2
               pr-4
-              shadow-[0_8px_30px_rgba(0,0,0,0.35)]
-              backdrop-blur-xl
+              shadow-[0_10px_40px_rgba(0,0,0,0.45)]
+              backdrop-blur-2xl
               transition-all
-              duration-300
+              duration-500
 
               ${
                 isLastMinute
-                  ? "border-red-400 bg-red-600"
+                  ? "border-red-400/50 bg-red-600"
                   : isLast10
-                    ? "border-red-400/60 bg-[#241313]/95"
+                    ? "border-red-400/30 bg-red-950/95"
                     : isLast30
-                      ? "border-orange-400/60 bg-[#241b10]/95"
-                      : "border-white/20 bg-[#171717]/90"
+                      ? "border-orange-400/30 bg-orange-950/95"
+                      : "border-white/10 bg-neutral-950/95"
               }
             `}
           >
-            {/* ================================= */}
-            {/* ACCENT GLOW */}
-            {/* ================================= */}
+            {/* =================================================
+                BACKGROUND GLOW
+            ================================================= */}
 
-            <div
+            <motion.div
+              animate={{
+                opacity: isLastMinute ? [0.25, 0.55, 0.25] : 0.35,
+              }}
+              transition={{
+                repeat: isLastMinute ? Infinity : 0,
+                duration: 1,
+              }}
               className={`
                 absolute
-                -left-5
+                -left-6
                 top-1/2
-                h-14
-                w-14
+                h-16
+                w-16
                 -translate-y-1/2
                 rounded-full
-                blur-xl
+                blur-2xl
 
                 ${
                   isLastMinute
-                    ? "bg-white/25"
+                    ? "bg-white"
                     : isLast10
-                      ? "bg-red-500/40"
+                      ? "bg-red-500"
                       : isLast30
-                        ? "bg-orange-500/40"
-                        : "bg-red-500/25"
+                        ? "bg-orange-500"
+                        : "bg-red-500"
                 }
               `}
             />
 
-            {/* ================================= */}
-            {/* ICON */}
-            {/* ================================= */}
+            {/* =================================================
+                ICON
+            ================================================= */}
 
             <div
               className={`
                 relative
                 flex
-                h-8
-                w-8
+                h-9
+                w-9
                 shrink-0
                 items-center
                 justify-center
@@ -383,21 +484,22 @@ const Timer = () => {
               `}
             >
               {isLast10 ? (
-                <AlertCircle size={17} strokeWidth={2.7} />
+                <AlertCircle size={18} strokeWidth={2.8} />
               ) : (
-                <Clock3 size={17} strokeWidth={2.7} />
+                <Clock3 size={18} strokeWidth={2.5} />
               )}
             </div>
 
-            {/* ================================= */}
-            {/* LABEL */}
-            {/* ================================= */}
+            {/* =================================================
+                CONTENT
+            ================================================= */}
 
-            <div className="relative leading-none">
+            <div className="relative min-w-[92px] leading-none">
               <p
                 className={`
                   text-[10px]
                   font-semibold
+
                   ${
                     isLastMinute
                       ? "text-white/80"
@@ -405,54 +507,50 @@ const Timer = () => {
                         ? "text-red-300"
                         : isLast30
                           ? "text-orange-300"
-                          : "text-white/65"
+                          : "text-white/50"
                   }
                 `}
               >
-                {isLast10 ? "जल्द ऑर्डर करें" : "ऑर्डर कटऑफ"}
+                {isLastMinute
+                  ? "अभी ऑर्डर करें!"
+                  : isLast10
+                    ? "जल्द ऑर्डर करें"
+                    : isLast30
+                      ? "30 मिनट से कम"
+                      : "ऑर्डर कटऑफ"}
               </p>
 
-              {/* ================================= */}
-              {/* TIME */}
-              {/* ================================= */}
-
               <p
-                className={`
-                  mt-[3px]
+                className="
+                  mt-[4px]
                   font-mono
-                  text-[15px]
+                  text-[16px]
                   font-extrabold
-                  tracking-[0.05em]
-
-                  ${isLastMinute ? "text-white" : "text-white"}
-                `}
+                  tracking-[0.06em]
+                  text-white
+                  tabular-nums
+                "
               >
-                {formatTime(countdown)}
+                {formatTime(remainingSeconds)}
               </p>
             </div>
 
-            {/* ================================= */}
-            {/* LIVE DOT */}
-            {/* ================================= */}
+            {/* =================================================
+                LIVE INDICATOR
+            ================================================= */}
 
             <motion.div
-              animate={
-                isLastMinute
-                  ? {
-                      opacity: [0.3, 1, 0.3],
-                      scale: [0.9, 1.2, 0.9],
-                    }
-                  : {
-                      opacity: [0.5, 1, 0.5],
-                    }
-              }
+              animate={{
+                opacity: [0.35, 1, 0.35],
+                scale: [0.9, 1.15, 0.9],
+              }}
               transition={{
                 repeat: Infinity,
-                duration: isLastMinute ? 0.8 : 2,
+                duration: isLastMinute ? 0.7 : 1.8,
               }}
               className={`
                 relative
-                ml-0.5
+                mr-1
                 h-2
                 w-2
                 rounded-full
@@ -468,6 +566,35 @@ const Timer = () => {
                 }
               `}
             />
+
+            {/* =================================================
+                SMALL BAG ICON
+            ================================================= */}
+
+            {isLast10 && (
+              <motion.div
+                initial={{
+                  opacity: 0,
+                  scale: 0.7,
+                }}
+                animate={{
+                  opacity: 1,
+                  scale: 1,
+                }}
+                className="
+                  relative
+                  flex
+                  h-7
+                  w-7
+                  items-center
+                  justify-center
+                  rounded-full
+                  bg-white/10
+                "
+              >
+                <ShoppingBag size={14} />
+              </motion.div>
+            )}
           </motion.div>
         </motion.div>
       )}

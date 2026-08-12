@@ -60,7 +60,7 @@ const ProductsList = () => {
   useEffect(() => {
     if (search.trim() && !hasScrolled.current) {
       window.scrollTo({
-        top: 223,
+        top: 217,
         behavior: "smooth",
       });
 
@@ -79,7 +79,7 @@ const ProductsList = () => {
   useEffect(() => {
     if (location.pathname.includes("/products")) {
       window.scrollTo({
-        top: 208,
+        top: 217,
         behavior: "smooth",
       });
     }
@@ -191,7 +191,7 @@ const ProductsList = () => {
   };
   if (prodLoading) {
     return (
-      <div className="space-y-3 pb-26 mt-2">
+      <div className="space-y-3 pb-26 mt-2 bg-white">
         <SuppRouteComp />
         <WelcomeCard />
         <SearchBar />
@@ -261,7 +261,7 @@ const ProductsList = () => {
         <motion.div
           ref={productsRef}
           layout
-          className="grid grid-cols-2 gap-4 px-4 pb-10"
+          className="grid grid-cols-2 gap-4 px-4 pb-10  rounded-t-4xl"
         >
           {products.map((item) => {
             const lowestPrice = Math.min(...item.variants.map((v) => v.price));
@@ -291,12 +291,12 @@ const ProductsList = () => {
                   scale: 0.98,
                 }}
                 onClick={() => handleProductClick(item)}
-                className="cursor-pointer overflow-hidden rounded-3xl bg-white shadow-sm transition-shadow duration-200 hover:shadow-lg"
+                className="cursor-pointer overflow-hidden rounded-3xl  bg-white shadow-sm transition-shadow duration-200 hover:shadow-lg"
               >
                 {/* Product Image */}
                 <div className="relative flex h-40 items-center justify-center overflow-hidden bg-gradient-to-br from-gray-50 to-red-50">
                   {/* Discount Badge */}
-                  <div className="absolute left-3 top-3 z-10 rounded-full bg-red-600 px-3 py-1 text-[10px] font-bold text-white shadow-lg">
+                  <div className="absolute left-0 top-0 z-10 rounded-r-2xl bg-red-600/80 px-3 py-1 text-[10px] font-bold text-white shadow-lg">
                     ₹{lowestPrice} से
                   </div>
 
@@ -357,7 +357,7 @@ const ProductsList = () => {
                     whileTap={{
                       scale: 0.96,
                     }}
-                    className="mt-4 flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-red-600 to-red-500 font-semibold text-white shadow-lg"
+                    className="mt-4 flex h-11 w-[60%] items-center justify-center gap-2 rounded-2xl bg-gradient-to-tr from-red-600 to-orange-500 font-semibold text-white shadow-lg"
                   >
                     <ShoppingCart size={18} />
                     देखें

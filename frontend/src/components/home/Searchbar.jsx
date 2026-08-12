@@ -20,7 +20,7 @@ const SearchBar = ({ value, onChange }) => {
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="सामान खोजें..."
-          className="h-14 w-full rounded-2xl border border-gray-200 bg-white pl-12 pr-12 text-[15px] font-medium text-gray-700 shadow-sm outline-none transition-all duration-200 placeholder:text-gray-400 focus:border-red-500 focus:ring-4 focus:ring-red-100"
+          className="h-12 w-full rounded-2xl border border-gray-200 bg-white pl-12 pr-12 text-[15px] font-medium text-gray-700 shadow-sm outline-none transition-all duration-200 placeholder:text-gray-400 focus:border-red-500 focus:ring-4 focus:ring-red-100"
         />
 
         {value && (
