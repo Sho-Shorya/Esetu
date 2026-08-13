@@ -2,86 +2,62 @@ import React, { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 
-/* ============================================================
-   PARTICLES
-   Small + few = very cheap
-============================================================ */
-
 const particles = [
-  { x: -68, y: -38, r: -35, d: 0 },
-  { x: 68, y: -40, r: 35, d: 0.03 },
-  { x: -78, y: 4, r: -50, d: 0.02 },
-  { x: 78, y: 8, r: 50, d: 0.04 },
-  { x: -48, y: 62, r: -20, d: 0.05 },
-  { x: 52, y: 65, r: 20, d: 0.07 },
+  { x: -70, y: -42, r: -25, d: 0 },
+  { x: 70, y: -45, r: 25, d: 0.03 },
+  { x: -82, y: 4, r: -40, d: 0.02 },
+  { x: 82, y: 8, r: 40, d: 0.04 },
+  { x: -52, y: 65, r: -15, d: 0.05 },
+  { x: 55, y: 68, r: 20, d: 0.07 },
+  { x: -18, y: -78, r: -10, d: 0.025 },
+  { x: 20, y: -78, r: 10, d: 0.05 },
 ];
 
 const OrderSuccess = () => {
   const navigate = useNavigate();
-  const riserRef = useRef(null);
-  const successAudioRef = useRef(null);
+  const audioRef = useRef(null);
 
   useEffect(() => {
-    // ========================================================
-    // PRELOAD BOTH SOUNDS
-    // ========================================================
+    /* ========================================================
+       PRELOAD SOUND
+    ======================================================== */
 
-    const riser = new Audio("/riser.mp3");
-    const successAudio = new Audio("/new.mp3");
+    const audio = new Audio("/new.mp3");
 
-    riser.preload = "auto";
-    successAudio.preload = "auto";
+    audio.volume = 0.9;
+    audio.preload = "auto";
 
-    riser.volume = 0.8;
-    successAudio.volume = 1;
+    audioRef.current = audio;
+    audio.load();
 
-    riserRef.current = riser;
-    successAudioRef.current = successAudio;
+    /* ========================================================
+       SOUND — WHEN SUCCESS APPEARS
+    ======================================================== */
 
-    riser.load();
-    successAudio.load();
+    const soundTimer = setTimeout(() => {
+      audio.play().catch(() => {});
+    }, 1100);
 
-    // ========================================================
-    // RISER STARTS WITH LOADING — 0.0s
-    // ========================================================
-
-    riser.currentTime = -1;
-
-    riser.play().catch(() => {});
-
-    // ========================================================
-    // SUCCESS SOUND — 2.0s
-    // ========================================================
-
-    const successTimer = setTimeout(() => {
-      successAudio.currentTime = 0;
-      successAudio.play().catch(() => {});
-    }, 2000);
-
-    // ========================================================
-    // REDIRECT — 3.0s
-    // ========================================================
+    /* ========================================================
+       2 SEC LOADING + 1 SEC SUCCESS
+    ======================================================== */
 
     const redirectTimer = setTimeout(() => {
       navigate("/my-orders", {
         replace: true,
       });
-    }, 3000);
+    }, 4500);
 
     return () => {
-      clearTimeout(successTimer);
+      clearTimeout(soundTimer);
       clearTimeout(redirectTimer);
 
-      riser.pause();
-      successAudio.pause();
-
-      riser.currentTime = 0;
-      successAudio.currentTime = 0;
-
-      riserRef.current = null;
-      successAudioRef.current = null;
+      audio.pause();
+      audio.currentTime = 0;
+      audioRef.current = null;
     };
   }, [navigate]);
+
   return (
     <div
       className="
@@ -98,7 +74,7 @@ const OrderSuccess = () => {
       <div className="relative flex flex-col items-center">
         {/* ====================================================
             PARTICLES
-            START ONLY AFTER TICK
+            ONLY AFTER SUCCESS
         ==================================================== */}
 
         <div
@@ -106,7 +82,7 @@ const OrderSuccess = () => {
             pointer-events-none
             absolute
             left-1/2
-            top-[64px]
+            top-[72px]
             z-30
           "
         >
@@ -118,25 +94,26 @@ const OrderSuccess = () => {
                 y: 0,
                 scale: 0,
                 opacity: 0,
+                rotate: 0,
               }}
               animate={{
                 x: particle.x,
                 y: particle.y,
-                scale: [0, 1, 0.65],
+                scale: [0, 1.2, 0],
                 opacity: [0, 1, 0],
                 rotate: particle.r,
               }}
               transition={{
-                delay: 2.05 + particle.d,
                 duration: 0.55,
-                ease: [0.22, 1, 0.36, 1],
+                delay: 2.08 + particle.d,
+                ease: [0.16, 1, 0.3, 1],
               }}
               className="
                 absolute
-                left-[-3px]
-                top-[-3px]
-                h-1.5
-                w-1.5
+                left-[-4px]
+                top-[-4px]
+                h-2
+                w-2
                 rounded-[2px]
                 bg-green-500
               "
@@ -145,7 +122,7 @@ const OrderSuccess = () => {
         </div>
 
         {/* ====================================================
-            ICON
+            ICON AREA
         ==================================================== */}
 
         <div
@@ -159,8 +136,8 @@ const OrderSuccess = () => {
           "
         >
           {/* ==================================================
-              LOADING
-              EXACTLY 2 SECONDS
+              LOADING STATE
+              0 → 2 SECONDS
           ================================================== */}
 
           <motion.div
@@ -170,7 +147,7 @@ const OrderSuccess = () => {
             }}
             animate={{
               opacity: 0,
-              scale: 0.88,
+              scale: 0.8,
             }}
             transition={{
               delay: 1.88,
@@ -186,65 +163,54 @@ const OrderSuccess = () => {
               justify-center
             "
           >
-            {/* Static ring */}
+            {/* Outer subtle ring */}
 
-            <svg viewBox="0 0 100 100" className="absolute h-24 w-24">
-              <circle
-                cx="50"
-                cy="50"
-                r="43"
-                fill="none"
-                stroke="#f3f4f6"
-                strokeWidth="3"
-              />
+            <div
+              className="
+                absolute
+                inset-0
+                rounded-full
+                border-[3px]
+                border-gray-100
+              "
+            />
 
-              {/* Progress ring */}
-
-              <motion.circle
-                cx="50"
-                cy="50"
-                r="43"
-                fill="none"
-                stroke="#22c55e"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeDasharray="270"
-                initial={{
-                  strokeDashoffset: 270,
-                }}
-                animate={{
-                  strokeDashoffset: 0,
-                }}
-                transition={{
-                  duration: 1.9,
-                  ease: "linear",
-                }}
-                style={{
-                  transform: "rotate(-90deg)",
-                  transformOrigin: "50% 50%",
-                }}
-              />
-            </svg>
-
-            {/* Center pulse */}
+            {/* Animated loader */}
 
             <motion.div
-              initial={{
-                scale: 0.7,
-                opacity: 0.5,
-              }}
               animate={{
-                scale: [0.7, 1.15, 0.7],
-                opacity: [0.45, 1, 0.45],
+                rotate: 360,
               }}
               transition={{
-                duration: 0.9,
+                duration: 0.8,
+                repeat: 2,
+                ease: "linear",
+              }}
+              className="
+                absolute
+                inset-0
+                rounded-full
+                border-[3px]
+                border-transparent
+                border-t-green-500
+                border-r-green-400
+              "
+            />
+
+            {/* Center */}
+
+            <motion.div
+              animate={{
+                scale: [1, 1.12, 1],
+              }}
+              transition={{
+                duration: 0.8,
                 repeat: 1,
                 ease: "easeInOut",
               }}
               className="
-                h-2.5
-                w-2.5
+                h-3
+                w-3
                 rounded-full
                 bg-green-500
               "
@@ -253,23 +219,23 @@ const OrderSuccess = () => {
 
           {/* ==================================================
               SUCCESS CIRCLE
-              EXACTLY AT 2 SECONDS
+              APPEARS AT 2 SECONDS
           ================================================== */}
 
           <motion.div
             initial={{
-              scale: 0.55,
+              scale: 0,
               opacity: 0,
             }}
             animate={{
-              scale: [0.55, 1.1, 1],
+              scale: [0, 1.14, 1],
               opacity: 1,
             }}
             transition={{
               delay: 2,
-              duration: 0.32,
+              duration: 0.38,
               times: [0, 0.65, 1],
-              ease: [0.22, 1, 0.36, 1],
+              ease: [0.16, 1, 0.3, 1],
             }}
             className="
               absolute
@@ -280,14 +246,13 @@ const OrderSuccess = () => {
               justify-center
               rounded-full
               bg-green-500
-              shadow-[0_12px_30px_rgba(34,197,94,0.22)]
+              shadow-[0_14px_40px_rgba(34,197,94,0.28)]
             "
           >
             {/* Inner ring */}
 
             <div
               className="
-                pointer-events-none
                 absolute
                 inset-[5px]
                 rounded-full
@@ -296,41 +261,13 @@ const OrderSuccess = () => {
               "
             />
 
-            {/* =================================================
-                CHECK
-            ================================================= */}
+            {/* Check */}
 
             <svg
               viewBox="0 0 64 64"
-              className="
-                relative
-                z-10
-                h-[68px]
-                w-[68px]
-              "
+              className="relative z-10 h-[68px] w-[68px]"
               fill="none"
             >
-              <motion.circle
-                cx="32"
-                cy="32"
-                r="23"
-                stroke="white"
-                strokeWidth="2.5"
-                initial={{
-                  pathLength: 0,
-                  opacity: 0,
-                }}
-                animate={{
-                  pathLength: 1,
-                  opacity: 1,
-                }}
-                transition={{
-                  delay: 2.1,
-                  duration: 0.2,
-                  ease: "easeOut",
-                }}
-              />
-
               <motion.path
                 d="M18 32L27 41L46 22"
                 stroke="white"
@@ -346,7 +283,7 @@ const OrderSuccess = () => {
                   opacity: 1,
                 }}
                 transition={{
-                  delay: 2.23,
+                  delay: 2.22,
                   duration: 0.3,
                   ease: [0.22, 1, 0.36, 1],
                 }}
@@ -360,16 +297,16 @@ const OrderSuccess = () => {
 
           <motion.div
             initial={{
-              scale: 0.85,
+              scale: 0.8,
               opacity: 0,
             }}
             animate={{
-              scale: 1.5,
-              opacity: 0,
+              scale: [0.8, 1.45],
+              opacity: [0.45, 0],
             }}
             transition={{
-              delay: 2,
-              duration: 0.45,
+              delay: 2.05,
+              duration: 0.5,
               ease: "easeOut",
             }}
             className="
@@ -390,16 +327,15 @@ const OrderSuccess = () => {
         <motion.h1
           initial={{
             opacity: 0,
-            y: 6,
+            y: 7,
           }}
           animate={{
             opacity: 1,
             y: 0,
           }}
           transition={{
-            delay: 2.42,
-            duration: 0.22,
-            ease: "easeOut",
+            delay: 2.35,
+            duration: 0.25,
           }}
           className="
             mt-7
@@ -411,6 +347,29 @@ const OrderSuccess = () => {
         >
           ऑर्डर हो गया!
         </motion.h1>
+
+        {/* Very small subtitle */}
+
+        <motion.p
+          initial={{
+            opacity: 0,
+          }}
+          animate={{
+            opacity: 1,
+          }}
+          transition={{
+            delay: 2.48,
+            duration: 0.2,
+          }}
+          className="
+            mt-1
+            text-xs
+            font-medium
+            text-gray-400
+          "
+        >
+          कृपया ऑर्डर के approve का इंतज़ार करें।
+        </motion.p>
       </div>
     </div>
   );
