@@ -1,8 +1,13 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+
 import { useDispatch, useSelector } from "react-redux";
+
 import { useNavigate } from "react-router-dom";
+
 import axios from "axios";
+
 import { toast } from "sonner";
+
 import { motion, AnimatePresence } from "framer-motion";
 
 import {
@@ -20,8 +25,11 @@ import {
 } from "lucide-react";
 
 import Timer from "@/components/Timer";
+
 import { Button } from "@/components/ui/button";
+
 import { setCartData, clearCart } from "@/redux/ProductSlice";
+
 import { API_BASE_URL } from "@/lib/constants";
 
 /* ============================================================
@@ -37,9 +45,10 @@ const containerVariants = {
 
   visible: {
     opacity: 1,
+
     transition: {
-      staggerChildren: 0.045,
-      delayChildren: 0.03,
+      staggerChildren: 0.035,
+      delayChildren: 0.02,
     },
   },
 };
@@ -47,7 +56,7 @@ const containerVariants = {
 const cardVariants = {
   hidden: {
     opacity: 0,
-    y: 14,
+    y: 12,
     scale: 0.985,
   },
 
@@ -55,18 +64,20 @@ const cardVariants = {
     opacity: 1,
     y: 0,
     scale: 1,
+
     transition: {
-      duration: 0.24,
+      duration: 0.22,
       ease: easeOut,
     },
   },
 
   exit: {
     opacity: 0,
-    x: -35,
+    x: -30,
     scale: 0.97,
+
     transition: {
-      duration: 0.18,
+      duration: 0.16,
       ease: "easeOut",
     },
   },
@@ -75,14 +86,15 @@ const cardVariants = {
 const pageVariants = {
   hidden: {
     opacity: 0,
-    y: 12,
+    y: 10,
   },
 
   visible: {
     opacity: 1,
     y: 0,
+
     transition: {
-      duration: 0.28,
+      duration: 0.25,
       ease: easeOut,
     },
   },
@@ -107,6 +119,7 @@ const Cart = () => {
           items: [],
           totalPrice: 0,
         },
+
         productData: [],
       },
   );
@@ -116,14 +129,39 @@ const Cart = () => {
   ========================================================== */
 
   const [loading, setLoading] = useState(false);
-  const [updatingId, setUpdatingId] = useState(null);
+
   const [checkoutLoading, setCheckoutLoading] = useState(false);
+
+  /* ==========================================================
+     REFS
+
+     Refs are used for handlers because changing a ref does
+     NOT cause a React render.
+
+     This makes the handlers feel faster.
+  ========================================================== */
+
+  const requestQueues = useRef(new Map());
+
+  const checkoutLock = useRef(false);
+
+  const mountedRef = useRef(true);
 
   /* ==========================================================
      TOKEN
   ========================================================== */
 
   const token = localStorage.getItem("token");
+
+  /* ==========================================================
+     CLEANUP
+  ========================================================== */
+
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
   /* ==========================================================
      DERIVED DATA
@@ -176,36 +214,41 @@ const Cart = () => {
 
     return `${productId || ""}-${companyId || ""}-${item?.measurement || ""}`;
   };
-
   /* ==========================================================
-     SYNC CART
-  ========================================================== */
+   SYNC CART
+========================================================== */
+
+  const EMPTY_CART = {
+    items: [],
+    totalPrice: 0,
+  };
 
   const syncCart = (newCart) => {
-    dispatch(
-      setCartData(
-        newCart || {
-          items: [],
-          totalPrice: 0,
-        },
-      ),
-    );
+    dispatch(setCartData(newCart || EMPTY_CART));
   };
 
   /* ==========================================================
-     FETCH CART
-  ========================================================== */
+   FETCH CART
+   - Never block the UI
+   - Redux cart is shown immediately
+   - Backend refresh happens silently
+========================================================== */
 
   const fetchCart = async () => {
-    if (!token) return;
+    const currentToken = localStorage.getItem("token");
 
-    setLoading(true);
+    if (!currentToken) {
+      return;
+    }
 
     try {
       const res = await axios.get(`${API_BASE_URL}/api/v1/cart`, {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${currentToken}`,
         },
+
+        // Don't let a dead/slow backend hang the page forever
+        timeout: 7000,
       });
 
       if (res.data?.success) {
@@ -214,22 +257,28 @@ const Cart = () => {
     } catch (error) {
       console.error("Fetch cart error:", error);
 
-      toast.error(
-        error.response?.data?.message || "कार्ट लोड करने में समस्या हुई",
-      );
-    } finally {
-      setLoading(false);
+      // Only show an error if the user actually has no
+      // locally available cart to display.
+      const currentCart = cartData;
+
+      if (!currentCart?.items?.length) {
+        toast.error(
+          error.response?.data?.message || "कार्ट लोड करने में समस्या हुई",
+          {
+            duration: 1500,
+          },
+        );
+      }
     }
   };
 
   /* ==========================================================
-     INITIAL LOAD
-  ========================================================== */
+   INITIAL LOAD
+========================================================== */
 
   useEffect(() => {
     fetchCart();
   }, []);
-
   /* ==========================================================
      COMPANY NAME
   ========================================================== */
@@ -257,7 +306,70 @@ const Cart = () => {
   };
 
   /* ==========================================================
-     UPDATE QUANTITY
+     GET UNIT PRICE
+  ========================================================== */
+
+  const getUnitPrice = (item) => {
+    const qty = Number(item?.qty || 1);
+
+    const variant = item?.productId?.variants?.find(
+      (v) => v?.measurement === item?.measurement,
+    );
+
+    return (
+      Number(variant?.price) ||
+      Number(item?.price) ||
+      (qty > 0 ? Number(item?.total || 0) / qty : 0)
+    );
+  };
+
+  /* ==========================================================
+     BUILD OPTIMISTIC CART
+  ========================================================== */
+
+  const buildQuantityCart = (currentCart, itemKey, newQty) => {
+    const currentItems = currentCart?.items || [];
+
+    const updatedItems = currentItems.map((cartItem) => {
+      if (getItemKey(cartItem) !== itemKey) {
+        return cartItem;
+      }
+
+      const unitPrice = getUnitPrice(cartItem);
+
+      return {
+        ...cartItem,
+
+        qty: newQty,
+
+        total: unitPrice * newQty,
+      };
+    });
+
+    const total = updatedItems.reduce(
+      (sum, cartItem) => sum + Number(cartItem?.total || 0),
+      0,
+    );
+
+    return {
+      ...currentCart,
+
+      items: updatedItems,
+
+      totalPrice: total,
+    };
+  };
+
+  /* ==========================================================
+     UPDATE QUANTITY — INSTANT UI
+     
+     IMPORTANT:
+     There is NO loading overlay.
+     
+     The UI changes immediately.
+     
+     API requests for the same item are queued so rapid
+     + / - clicks don't race each other.
   ========================================================== */
 
   const updateQuantity = async (item, type) => {
@@ -269,6 +381,8 @@ const Cart = () => {
       return;
     }
 
+    const itemKey = getItemKey(item);
+
     const productId =
       typeof item?.productId === "object"
         ? item?.productId?._id
@@ -277,120 +391,154 @@ const Cart = () => {
     const companyId =
       typeof item?.company === "object" ? item?.company?._id : item?.company;
 
-    const itemKey = getItemKey(item);
+    if (!productId) return;
 
-    if (!productId || updatingId === itemKey) {
-      return;
-    }
+    /* --------------------------------------------------------
+       ALWAYS READ LATEST ITEM FROM REDUX
+       
+       This is important when user rapidly clicks + + +.
+    -------------------------------------------------------- */
 
-    const currentItem = cartData?.items?.find(
+    const latestItem = (cartData?.items || []).find(
       (cartItem) => getItemKey(cartItem) === itemKey,
     );
 
-    if (!currentItem) return;
+    if (!latestItem) return;
 
-    if (type === "decrease" && Number(currentItem.qty || 1) <= 1) {
+    const currentQty = Number(latestItem?.qty || 1);
+
+    if (type === "decrease" && currentQty <= 1) {
       return;
     }
-
-    const previousCart = cartData;
-
-    const currentQty = Number(currentItem.qty || 1);
 
     const newQty =
       type === "increase" ? currentQty + 1 : Math.max(1, currentQty - 1);
 
-    const variant = currentItem?.productId?.variants?.find(
-      (v) => v?.measurement === currentItem?.measurement,
-    );
+    /* --------------------------------------------------------
+       INSTANT UI UPDATE
+    -------------------------------------------------------- */
 
-    const price = Number(
-      variant?.price ||
-        currentItem?.price ||
-        (currentQty ? Number(currentItem?.total || 0) / currentQty : 0),
-    );
+    const optimisticCart = buildQuantityCart(cartData, itemKey, newQty);
 
-    const newItemTotal = price * newQty;
-
-    const updatedItems = (cartData?.items || []).map((cartItem) => {
-      if (getItemKey(cartItem) !== itemKey) {
-        return cartItem;
-      }
-
-      return {
-        ...cartItem,
-        qty: newQty,
-        total: newItemTotal,
-      };
-    });
-
-    const newTotalPrice = updatedItems.reduce(
-      (sum, cartItem) => sum + Number(cartItem?.total || 0),
-      0,
-    );
-
-    const optimisticCart = {
-      ...cartData,
-      items: updatedItems,
-      totalPrice: newTotalPrice,
-    };
-
-    /* Instant UI update */
     dispatch(setCartData(optimisticCart));
 
-    setUpdatingId(itemKey);
+    /* --------------------------------------------------------
+       QUEUE REQUEST
+       
+       If another request for this product is already running,
+       this request waits for it.
+    -------------------------------------------------------- */
+
+    const previousQueue =
+      requestQueues.current.get(itemKey) || Promise.resolve();
+
+    const request = previousQueue
+      .catch(() => {})
+      .then(async () => {
+        try {
+          const res = await axios.put(
+            `${API_BASE_URL}/api/v1/cart/update-cart`,
+            {
+              productId,
+
+              company: companyId,
+
+              measurement: latestItem?.measurement,
+
+              type,
+            },
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            },
+          );
+
+          if (!res.data?.success) {
+            throw new Error(res.data?.message || "मात्रा अपडेट नहीं हो सकी");
+          }
+
+          /*
+              Do NOT immediately replace the optimistic
+              state with the backend cart here.
+
+              If the user clicked + several times quickly,
+              an older response could overwrite the newer
+              optimistic quantity.
+            */
+
+          return res.data;
+        } catch (error) {
+          console.error("Quantity update error:", error);
+
+          /*
+              Server rejected one of the operations.
+
+              Safest option is to sync the real cart instead
+              of guessing the correct quantity.
+            */
+
+          try {
+            const fresh = await axios.get(`${API_BASE_URL}/api/v1/cart`, {
+              headers: {
+                Authorization: `Bearer ${token}`,
+              },
+            });
+
+            if (fresh.data?.success && mountedRef.current) {
+              dispatch(setCartData(fresh.data.cart));
+            }
+          } catch (syncError) {
+            console.error("Cart resync error:", syncError);
+          }
+
+          if (mountedRef.current) {
+            toast.error(
+              error.response?.data?.message ||
+                error.message ||
+                "मात्रा अपडेट नहीं हो सकी",
+              {
+                duration: 1200,
+              },
+            );
+          }
+
+          throw error;
+        }
+      });
+
+    requestQueues.current.set(itemKey, request);
 
     try {
-      const res = await axios.put(
-        `${API_BASE_URL}/api/v1/cart/update-cart`,
-        {
-          productId,
-          company: companyId,
-          measurement: currentItem?.measurement,
-          type,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
-
-      if (!res.data?.success) {
-        dispatch(setCartData(previousCart));
-
-        toast.error(res.data?.message || "मात्रा अपडेट नहीं हो सकी", {
-          duration: 1000,
-        });
-
-        return;
-      }
-
-      if (res.data?.cart) {
-        dispatch(setCartData(res.data.cart));
-      }
-    } catch (error) {
-      console.error("Update quantity error:", error);
-
-      dispatch(setCartData(previousCart));
-
-      toast.error(error.response?.data?.message || "मात्रा अपडेट नहीं हो सकी", {
-        duration: 1200,
-      });
+      await request;
+    } catch {
+      // Error already handled above.
     } finally {
-      setUpdatingId(null);
+      /*
+        Only delete if this is still the current queue.
+      */
+
+      if (requestQueues.current.get(itemKey) === request) {
+        requestQueues.current.delete(itemKey);
+      }
     }
   };
 
   /* ==========================================================
-     REMOVE ITEM
+     REMOVE ITEM — INSTANT
+     
+     NO WHITE LOADING.
+     NO SPINNER.
   ========================================================== */
 
   const removeItem = async (item) => {
     if (!token) {
-      toast.error("कृपया पहले लॉग इन करें");
+      toast.error("कृपया पहले लॉगिन करें");
+
       return;
     }
+
+    const itemKey = getItemKey(item);
 
     const productId =
       typeof item?.productId === "object"
@@ -400,33 +548,40 @@ const Cart = () => {
     const companyId =
       typeof item?.company === "object" ? item?.company?._id : item?.company;
 
-    const itemKey = getItemKey(item);
+    if (!productId) return;
 
-    if (!productId || updatingId === itemKey) {
-      return;
-    }
+    /* --------------------------------------------------------
+       SAVE PREVIOUS CART
+    -------------------------------------------------------- */
 
     const previousCart = cartData;
+
+    /* --------------------------------------------------------
+       REMOVE IMMEDIATELY
+    -------------------------------------------------------- */
 
     const updatedItems = (cartData?.items || []).filter(
       (cartItem) => getItemKey(cartItem) !== itemKey,
     );
 
-    const newTotalPrice = updatedItems.reduce(
+    const newTotal = updatedItems.reduce(
       (sum, cartItem) => sum + Number(cartItem?.total || 0),
       0,
     );
 
-    const optimisticCart = {
-      ...cartData,
-      items: updatedItems,
-      totalPrice: newTotalPrice,
-    };
+    dispatch(
+      setCartData({
+        ...cartData,
 
-    /* Instant removal */
-    dispatch(setCartData(optimisticCart));
+        items: updatedItems,
 
-    setUpdatingId(itemKey);
+        totalPrice: newTotal,
+      }),
+    );
+
+    /* --------------------------------------------------------
+       API
+    -------------------------------------------------------- */
 
     try {
       const res = await axios.delete(
@@ -438,57 +593,78 @@ const Cart = () => {
 
           data: {
             productId,
+
             company: companyId,
+
             measurement: item?.measurement,
           },
         },
       );
 
       if (!res.data?.success) {
+        throw new Error(res.data?.message || "प्रोडक्ट हटाया नहीं जा सका");
+      }
+
+      /*
+        Do NOT replace the cart with the response.
+
+        The UI already contains the correct optimistic
+        state and another quantity request may be running.
+      */
+    } catch (error) {
+      console.error("Remove item error:", error);
+
+      /*
+        Restore previous cart.
+      */
+
+      if (mountedRef.current) {
         dispatch(setCartData(previousCart));
 
-        toast.error(res.data?.message || "कुछ गलत हो गया", {
-          duration: 1200,
-        });
-
-        return;
+        toast.error(
+          error.response?.data?.message ||
+            error.message ||
+            "प्रोडक्ट हटाया नहीं जा सका",
+          {
+            duration: 1400,
+          },
+        );
       }
-
-      if (res.data?.cart) {
-        dispatch(setCartData(res.data.cart));
-      }
-
-      toast.success("कार्ट से हटाया गया", {
-        duration: 900,
-      });
-    } catch (error) {
-      console.error("Remove cart item error:", error);
-
-      dispatch(setCartData(previousCart));
-
-      toast.error(error.response?.data?.message || "कुछ गलत हो गया", {
-        duration: 1200,
-      });
-    } finally {
-      setUpdatingId(null);
     }
   };
 
   /* ==========================================================
      CHECKOUT
+     
+     Fastest safe approach:
+     
+     1. Lock with ref immediately.
+     2. Disable button visually.
+     3. Send order request.
+     4. Clear Redux.
+     5. Navigate immediately after success.
+     
+     We DO NOT fetch cart again.
   ========================================================== */
 
   const handleCheckout = async () => {
-    if (!token) {
-      toast.error("कृपया पहले लॉगिन करें");
+    const currentToken = localStorage.getItem("token");
+
+    if (!currentToken) {
+      toast.error("कृपया पहले लॉगिन करें", {
+        duration: 1200,
+      });
       return;
     }
 
-    if (checkoutLoading || !items.length) {
+    if (checkoutLock.current || !items.length) {
       return;
     }
 
-    // Lock immediately so the user cannot double-submit
+    // 🔒 synchronous lock — prevents double click
+    checkoutLock.current = true;
+
+    // Don't wait for React to update before locking
     setCheckoutLoading(true);
 
     try {
@@ -497,47 +673,47 @@ const Cart = () => {
         {},
         {
           headers: {
-            Authorization: `Bearer ${token}`,
+            Authorization: `Bearer ${currentToken}`,
           },
-          timeout: 10000,
+
+          // Don't use 15 seconds for a user action
+          timeout: 8000,
         },
       );
 
-      if (res.data?.success) {
-        // Clear local cart immediately
-        dispatch(clearCart());
-
-        // Go straight to success screen
-        navigate("/order-success", {
-          replace: true,
-          state: {
-            order: res.data?.order || null,
-          },
-        });
-
-        return;
+      if (!res.data?.success) {
+        throw new Error(res.data?.message || "ऑर्डर पूरा नहीं हो सका");
       }
 
-      toast.error(res.data?.message || "ऑर्डर पूरा नहीं हो सका", {
-        duration: 2000,
+      // ⚡ Do these synchronously
+      dispatch(clearCart());
+
+      navigate("/order-success", {
+        replace: true,
+        state: {
+          order: res.data.order || null,
+        },
       });
     } catch (error) {
       console.error("Checkout error:", error);
 
       if (error.code === "ECONNABORTED") {
-        toast.error("सर्वर से जवाब आने में बहुत समय लग रहा है");
+        toast.error("सर्वर से जवाब आने में बहुत समय लग रहा है", {
+          duration: 1500,
+        });
       } else {
         toast.error(error.response?.data?.message || "ऑर्डर पूरा नहीं हो सका", {
-          duration: 2500,
+          duration: 1800,
         });
       }
-    } finally {
+
+      checkoutLock.current = false;
       setCheckoutLoading(false);
     }
   };
 
   /* ==========================================================
-     LOGIN SCREEN
+     LOGIN
   ========================================================== */
 
   if (!token) {
@@ -648,51 +824,6 @@ const Cart = () => {
             लॉगिन करें
           </Button>
         </motion.div>
-      </div>
-    );
-  }
-
-  /* ==========================================================
-     LOADING
-  ========================================================== */
-
-  if (loading) {
-    return (
-      <div
-        className="
-          fixed
-          inset-0
-          z-[999]
-          flex
-          items-center
-          justify-center
-          bg-white/70
-          backdrop-blur-md
-        "
-      >
-        <div
-          className="
-            flex
-            h-20
-            w-20
-            items-center
-            justify-center
-            rounded-3xl
-            border
-            border-gray-100
-            bg-white
-            shadow-xl
-          "
-        >
-          <Loader2
-            className="
-              h-8
-              w-8
-              animate-spin
-              text-red-600
-            "
-          />
-        </div>
       </div>
     );
   }
@@ -813,7 +944,13 @@ const Cart = () => {
               sm:text-lg
             "
           >
-            <MoveLeft className="mr-1 h-5 w-5" />
+            <MoveLeft
+              className="
+                mr-1
+                h-5
+                w-5
+              "
+            />
             खरीदारी शुरू करें
           </Button>
         </motion.div>
@@ -892,8 +1029,6 @@ const Cart = () => {
             lg:justify-between
           "
         >
-          {/* Decorative glow */}
-
           <div
             className="
               pointer-events-none
@@ -909,7 +1044,13 @@ const Cart = () => {
           />
 
           <div className="relative">
-            <div className="flex items-center gap-3">
+            <div
+              className="
+                flex
+                items-center
+                gap-3
+              "
+            >
               <div
                 className="
                   flex
@@ -928,7 +1069,13 @@ const Cart = () => {
                   sm:w-14
                 "
               >
-                <ShoppingBag size={24} className="sm:h-7 sm:w-7" />
+                <ShoppingBag
+                  size={24}
+                  className="
+                    sm:h-7
+                    sm:w-7
+                  "
+                />
               </div>
 
               <div className="min-w-0">
@@ -963,7 +1110,7 @@ const Cart = () => {
       </motion.div>
 
       {/* ======================================================
-          CONTENT GRID
+          CONTENT
       ====================================================== */}
 
       <div
@@ -977,25 +1124,27 @@ const Cart = () => {
         "
       >
         {/* ====================================================
-    PRODUCT GRID
-==================================================== */}
+            PRODUCT GRID
+
+            ALWAYS 2 PRODUCTS PER ROW
+        ==================================================== */}
 
         <motion.div
           variants={containerVariants}
           initial="hidden"
           animate="visible"
           className="
-    grid
-    grid-cols-2
-    gap-3
-    sm:gap-4
-  "
+            grid
+            grid-cols-2
+            gap-3
+            sm:gap-4
+          "
         >
           <AnimatePresence initial={false} mode="popLayout">
             {items.map((item) => {
               const imageUrl = getProductImageUrl(item);
+
               const itemKey = getItemKey(item);
-              const isUpdating = updatingId === itemKey;
 
               const companyName = fetchCompanyName(item.company);
 
@@ -1008,45 +1157,54 @@ const Cart = () => {
                   layout="position"
                   variants={cardVariants}
                   exit={cardVariants.exit}
-                  whileTap={{ scale: 0.985 }}
+                  whileTap={{
+                    scale: 0.985,
+                  }}
                   className="
-            relative
-            min-w-0
-            overflow-hidden
-            rounded-[22px]
-            border
-            border-gray-200
-            bg-white
-            p-3.5
-            shadow-[0_3px_14px_rgba(0,0,0,0.07)]
-            transition-all
-            duration-200
-            hover:shadow-[0_7px_22px_rgba(0,0,0,0.10)]
-            sm:rounded-3xl
-            sm:p-4
-          "
+                    relative
+                    min-w-0
+                    overflow-hidden
+                    rounded-[22px]
+                    border
+                    border-gray-200
+                    bg-white
+                    p-3.5
+                    shadow-[0_3px_14px_rgba(0,0,0,0.07)]
+                    transition-shadow
+                    duration-200
+                    hover:shadow-[0_7px_22px_rgba(0,0,0,0.10)]
+                    sm:rounded-3xl
+                    sm:p-4
+                  "
                 >
                   {/* ==================================================
-              PRODUCT HEADER
-          ================================================== */}
+                      PRODUCT HEADER
+                  ================================================== */}
 
-                  <div className="flex min-w-0 items-start gap-3">
-                    {/* PRODUCT IMAGE */}
+                  <div
+                    className="
+                      flex
+                      min-w-0
+                      items-start
+                      gap-3
+                    "
+                  >
+                    {/* IMAGE */}
 
                     <div
                       className="
-                flex
-                h-[58px]
-                w-[58px]
-                shrink-0
-                items-center
-                justify-center
-                overflow-hidden
-                rounded-2xl
-                bg-gray-50
-                sm:h-[70px]
-                sm:w-[70px]
-              "
+                        flex
+                        h-[58px]
+                        w-[58px]
+                        shrink-0
+                        items-center
+                        justify-center
+                        overflow-hidden
+                        rounded-2xl
+                        bg-gray-50
+                        sm:h-[70px]
+                        sm:w-[70px]
+                      "
                     >
                       {imageUrl ? (
                         <img
@@ -1055,124 +1213,121 @@ const Cart = () => {
                           loading="lazy"
                           decoding="async"
                           className="
-                    h-[48px]
-                    w-[48px]
-                    object-contain
-                    sm:h-[58px]
-                    sm:w-[58px]
-                  "
+                            h-[48px]
+                            w-[48px]
+                        
+                            object-contain
+                            sm:h-[58px]
+                            sm:w-[58px]
+                          "
                         />
                       ) : (
                         <Package
                           className="
-                    h-8
-                    w-8
-                    text-gray-300
-                    sm:h-10
-                    sm:w-10
-                  "
+                            h-8
+                            w-8
+                            text-gray-300
+                            sm:h-10
+                            sm:w-10
+                          "
                         />
                       )}
                     </div>
 
-                    {/* PRODUCT INFORMATION */}
+                    {/* INFORMATION */}
 
-                    <div className="min-w-0 flex-1">
-                      {/* COMPANY */}
-
+                    <div
+                      className="
+                        min-w-0
+                        flex-1
+                      "
+                    >
                       {companyName && (
                         <span
                           className="
-                    inline-flex
-                    max-w-full
-                    truncate
-                    rounded-full
-                    bg-blue-50
-                    px-2.5
-                    py-1
-                    text-[12px]
-                    font-extrabold
-                    leading-none
-                    text-blue-600
-                    sm:text-[13px]
-                  "
+                            inline-flex
+                            max-w-full
+                            truncate
+                            rounded-full
+                            bg-blue-50
+                            px-2.5
+                            py-1
+                            text-[14px]
+                            font-extrabold
+                            leading-none
+                            text-blue-600
+                            sm:text-[13px]
+                          "
                         >
                           {companyName}
                         </span>
                       )}
 
-                      {/* PRODUCT NAME */}
-
                       <h2
                         className="
-                  mt-1.5
-                  line-clamp-2
-                  text-[18px]
-                  font-black
-                  leading-[1.12]
-                  tracking-[-0.02em]
-                  text-gray-950
-                  sm:text-[20px]
-                "
+                          mt-1.5
+                          line-clamp-2
+                          text-[18px]
+                          font-black
+                          leading-[1.25]
+                          tracking-[-0.01em]
+                          text-gray-950
+                          sm:text-[20px]
+                        "
                       >
                         {item.productId?.name || "Product"}
                       </h2>
-
-                      {/* VARIANT / MEASUREMENT */}
-
-                      <p
-                        className="
-                  mt-1.5
-                  truncate
-                  text-[12px]
-                  font-bold
-                  leading-none
-                  text-gray-500
-                  sm:text-[13px]
-                "
-                      >
-                        {item.measurement} × {item.qty}
-                      </p>
                     </div>
                   </div>
 
+                  <p
+                    className="
+                          mt-4
+                          truncate
+                          text-[14px]
+                          font-bold
+                          leading-none
+                          text-gray-500
+                          sm:text-[13px]
+                        "
+                  >
+                    {item.measurement} × {item.qty}
+                  </p>
                   {/* ==================================================
-              PRICE ROW
-          ================================================== */}
+                      PRICE
+                  ================================================== */}
 
                   <div
                     className="
-              mt-4
-              flex
-              items-end
-              justify-between
-              gap-2
-            "
+                      mt-4
+                      flex
+                      items-end
+                      justify-between
+                      gap-2
+                    "
                   >
-                    {/* PRICE */}
-
                     <div>
                       <div
                         className="
-                  flex
-                  items-center
-                  text-[24px]
-                  font-black
-                  leading-none
-                  tracking-tight
-                  text-green-700
-                  sm:text-[27px]
-                "
+                          flex
+                          items-center
+                          text-[24px]
+                          font-black
+                          leading-none
+                          tracking-tight
+                          text-green-700
+                          sm:text-[27px]
+                        "
                       >
                         <IndianRupee
                           className="
-                    mr-0.5
-                    h-[19px]
-                    w-[19px]
-                    stroke-[2.8]
-                    sm:h-[21px]
-                    sm:w-[21px]
-                  "
+                            mr-0.5
+                            h-[19px]
+                            w-[19px]
+                            stroke-[2.8]
+                            sm:h-[21px]
+                            sm:w-[21px]
+                          "
                         />
 
                         {Number(item.total || 0).toFixed(0)}
@@ -1180,69 +1335,47 @@ const Cart = () => {
 
                       <p
                         className="
-                  mt-1
-                  text-[11px]
-                  font-bold
-                  leading-none
-                  text-gray-400
-                  sm:text-[12px]
-                "
+                          mt-1
+                          text-[11px]
+                          font-bold
+                          leading-none
+                          text-gray-400
+                          sm:text-[12px]
+                        "
                       >
                         ₹{unitPrice.toFixed(0)} प्रति
                       </p>
                     </div>
-
-                    {/* MEASUREMENT PILL */}
-
-                    <span
-                      className="
-                max-w-[85px]
-                truncate
-                rounded-full
-                bg-gray-100
-                px-2.5
-                py-1.5
-                text-[11px]
-                font-extrabold
-                text-gray-600
-                sm:max-w-[100px]
-                sm:text-[12px]
-              "
-                    >
-                      {item.measurement}
-                    </span>
                   </div>
 
                   {/* ==================================================
-              QUANTITY + REMOVE
-          ================================================== */}
+                      QUANTITY
+                  ================================================== */}
 
                   <div
                     className="
-              mt-4
-              flex
-              w-full
-              items-center
-              gap-2
-            "
+                      mt-4
+                      flex
+                      w-full
+                      items-center
+                      gap-2
+                    "
                   >
-                    {/* QUANTITY */}
-
                     <div
                       className="
-                flex
-                h-11
-                min-w-0
-                flex-1
-                items-center
-                justify-between
-                rounded-full
-                border
-                border-gray-200
-                bg-gray-50
-                px-1
-                sm:h-12
-              "
+                        flex
+                        h-11
+                        min-w-0
+                        flex-1
+                        items-center
+                        justify-between
+                        rounded-full
+                        border
+                        border-gray-200
+                        bg-gray-50
+                        px-1
+                        sm:h-12
+                      "
                     >
                       {/* MINUS */}
 
@@ -1250,26 +1383,26 @@ const Cart = () => {
                         type="button"
                         size="icon"
                         variant="ghost"
-                        disabled={item.qty <= 1 || isUpdating}
+                        disabled={Number(item.qty) <= 1}
                         onClick={() => updateQuantity(item, "decrease")}
                         className="
-                  h-9
-                  w-9
-                  shrink-0
-                  rounded-full
-                  text-gray-700
-                  hover:bg-white
-                  hover:text-red-600
-                  sm:h-10
-                  sm:w-10
-                "
+                          h-9
+                          w-9
+                          shrink-0
+                          rounded-full
+                          text-gray-700
+                          hover:bg-white
+                          hover:text-red-600
+                          sm:h-10
+                          sm:w-10
+                        "
                       >
                         <Minus
                           className="
-                    h-[18px]
-                    w-[18px]
-                    stroke-[2.5]
-                  "
+                            h-[18px]
+                            w-[18px]
+                            stroke-[2.5]
+                          "
                         />
                       </Button>
 
@@ -1278,7 +1411,7 @@ const Cart = () => {
                       <motion.span
                         key={item.qty}
                         initial={{
-                          scale: 1.25,
+                          scale: 1.2,
                           opacity: 0.5,
                         }}
                         animate={{
@@ -1286,17 +1419,17 @@ const Cart = () => {
                           opacity: 1,
                         }}
                         transition={{
-                          duration: 0.15,
+                          duration: 0.12,
                         }}
                         className="
-                  min-w-[30px]
-                  text-center
-                  text-[19px]
-                  font-black
-                  leading-none
-                  text-gray-950
-                  sm:text-[21px]
-                "
+                          min-w-[30px]
+                          text-center
+                          text-[19px]
+                          font-black
+                          leading-none
+                          text-gray-950
+                          sm:text-[21px]
+                        "
                       >
                         {item.qty}
                       </motion.span>
@@ -1307,26 +1440,25 @@ const Cart = () => {
                         type="button"
                         size="icon"
                         variant="ghost"
-                        disabled={isUpdating}
                         onClick={() => updateQuantity(item, "increase")}
                         className="
-                  h-9
-                  w-9
-                  shrink-0
-                  rounded-full
-                  text-gray-700
-                  hover:bg-white
-                  hover:text-green-600
-                  sm:h-10
-                  sm:w-10
-                "
+                          h-9
+                          w-9
+                          shrink-0
+                          rounded-full
+                          text-gray-700
+                          hover:bg-white
+                          hover:text-green-600
+                          sm:h-10
+                          sm:w-10
+                        "
                       >
                         <Plus
                           className="
-                    h-[18px]
-                    w-[18px]
-                    stroke-[2.5]
-                  "
+                            h-[18px]
+                            w-[18px]
+                            stroke-[2.5]
+                          "
                         />
                       </Button>
                     </div>
@@ -1337,89 +1469,33 @@ const Cart = () => {
                       type="button"
                       size="icon"
                       variant="ghost"
-                      disabled={isUpdating}
                       onClick={() => removeItem(item)}
                       className="
-                h-11
-                w-11
-                shrink-0
-                rounded-full
-                border
-                border-red-100
-                bg-red-50
-                text-red-500
-                transition-all
-                hover:bg-red-100
-                hover:text-red-600
-                active:scale-90
-                sm:h-12
-                sm:w-12
-              "
+                        h-11
+                        w-11
+                        shrink-0
+                        rounded-full
+                        border
+                        border-red-100
+                        bg-red-50
+                        text-red-500
+                        transition-all
+                        hover:bg-red-100
+                        hover:text-red-600
+                        active:scale-90
+                        sm:h-12
+                        sm:w-12
+                      "
                     >
                       <Trash2
                         className="
-                  h-[18px]
-                  w-[18px]
-                  stroke-[2.5]
-                "
+                          h-[18px]
+                          w-[18px]
+                          stroke-[2.5]
+                        "
                       />
                     </Button>
                   </div>
-
-                  {/* ==================================================
-              UPDATE LOADING
-          ================================================== */}
-
-                  <AnimatePresence>
-                    {isUpdating && (
-                      <motion.div
-                        initial={{
-                          opacity: 0,
-                        }}
-                        animate={{
-                          opacity: 1,
-                        }}
-                        exit={{
-                          opacity: 0,
-                        }}
-                        className="
-                  pointer-events-none
-                  absolute
-                  inset-0
-                  z-20
-                  flex
-                  items-center
-                  justify-center
-                  rounded-[22px]
-                  bg-white/65
-                  backdrop-blur-[2px]
-                  sm:rounded-3xl
-                "
-                      >
-                        <div
-                          className="
-                    flex
-                    h-10
-                    w-10
-                    items-center
-                    justify-center
-                    rounded-full
-                    bg-white
-                    shadow-lg
-                  "
-                        >
-                          <Loader2
-                            className="
-                      h-5
-                      w-5
-                      animate-spin
-                      text-red-500
-                    "
-                          />
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
                 </motion.div>
               );
             })}
@@ -1441,7 +1517,7 @@ const Cart = () => {
           }}
           transition={{
             duration: 0.3,
-            delay: 0.08,
+            delay: 0.06,
             ease: easeOut,
           }}
           className="
@@ -1461,7 +1537,7 @@ const Cart = () => {
               sm:rounded-3xl
             "
           >
-            {/* SUMMARY HEADER */}
+            {/* HEADER */}
 
             <div
               className="
@@ -1512,16 +1588,14 @@ const Cart = () => {
               </div>
             </div>
 
+            {/* BODY */}
+
             <div
               className="
                 p-5
                 sm:p-6
               "
             >
-              {/* ==================================================
-                  PRICE DETAILS
-              ================================================== */}
-
               <div className="space-y-4">
                 {/* SUBTOTAL */}
 
@@ -1687,7 +1761,7 @@ const Cart = () => {
               </div>
 
               {/* ==================================================
-                  CHECKOUT BUTTON
+                  CHECKOUT
               ================================================== */}
 
               <Button
@@ -1718,7 +1792,13 @@ const Cart = () => {
               >
                 {checkoutLoading ? (
                   <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <Loader2
+                      className="
+                        h-5
+                        w-5
+                        animate-spin
+                      "
+                    />
                     कृपया प्रतीक्षा करें!
                   </>
                 ) : (

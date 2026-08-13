@@ -403,31 +403,35 @@ const MyTodayOrder = () => {
 
                   {/* STATUS */}
 
-                  <div className="relative">
+                  <div className="relative flex">
                     {order.status === "Pending" && (
                       <span
                         className="
-                            rounded-1xl
+                      rounded-1xl
                             bg-yellow-100
                             px-4
                             py-2
+                            flex
+                            gap-2
+                            items-center
                             text-sm
                             font-semibold
                             text-orange-700
-                          "
-                      >
-                        Pending
-                        <Dot
-                          className="
-                              absolute
-                              -right-3
-                              -top-4
-                              h-10
-                              w-10
-                              animate-ping
-                              bg-red
                             "
-                        />
+                      >
+                        <p
+                          className={`
+                                  h-3
+                                  w-3
+                                  rounded-full
+                                  animate-ping bg-red-600
+                                  ${!order.status === "Approved" && "bg-green-600"}
+                                  ${!order.status === "Declined" && "bg-gray-600"}
+                                  
+                                  
+                                `}
+                        ></p>
+                        Pending
                       </span>
                     )}
 
@@ -437,21 +441,23 @@ const MyTodayOrder = () => {
                             rounded-full
                             bg-green-100
                             px-4
+                            flex
+                            items-center
                             py-2
                             text-sm
                             font-semibold
                             text-green-700
                           "
                       >
+                        <p
+                          className={`
+                                  h-3
+                                  w-3
+                                  rounded-full
+                                  bg-green-600
+                                `}
+                        ></p>
                         Approved
-                        <Check
-                          className="
-                              absolute
-                              -right-1
-                              -top-1
-                              h-3
-                            "
-                        />
                       </span>
                     )}
 
@@ -467,6 +473,16 @@ const MyTodayOrder = () => {
                             text-red-700
                           "
                       >
+                        <p
+                          className={`
+                                  h-3
+                                  w-3
+                                  rounded-full
+                                  bg-gray-600
+                                  
+                                  
+                                `}
+                        ></p>
                         Declined
                       </span>
                     )}

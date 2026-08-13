@@ -16,18 +16,10 @@ const WelcomeCard = () => {
 
   return (
     <motion.section
-      initial={{
-        opacity: 0,
-        y: 24,
-        scale: 0.97,
-      }}
-      animate={{
-        opacity: 1,
-        y: 0,
-        scale: 1,
-      }}
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
       transition={{
-        duration: 0.6,
+        duration: 0.4,
         ease: [0.22, 1, 0.36, 1],
       }}
       className="
@@ -39,28 +31,28 @@ const WelcomeCard = () => {
         overflow-hidden
         rounded-[28px]
         bg-gradient-to-br
-        from-[#f40612]
+        from-[#ef101c]
         via-[#ff2635]
-        to-[#ff7918]
-        shadow-[0_14px_35px_rgba(239,68,68,0.20)]
+        to-[#ff7418]
+        shadow-[0_12px_32px_rgba(239,68,68,0.18)]
+        isolate
       "
     >
       {/* =====================================================
-          BACKGROUND
+          STATIC DEPTH
       ====================================================== */}
 
-      {/* Large soft glow */}
       <div
         className="
           pointer-events-none
           absolute
-          -right-16
-          -top-20
-          h-52
-          w-52
+          -right-12
+          -top-16
+          h-44
+          w-44
           rounded-full
-          bg-orange-300/30
-          blur-3xl
+          bg-orange-300/20
+          blur-2xl
         "
       />
 
@@ -68,136 +60,137 @@ const WelcomeCard = () => {
         className="
           pointer-events-none
           absolute
-          -bottom-24
-          -left-16
-          h-48
-          w-48
+          -bottom-20
+          -left-14
+          h-40
+          w-40
           rounded-full
           bg-red-950/20
-          blur-3xl
+          blur-2xl
         "
       />
 
-      {/* Decorative circles */}
-      <motion.div
-        animate={{
-          rotate: 360,
-        }}
-        transition={{
-          duration: 22,
-          repeat: Infinity,
-          ease: "linear",
-        }}
+      {/* =====================================================
+          PREMIUM ORBIT
+      ====================================================== */}
+
+      <div
         className="
           pointer-events-none
           absolute
           -right-8
-          top-3
-          h-28
-          w-28
+          -top-8
+          h-[138px]
+          w-[138px]
+          rounded-full
+          border
+          border-white/15
+        "
+      />
+
+      <div
+        className="
+          pointer-events-none
+          absolute
+          -right-1
+          top-[18px]
+          h-[92px]
+          w-[92px]
           rounded-full
           border
           border-white/10
         "
       />
 
-      <div
+      {/* =====================================================
+          STATIC PARTICLES
+          No infinite animation = very cheap
+      ====================================================== */}
+
+      <span
         className="
           pointer-events-none
           absolute
-          right-8
-          top-10
+          right-[84px]
+          top-[22px]
+          h-1.5
+          w-1.5
+          rounded-full
+          bg-white/70
+        "
+      />
+
+      <span
+        className="
+          pointer-events-none
+          absolute
+          right-[28px]
+          top-[57px]
           h-2
           w-2
+          rounded-full
+          bg-yellow-200/80
+        "
+      />
+
+      <span
+        className="
+          pointer-events-none
+          absolute
+          right-[74px]
+          bottom-[22px]
+          h-1
+          w-1
+          rounded-full
+          bg-white/60
+        "
+      />
+
+      <span
+        className="
+          pointer-events-none
+          absolute
+          right-[132px]
+          top-[46px]
+          h-1
+          w-1
           rounded-full
           bg-white/50
         "
       />
 
-      <div
-        className="
-          pointer-events-none
-          absolute
-          right-16
-          bottom-10
-          h-1.5
-          w-1.5
-          rounded-full
-          bg-white/40
-        "
-      />
-
       {/* =====================================================
-          ANIMATED LIGHT SWEEP
+          CONTENT
       ====================================================== */}
 
-      <motion.div
-        initial={{
-          x: "-120%",
-        }}
-        animate={{
-          x: "160%",
-        }}
-        transition={{
-          duration: 5,
-          repeat: Infinity,
-          repeatDelay: 4,
-          ease: "easeInOut",
-        }}
-        className="
-          pointer-events-none
-          absolute
-          inset-y-0
-          w-20
-          -skew-x-12
-          bg-gradient-to-r
-          from-transparent
-          via-white/10
-          to-transparent
-          blur-sm
-        "
-      />
-
-      {/* =====================================================
-          MAIN CONTENT
-      ====================================================== */}
-
-      <div className="relative z-10 flex h-full items-center">
+      <div className="relative z-10 flex h-full">
         {/* ===================================================
-            LEFT
+            LEFT CONTENT
         ==================================================== */}
 
         <motion.div
-          initial={{
-            opacity: 0,
-            x: -18,
-          }}
-          animate={{
-            opacity: 1,
-            x: 0,
-          }}
+          initial={{ opacity: 0, x: -12 }}
+          animate={{ opacity: 1, x: 0 }}
           transition={{
-            delay: 0.12,
-            duration: 0.55,
+            delay: 0.06,
+            duration: 0.35,
             ease: [0.22, 1, 0.36, 1],
           }}
           className="
-            relative
-            z-20
             flex
             h-full
-            w-[62%]
+            w-[63%]
             flex-col
             justify-center
             pl-5
-            pr-1
+            pr-0
           "
         >
           {/* Greeting chip */}
 
           <div
             className="
-              mb-3
+              mb-2.5
               flex
               w-fit
               items-center
@@ -205,20 +198,30 @@ const WelcomeCard = () => {
               rounded-full
               border
               border-white/20
-              bg-white/15
+              bg-white/10
               px-2.5
               py-1
-              shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]
-              backdrop-blur-md
             "
           >
             <img
               src="./namaste.png"
-              alt="Namaste"
+              alt=""
+              draggable={false}
+              width="16"
+              height="16"
+              loading="eager"
+              decoding="async"
               className="h-4 w-4 object-contain"
             />
 
-            <span className="text-[10px] font-semibold tracking-wide text-white">
+            <span
+              className="
+                text-[10px]
+                font-bold
+                tracking-wide
+                text-white
+              "
+            >
               नमस्ते!
             </span>
           </div>
@@ -229,8 +232,8 @@ const WelcomeCard = () => {
             className="
               text-[26px]
               font-black
-              leading-[1.05]
-              tracking-[-0.03em]
+              leading-[1]
+              tracking-[-0.035em]
               text-white
             "
           >
@@ -241,166 +244,162 @@ const WelcomeCard = () => {
 
           <p
             className="
-              mt-1.5
-              max-w-[190px]
+              mt-2
+              max-w-[185px]
               text-[10.5px]
               font-medium
-              leading-[1.5]
+              leading-[1.45]
               text-white/75
             "
           >
             {message}
           </p>
-
-          {/* Bottom mini status */}
         </motion.div>
 
         {/* ===================================================
-            RIGHT CHARACTER AREA
+            CHARACTER SIDE
         ==================================================== */}
 
         <div
           className="
+            pointer-events-none
             absolute
-            right-[-3px]
+            right-0
             top-0
             h-full
-            w-[47%]
+            w-[45%]
           "
         >
-          {/* Glass character backdrop */}
+          {/* Character platform */}
 
           <motion.div
-            animate={{
-              scale: [1, 1.04, 1],
-              rotate: [0, 2, 0],
-            }}
-            transition={{
-              duration: 5,
-              repeat: Infinity,
-              ease: "easeInOut",
-            }}
-            className="
-              absolute
-              right-6
-              top-5
-              h-[112px]
-              w-[112px]
-              rounded-[32px]
-              border
-              border-white/25
-              bg-white/15
-              shadow-[inset_0_1px_0_rgba(255,255,255,0.25)]
-              backdrop-blur-[2px]
-            "
-          />
-
-          {/* Inner glow */}
-
-          <div
-            className="
-              absolute
-              right-8
-              top-8
-              h-20
-              w-20
-              rounded-full
-              bg-orange-200/30
-              blur-2xl
-            "
-          />
-
-          {/* Character */}
-
-          <motion.img
-            src="./holdingGrocery.png"
-            alt="Shopping Character"
-            draggable={false}
-            className="
-              pointer-events-none
-              absolute
-              -bottom-[12px]
-              right-[-12px]
-              z-10
-              h-[166px]
-              w-[166px]
-              object-contain
-              drop-shadow-[0_14px_12px_rgba(120,20,0,0.22)]
-            "
             initial={{
               opacity: 0,
-              y: 25,
-              scale: 0.82,
-              rotate: -6,
+              scale: 0.92,
             }}
             animate={{
               opacity: 1,
-              y: [0, -5, 0],
-              scale: [1, 1.015, 1],
-              rotate: [0, 1, -1, 0],
+              scale: 1,
             }}
             transition={{
-              opacity: {
-                duration: 0.55,
-              },
-              y: {
-                duration: 4,
-                repeat: Infinity,
-                ease: "easeInOut",
-              },
-              scale: {
-                duration: 4,
-                repeat: Infinity,
-                ease: "easeInOut",
-              },
-              rotate: {
-                duration: 4,
-                repeat: Infinity,
-                ease: "easeInOut",
-              },
-            }}
-          />
-
-          {/* Tiny floating sparkle */}
-
-          <motion.div
-            animate={{
-              y: [0, -5, 0],
-              opacity: [0.4, 1, 0.4],
-            }}
-            transition={{
-              duration: 2.5,
-              repeat: Infinity,
-              ease: "easeInOut",
+              delay: 0.12,
+              duration: 0.4,
+              ease: [0.22, 1, 0.36, 1],
             }}
             className="
               absolute
               right-5
-              top-7
+              top-[17px]
+              h-[116px]
+              w-[116px]
+              rounded-[34px]
+              border
+              border-white/20
+              bg-white/10
+            "
+          />
+
+          {/* Inner circle */}
+
+          <div
+            className="
+              absolute
+              right-[27px]
+              top-[28px]
+              h-[94px]
+              w-[94px]
+              rounded-full
+              bg-orange-200/15
+            "
+          />
+
+          {/* =================================================
+              CHARACTER
+          ================================================== */}
+
+          <motion.img
+            src="./holdingGrocery.png"
+            alt=""
+            draggable={false}
+            width="166"
+            height="166"
+            loading="eager"
+            decoding="async"
+            fetchPriority="high"
+            initial={{
+              opacity: 0,
+              y: 18,
+              scale: 0.9,
+            }}
+            animate={{
+              opacity: 1,
+              y: 0,
+              scale: 1,
+            }}
+            transition={{
+              delay: 0.1,
+              duration: 0.45,
+              ease: [0.22, 1, 0.36, 1],
+            }}
+            className="
+              absolute
+              -bottom-[12px]
+              right-[-10px]
+              z-10
+              h-[166px]
+              w-[166px]
+              object-contain
+              drop-shadow-[0_10px_8px_rgba(90,20,0,0.18)]
+            "
+          />
+
+          {/* =================================================
+              SPARKLES
+          ================================================== */}
+
+          <motion.span
+            initial={{
+              opacity: 0,
+              scale: 0,
+            }}
+            animate={{
+              opacity: [0, 1, 0.5],
+              scale: [0, 1, 0.8],
+            }}
+            transition={{
+              delay: 0.5,
+              duration: 0.6,
+            }}
+            className="
+              absolute
+              right-[20px]
+              top-[24px]
               z-20
               h-2
               w-2
               rounded-full
               bg-white
-              shadow-[0_0_12px_rgba(255,255,255,0.9)]
+              shadow-[0_0_10px_rgba(255,255,255,0.8)]
             "
           />
 
-          <motion.div
+          <motion.span
+            initial={{
+              opacity: 0,
+              scale: 0,
+            }}
             animate={{
-              y: [0, 4, 0],
-              opacity: [0.3, 0.8, 0.3],
+              opacity: 1,
+              scale: 1,
             }}
             transition={{
-              duration: 3,
-              repeat: Infinity,
-              ease: "easeInOut",
-              delay: 0.7,
+              delay: 0.65,
+              duration: 0.25,
             }}
             className="
               absolute
-              right-24
-              top-20
+              right-[102px]
+              top-[67px]
               z-20
               h-1.5
               w-1.5
@@ -427,17 +426,49 @@ const WelcomeCard = () => {
       />
 
       {/* =====================================================
-          BOTTOM SHINE
+          BOTTOM EDGE
       ====================================================== */}
 
       <div
         className="
           pointer-events-none
           absolute
-          inset-x-6
           bottom-0
+          left-6
+          right-6
           h-px
           bg-white/15
+        "
+      />
+
+      {/* =====================================================
+          ONE-TIME LIGHT SWEEP
+          Doesn't run forever
+      ====================================================== */}
+
+      <motion.div
+        initial={{
+          x: "-120%",
+        }}
+        animate={{
+          x: "160%",
+        }}
+        transition={{
+          delay: 0.7,
+          duration: 1.1,
+          ease: "easeInOut",
+        }}
+        className="
+          pointer-events-none
+          absolute
+          inset-y-0
+          z-30
+          w-16
+          -skew-x-12
+          bg-gradient-to-r
+          from-transparent
+          via-white/10
+          to-transparent
         "
       />
     </motion.section>
