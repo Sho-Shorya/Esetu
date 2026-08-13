@@ -85,11 +85,17 @@ export const addOrder = async (req, res) => {
       });
     }
 
-    // Get User Cart
+    // ============================================================
+    // 1. GET CART
+    // ============================================================
+
     const cart = await Cart.findOne({ userId })
       .populate({
         path: "items.productId",
-        populate: { path: "category", select: "name" },
+        populate: {
+          path: "category",
+          select: "name",
+        },
       })
       .populate("items.company");
 
@@ -100,8 +106,13 @@ export const addOrder = async (req, res) => {
       });
     }
 
-    // Get User
-    const user = await User.findById(userId);
+    // ============================================================
+    // 2. GET USER
+    // ============================================================
+
+    const user = await User.findById(userId).select(
+      "firstName lastName address oneSignalSubscriptionId",
+    );
 
     if (!user) {
       return res.status(404).json({
@@ -110,23 +121,42 @@ export const addOrder = async (req, res) => {
       });
     }
 
-    const { startToday, endToday } = getTodayDateRange();
+    // ============================================================
+    // 3. CHECK ORDERING WINDOW
+    // ============================================================
 
-    // Find Existing Pending Order for today only
-    let order = await Order.findOne({
-      userId,
-      status: "Pending",
-      isTodayOrder: true,
-      createdAt: { $gte: startToday, $lte: endToday },
-    });
+    const withinWindow = await isWithinOrderingWindow();
 
-    // If pending order exists check cutoff
-    if (!(await isWithinOrderingWindow())) {
+    if (!withinWindow) {
       return res.status(400).json({
         success: false,
         message: "ऑर्डर कटऑफ समय से पहले ही रखें।",
       });
     }
+
+    // ============================================================
+    // 4. TODAY RANGE
+    // ============================================================
+
+    const { startToday, endToday } = getTodayDateRange();
+
+    // ============================================================
+    // 5. FIND EXISTING ORDER
+    // ============================================================
+
+    let order = await Order.findOne({
+      userId,
+      status: "Pending",
+      isTodayOrder: true,
+      createdAt: {
+        $gte: startToday,
+        $lte: endToday,
+      },
+    });
+
+    // ============================================================
+    // 6. CUTOFF CHECK
+    // ============================================================
 
     if (order && isCutoffPassed(order.cutoffTime)) {
       return res.status(400).json({
@@ -134,9 +164,10 @@ export const addOrder = async (req, res) => {
         message: "आज का ऑर्डर अब एडिट नहीं किया जा सकता।",
       });
     }
-    /* ===========================================
-       MERGE INTO EXISTING ORDER
-    =========================================== */
+
+    // ============================================================
+    // 7. MERGE EXISTING ORDER
+    // ============================================================
 
     if (order) {
       for (const cartItem of cart.items) {
@@ -147,14 +178,10 @@ export const addOrder = async (req, res) => {
             item.measurement === cartItem.measurement,
         );
 
-        // Same Product + Same Company + Same Variant
         if (existingItem) {
           existingItem.qty += cartItem.qty;
           existingItem.total += cartItem.total;
-        }
-
-        // New Variant
-        else {
+        } else {
           order.items.push({
             productId: cartItem.productId._id,
 
@@ -194,15 +221,12 @@ export const addOrder = async (req, res) => {
       order.totalAmount += cart.totalPrice;
 
       await order.save();
-      await sendNotification({
-        subscriptionId: user.oneSignalSubscriptionId,
-        title: "🛒 ऑर्डर अपडेट किया गया",
-        message: "आपका ऑर्डर सफलतापूर्वक अपडेट हो गया है।",
-      });
-    } else {
-      /* ===========================================
-       CREATE NEW ORDER
-    =========================================== */
+    }
+
+    // ============================================================
+    // 8. CREATE NEW ORDER
+    // ============================================================
+    else {
       const orderItems = cart.items.map((cartItem) => ({
         productId: cartItem.productId._id,
 
@@ -237,6 +261,7 @@ export const addOrder = async (req, res) => {
       }));
 
       const cutoffTime = await getTodayCutoff();
+
       order = await Order.create({
         userId,
 
@@ -251,39 +276,82 @@ export const addOrder = async (req, res) => {
         cutoffTime,
       });
     }
-    console.log(user.oneSignalSubscriptionId);
-    await sendNotification({
-      subscriptionId: user.oneSignalSubscriptionId,
-      title: "🟠 ऑर्डर सफल",
-      message: "आपका ऑर्डर सफलतापूर्वक प्राप्त हो गया है।",
-    });
 
-    const suppliers = await User.find({
-      role: "supplier", // or "admin" if that's your role
-      oneSignalSubscriptionId: { $ne: "" },
-    });
-
-    for (const supp of suppliers) {
-      await sendNotification({
-        subscriptionId: supp.oneSignalSubscriptionId,
-        title: `🟢 ${user.firstName} ${user.lastName} का ऑर्डर आया है`,
-        message: `कृपया चेक करके, मंज़ूर या अस्वीकार करें।`,
-        sendToAll: false,
-      });
-    }
+    // ============================================================
+    // 9. CLEAR CART IMMEDIATELY
+    // ============================================================
 
     cart.items = [];
     cart.totalPrice = 0;
 
     await cart.save();
 
-    return res.status(200).json({
+    // ============================================================
+    // 10. SEND RESPONSE IMMEDIATELY
+    // ============================================================
+
+    res.status(200).json({
       success: true,
       message: "ऑर्डर हो गया। ✅",
       order,
     });
+
+    // ============================================================
+    // 11. NOTIFICATIONS IN BACKGROUND
+    // ============================================================
+
+    // IMPORTANT:
+    // Do NOT await these.
+    // They should never block checkout.
+
+    Promise.resolve().then(async () => {
+      try {
+        // User notification
+        if (user.oneSignalSubscriptionId) {
+          await sendNotification({
+            subscriptionId: user.oneSignalSubscriptionId,
+
+            title: "🟠 ऑर्डर सफल",
+
+            message: "आपका ऑर्डर सफलतापूर्वक प्राप्त हो गया है。",
+          });
+        }
+
+        // Find suppliers
+        const suppliers = await User.find({
+          role: "supplier",
+          oneSignalSubscriptionId: {
+            $exists: true,
+            $ne: "",
+          },
+        }).select("firstName lastName oneSignalSubscriptionId");
+
+        // Send supplier notifications in parallel
+        await Promise.all(
+          suppliers.map((supp) =>
+            sendNotification({
+              subscriptionId: supp.oneSignalSubscriptionId,
+
+              title: `🟢 ${user.firstName} ${user.lastName} का ऑर्डर आया है`,
+
+              message: "कृपया चेक करके, मंज़ूर या अस्वीकार करें।",
+
+              sendToAll: false,
+            }),
+          ),
+        );
+      } catch (notificationError) {
+        console.error("Notification error:", notificationError);
+      }
+    });
   } catch (error) {
-    console.log("Add Order Error :", error);
+    console.error("Add Order Error :", error);
+
+    // Don't try to send another response if headers
+    // have already been sent.
+    if (res.headersSent) {
+      return;
+    }
 
     return res.status(500).json({
       success: false,

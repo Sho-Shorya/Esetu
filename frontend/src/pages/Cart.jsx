@@ -24,9 +24,9 @@ import { Button } from "@/components/ui/button";
 import { setCartData, clearCart } from "@/redux/ProductSlice";
 import { API_BASE_URL } from "@/lib/constants";
 
-// ============================================================
-// ANIMATION CONFIG
-// ============================================================
+/* ============================================================
+   ANIMATION
+============================================================ */
 
 const easeOut = [0.22, 1, 0.36, 1];
 
@@ -37,7 +37,6 @@ const containerVariants = {
 
   visible: {
     opacity: 1,
-
     transition: {
       staggerChildren: 0.045,
       delayChildren: 0.03,
@@ -56,7 +55,6 @@ const cardVariants = {
     opacity: 1,
     y: 0,
     scale: 1,
-
     transition: {
       duration: 0.24,
       ease: easeOut,
@@ -67,7 +65,6 @@ const cardVariants = {
     opacity: 0,
     x: -35,
     scale: 0.97,
-
     transition: {
       duration: 0.18,
       ease: "easeOut",
@@ -84,7 +81,6 @@ const pageVariants = {
   visible: {
     opacity: 1,
     y: 0,
-
     transition: {
       duration: 0.28,
       ease: easeOut,
@@ -92,294 +88,17 @@ const pageVariants = {
   },
 };
 
-// ============================================================
-// SUCCESS ANIMATION
-// ============================================================
-
-const OrderSuccessAnimation = ({ orderId }) => {
-  return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      className="
-        fixed
-        inset-0
-        z-[9999]
-        flex
-        items-center
-        justify-center
-        bg-white
-        px-5
-      "
-    >
-      <div className="flex w-full max-w-sm flex-col items-center text-center">
-        {/* ====================================================
-            GOOGLE PAY STYLE SUCCESS CIRCLE
-        ==================================================== */}
-
-        <div className="relative flex h-32 w-32 items-center justify-center">
-          {/* Outer expanding ring */}
-          <motion.div
-            initial={{
-              scale: 0.65,
-              opacity: 0,
-            }}
-            animate={{
-              scale: 1.18,
-              opacity: [0, 1, 0],
-            }}
-            transition={{
-              duration: 0.85,
-              ease: "easeOut",
-            }}
-            className="
-              absolute
-              inset-0
-              rounded-full
-              border-[5px]
-              border-green-200
-            "
-          />
-
-          {/* Main green circle */}
-          <motion.div
-            initial={{
-              scale: 0,
-            }}
-            animate={{
-              scale: 1,
-            }}
-            transition={{
-              type: "spring",
-              stiffness: 300,
-              damping: 18,
-              mass: 0.7,
-            }}
-            className="
-              relative
-              flex
-              h-28
-              w-28
-              items-center
-              justify-center
-              rounded-full
-              bg-green-500
-              shadow-lg
-              shadow-green-200
-            "
-          >
-            {/* Inner subtle highlight */}
-            <motion.div
-              initial={{
-                opacity: 0,
-                scale: 0.7,
-              }}
-              animate={{
-                opacity: 0.18,
-                scale: 1,
-              }}
-              transition={{
-                duration: 0.3,
-                delay: 0.15,
-              }}
-              className="
-                absolute
-                inset-2
-                rounded-full
-                border
-                border-white
-              "
-            />
-
-            {/* =================================================
-                TICK
-            ================================================= */}
-
-            <svg
-              viewBox="0 0 64 64"
-              className="relative h-16 w-16 text-white"
-              fill="none"
-            >
-              <motion.path
-                d="M17 33L27 43L48 21"
-                stroke="currentColor"
-                strokeWidth="6"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                initial={{
-                  pathLength: 0,
-                  opacity: 0,
-                }}
-                animate={{
-                  pathLength: 1,
-                  opacity: 1,
-                }}
-                transition={{
-                  pathLength: {
-                    duration: 0.42,
-                    delay: 0.28,
-                    ease: "easeOut",
-                  },
-                  opacity: {
-                    duration: 0.05,
-                    delay: 0.28,
-                  },
-                }}
-              />
-            </svg>
-          </motion.div>
-        </div>
-
-        {/* ====================================================
-            SUCCESS TEXT
-        ==================================================== */}
-
-        <motion.div
-          initial={{
-            opacity: 0,
-            y: 12,
-          }}
-          animate={{
-            opacity: 1,
-            y: 0,
-          }}
-          transition={{
-            duration: 0.3,
-            delay: 0.62,
-            ease: easeOut,
-          }}
-        >
-          <h1
-            className="
-            mt-7
-            text-3xl
-            font-extrabold
-            tracking-tight
-            text-gray-900
-          "
-          >
-            ऑर्डर सफल रहा!
-          </h1>
-
-          <p
-            className="
-            mt-2
-            text-gray-500
-          "
-          >
-            आपका ऑर्डर आज के ऑर्डर में जोड़ दिया गया है।
-          </p>
-        </motion.div>
-
-        {/* ====================================================
-            ORDER ID
-        ==================================================== */}
-
-        {orderId && (
-          <motion.div
-            initial={{
-              opacity: 0,
-              scale: 0.94,
-            }}
-            animate={{
-              opacity: 1,
-              scale: 1,
-            }}
-            transition={{
-              duration: 0.25,
-              delay: 0.82,
-              ease: easeOut,
-            }}
-            className="
-              mt-5
-              rounded-2xl
-              bg-gray-50
-              px-5
-              py-3
-            "
-          >
-            <p
-              className="
-              text-[10px]
-              font-semibold
-              tracking-widest
-              text-gray-400
-            "
-            >
-              ORDER ID
-            </p>
-
-            <p
-              className="
-              mt-1
-              font-mono
-              text-sm
-              font-bold
-              text-gray-700
-            "
-            >
-              #{orderId.slice(-8).toUpperCase()}
-            </p>
-          </motion.div>
-        )}
-
-        {/* ====================================================
-            REDIRECT INDICATOR
-        ==================================================== */}
-
-        <motion.div
-          initial={{
-            opacity: 0,
-          }}
-          animate={{
-            opacity: 1,
-          }}
-          transition={{
-            delay: 1,
-          }}
-          className="
-            mt-7
-            flex
-            items-center
-            gap-2
-            text-sm
-            text-gray-400
-          "
-        >
-          <motion.span
-            animate={{
-              opacity: [0.3, 1, 0.3],
-            }}
-            transition={{
-              repeat: Infinity,
-              duration: 1,
-              ease: "easeInOut",
-            }}
-            className="
-              h-2
-              w-2
-              rounded-full
-              bg-green-500
-            "
-          />
-          आज के ऑर्डर पर ले जा रहे हैं...
-        </motion.div>
-      </div>
-    </motion.div>
-  );
-};
-
-// ============================================================
-// CART
-// ============================================================
+/* ============================================================
+   CART
+============================================================ */
 
 const Cart = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
-  // ============================================================
-  // REDUX
-  // ============================================================
+  /* ==========================================================
+     REDUX
+  ========================================================== */
 
   const { cartData, productData } = useSelector(
     (store) =>
@@ -392,65 +111,75 @@ const Cart = () => {
       },
   );
 
-  // ============================================================
-  // STATE
-  // ============================================================
+  /* ==========================================================
+     STATE
+  ========================================================== */
 
   const [loading, setLoading] = useState(false);
-
   const [updatingId, setUpdatingId] = useState(null);
-
   const [checkoutLoading, setCheckoutLoading] = useState(false);
 
-  const [orderSuccess, setOrderSuccess] = useState(false);
-
-  const [confirmedOrder, setConfirmedOrder] = useState(null);
+  /* ==========================================================
+     TOKEN
+  ========================================================== */
 
   const token = localStorage.getItem("token");
 
-  // ============================================================
-  // DERIVED DATA
-  // ============================================================
+  /* ==========================================================
+     DERIVED DATA
+  ========================================================== */
 
   const items = cartData?.items || [];
 
   const totalPrice = Number(cartData?.totalPrice || 0);
 
-  // ============================================================
-  // DISCOUNT
-  // ============================================================
-
   const discount = useMemo(() => {
     return ((totalPrice * 13) / 100).toFixed(1);
   }, [totalPrice]);
 
-  // ============================================================
-  // PRODUCT IMAGE
-  // ============================================================
+  /* ==========================================================
+     PRODUCT IMAGE
+  ========================================================== */
 
   const getProductImageUrl = (item) => {
+    if (item?.productId?.productImg?.[0]?.url) {
+      return item.productId.productImg[0].url;
+    }
+
+    if (item?.productImg?.[0]?.url) {
+      return item.productImg[0].url;
+    }
+
     if (item?.productId?.image) {
       return item.productId.image;
+    }
+
+    if (item?.image) {
+      return item.image;
     }
 
     return null;
   };
 
-  // ============================================================
-  // ITEM KEY
-  // ============================================================
+  /* ==========================================================
+     ITEM KEY
+  ========================================================== */
 
   const getItemKey = (item) => {
-    const productId = item?.productId?._id || item?.productId || "";
+    const productId =
+      typeof item?.productId === "object"
+        ? item?.productId?._id
+        : item?.productId;
 
-    const companyId = item?.company?._id || item?.company || "";
+    const companyId =
+      typeof item?.company === "object" ? item?.company?._id : item?.company;
 
-    return `${productId}-${companyId}-${item?.measurement}`;
+    return `${productId || ""}-${companyId || ""}-${item?.measurement || ""}`;
   };
 
-  // ============================================================
-  // SYNC CART
-  // ============================================================
+  /* ==========================================================
+     SYNC CART
+  ========================================================== */
 
   const syncCart = (newCart) => {
     dispatch(
@@ -463,9 +192,9 @@ const Cart = () => {
     );
   };
 
-  // ============================================================
-  // FETCH CART
-  // ============================================================
+  /* ==========================================================
+     FETCH CART
+  ========================================================== */
 
   const fetchCart = async () => {
     if (!token) return;
@@ -479,7 +208,7 @@ const Cart = () => {
         },
       });
 
-      if (res.data.success) {
+      if (res.data?.success) {
         syncCart(res.data.cart);
       }
     } catch (error) {
@@ -493,35 +222,17 @@ const Cart = () => {
     }
   };
 
-  // ============================================================
-  // LOAD CART
-  // ============================================================
+  /* ==========================================================
+     INITIAL LOAD
+  ========================================================== */
 
   useEffect(() => {
     fetchCart();
   }, []);
 
-  // ============================================================
-  // AUTO NAVIGATION AFTER SUCCESS
-  // ============================================================
-
-  useEffect(() => {
-    if (!orderSuccess) return;
-
-    // Short Google-Pay-like confirmation.
-    // Long enough to see the tick, but doesn't feel slow.
-    const timer = setTimeout(() => {
-      navigate("/my-orders", {
-        replace: true,
-      });
-    }, 1150);
-
-    return () => clearTimeout(timer);
-  }, [orderSuccess, navigate]);
-
-  // ============================================================
-  // COMPANY NAME
-  // ============================================================
+  /* ==========================================================
+     COMPANY NAME
+  ========================================================== */
 
   const fetchCompanyName = (company) => {
     const companyId = typeof company === "object" ? company?._id : company;
@@ -530,20 +241,24 @@ const Cart = () => {
 
     for (const product of productData || []) {
       const variant = product?.variants?.find(
-        (v) => (v.company?._id || v.company) === companyId,
+        (v) => (v?.company?._id || v?.company) === companyId,
       );
 
       if (variant) {
-        return variant.company?.name || "";
+        return variant?.company?.name || "";
       }
+    }
+
+    if (typeof company === "object") {
+      return company?.name || "";
     }
 
     return "";
   };
 
-  // ============================================================
-  // UPDATE QUANTITY
-  // ============================================================
+  /* ==========================================================
+     UPDATE QUANTITY
+  ========================================================== */
 
   const updateQuantity = async (item, type) => {
     if (!token) {
@@ -554,14 +269,17 @@ const Cart = () => {
       return;
     }
 
-    const productId = item.productId?._id || item.productId;
+    const productId =
+      typeof item?.productId === "object"
+        ? item?.productId?._id
+        : item?.productId;
 
-    const companyId = item.company?._id || item.company;
+    const companyId =
+      typeof item?.company === "object" ? item?.company?._id : item?.company;
 
     const itemKey = getItemKey(item);
 
-    // Prevent double request
-    if (updatingId === itemKey) {
+    if (!productId || updatingId === itemKey) {
       return;
     }
 
@@ -571,26 +289,30 @@ const Cart = () => {
 
     if (!currentItem) return;
 
-    if (type === "decrease" && currentItem.qty <= 1) {
+    if (type === "decrease" && Number(currentItem.qty || 1) <= 1) {
       return;
     }
 
     const previousCart = cartData;
 
-    const newQty =
-      type === "increase"
-        ? currentItem.qty + 1
-        : Math.max(1, currentItem.qty - 1);
+    const currentQty = Number(currentItem.qty || 1);
 
-    const variant = currentItem.productId?.variants?.find(
-      (variant) => variant.measurement === currentItem.measurement,
+    const newQty =
+      type === "increase" ? currentQty + 1 : Math.max(1, currentQty - 1);
+
+    const variant = currentItem?.productId?.variants?.find(
+      (v) => v?.measurement === currentItem?.measurement,
     );
 
-    const price = Number(variant?.price || currentItem.price || 0);
+    const price = Number(
+      variant?.price ||
+        currentItem?.price ||
+        (currentQty ? Number(currentItem?.total || 0) / currentQty : 0),
+    );
 
     const newItemTotal = price * newQty;
 
-    const updatedItems = cartData.items.map((cartItem) => {
+    const updatedItems = (cartData?.items || []).map((cartItem) => {
       if (getItemKey(cartItem) !== itemKey) {
         return cartItem;
       }
@@ -603,7 +325,7 @@ const Cart = () => {
     });
 
     const newTotalPrice = updatedItems.reduce(
-      (sum, cartItem) => sum + Number(cartItem.total || 0),
+      (sum, cartItem) => sum + Number(cartItem?.total || 0),
       0,
     );
 
@@ -613,7 +335,7 @@ const Cart = () => {
       totalPrice: newTotalPrice,
     };
 
-    // Instant UI update
+    /* Instant UI update */
     dispatch(setCartData(optimisticCart));
 
     setUpdatingId(itemKey);
@@ -624,7 +346,7 @@ const Cart = () => {
         {
           productId,
           company: companyId,
-          measurement: currentItem.measurement,
+          measurement: currentItem?.measurement,
           type,
         },
         {
@@ -634,17 +356,17 @@ const Cart = () => {
         },
       );
 
-      if (!res.data.success) {
+      if (!res.data?.success) {
         dispatch(setCartData(previousCart));
 
-        toast.error(res.data.message || "मात्रा अपडेट नहीं हो सकी", {
+        toast.error(res.data?.message || "मात्रा अपडेट नहीं हो सकी", {
           duration: 1000,
         });
 
         return;
       }
 
-      if (res.data.cart) {
+      if (res.data?.cart) {
         dispatch(setCartData(res.data.cart));
       }
     } catch (error) {
@@ -653,16 +375,16 @@ const Cart = () => {
       dispatch(setCartData(previousCart));
 
       toast.error(error.response?.data?.message || "मात्रा अपडेट नहीं हो सकी", {
-        duration: 1000,
+        duration: 1200,
       });
     } finally {
       setUpdatingId(null);
     }
   };
 
-  // ============================================================
-  // REMOVE ITEM
-  // ============================================================
+  /* ==========================================================
+     REMOVE ITEM
+  ========================================================== */
 
   const removeItem = async (item) => {
     if (!token) {
@@ -670,24 +392,28 @@ const Cart = () => {
       return;
     }
 
-    const productId = item.productId?._id || item.productId;
+    const productId =
+      typeof item?.productId === "object"
+        ? item?.productId?._id
+        : item?.productId;
 
-    const companyId = item.company?._id || item.company;
+    const companyId =
+      typeof item?.company === "object" ? item?.company?._id : item?.company;
 
     const itemKey = getItemKey(item);
 
-    if (updatingId === itemKey) {
+    if (!productId || updatingId === itemKey) {
       return;
     }
 
     const previousCart = cartData;
 
-    const updatedItems = cartData.items.filter(
+    const updatedItems = (cartData?.items || []).filter(
       (cartItem) => getItemKey(cartItem) !== itemKey,
     );
 
     const newTotalPrice = updatedItems.reduce(
-      (sum, cartItem) => sum + Number(cartItem.total || 0),
+      (sum, cartItem) => sum + Number(cartItem?.total || 0),
       0,
     );
 
@@ -697,6 +423,7 @@ const Cart = () => {
       totalPrice: newTotalPrice,
     };
 
+    /* Instant removal */
     dispatch(setCartData(optimisticCart));
 
     setUpdatingId(itemKey);
@@ -712,53 +439,59 @@ const Cart = () => {
           data: {
             productId,
             company: companyId,
-            measurement: item.measurement,
+            measurement: item?.measurement,
           },
         },
       );
 
-      if (!res.data.success) {
+      if (!res.data?.success) {
         dispatch(setCartData(previousCart));
 
-        toast.error(res.data.message || "कुछ गलत हो गया", {
-          duration: 1000,
+        toast.error(res.data?.message || "कुछ गलत हो गया", {
+          duration: 1200,
         });
 
         return;
       }
 
-      if (res.data.cart) {
+      if (res.data?.cart) {
         dispatch(setCartData(res.data.cart));
       }
 
       toast.success("कार्ट से हटाया गया", {
-        duration: 1000,
+        duration: 900,
       });
     } catch (error) {
       console.error("Remove cart item error:", error);
 
       dispatch(setCartData(previousCart));
 
-      toast.error(error.response?.data?.message || "कुछ गलत हो गया");
+      toast.error(error.response?.data?.message || "कुछ गलत हो गया", {
+        duration: 1200,
+      });
     } finally {
       setUpdatingId(null);
     }
   };
 
-  // ============================================================
-  // CHECKOUT
-  // ============================================================
+  /* ==========================================================
+     CHECKOUT
+  ========================================================== */
+
   const handleCheckout = async () => {
     if (!token) {
       toast.error("कृपया पहले लॉगिन करें");
       return;
     }
 
-    if (checkoutLoading || !items.length) return;
+    if (checkoutLoading || !items.length) {
+      return;
+    }
+
+    // Lock immediately so the user cannot double-submit
+    setCheckoutLoading(true);
 
     try {
-      setCheckoutLoading(true);
-
       const res = await axios.post(
         `${API_BASE_URL}/api/v1/order/add-order`,
         {},
@@ -766,43 +499,59 @@ const Cart = () => {
           headers: {
             Authorization: `Bearer ${token}`,
           },
+          timeout: 10000,
         },
       );
 
-      if (res.data.success) {
-        // Clear cart
+      if (res.data?.success) {
+        // Clear local cart immediately
         dispatch(clearCart());
 
-        // Immediately show confirmation page
+        // Go straight to success screen
         navigate("/order-success", {
           replace: true,
+          state: {
+            order: res.data?.order || null,
+          },
         });
-      } else {
-        toast.error(res.data.message || "ऑर्डर पूरा नहीं हो सका");
+
+        return;
       }
-    } catch (error) {
-      toast.error(error.response?.data?.message || "ऑर्डर पूरा नहीं हो सका", {
-        duration: 2500,
+
+      toast.error(res.data?.message || "ऑर्डर पूरा नहीं हो सका", {
+        duration: 2000,
       });
+    } catch (error) {
+      console.error("Checkout error:", error);
+
+      if (error.code === "ECONNABORTED") {
+        toast.error("सर्वर से जवाब आने में बहुत समय लग रहा है");
+      } else {
+        toast.error(error.response?.data?.message || "ऑर्डर पूरा नहीं हो सका", {
+          duration: 2500,
+        });
+      }
     } finally {
       setCheckoutLoading(false);
     }
   };
-  // ============================================================
-  // LOGIN SCREEN
-  // ============================================================
+
+  /* ==========================================================
+     LOGIN SCREEN
+  ========================================================== */
 
   if (!token) {
     return (
       <div
         className="
-        mt-24
-        flex
-        min-h-[60vh]
-        items-center
-        justify-center
-        px-4
-      "
+          mt-24
+          flex
+          min-h-[60vh]
+          items-center
+          justify-center
+          px-4
+          sm:px-6
+        "
       >
         <motion.div
           initial={{
@@ -819,38 +568,60 @@ const Cart = () => {
           className="
             w-full
             max-w-lg
-            rounded-3xl
+            rounded-[28px]
             border
+            border-gray-100
             bg-white
-            p-10
+            p-6
             text-center
-            shadow-xl
+            shadow-[0_20px_60px_rgba(0,0,0,0.08)]
+            sm:p-10
           "
         >
-          <ShoppingBag
+          <div
             className="
               mx-auto
               mb-5
+              flex
               h-20
               w-20
-              text-green-600
+              items-center
+              justify-center
+              rounded-3xl
+              bg-green-50
             "
-          />
+          >
+            <ShoppingBag
+              className="
+                h-10
+                w-10
+                text-green-600
+              "
+            />
+          </div>
 
           <h1
             className="
-            text-3xl
-            font-bold
-          "
+              text-2xl
+              font-extrabold
+              tracking-tight
+              text-gray-900
+              sm:text-3xl
+            "
           >
             कृपया पहले लॉगिन करें
           </h1>
 
           <p
             className="
-            mt-3
-            text-gray-500
-          "
+              mx-auto
+              mt-3
+              max-w-md
+              text-sm
+              leading-6
+              text-gray-500
+              sm:text-base
+            "
           >
             कार्ट देखने और ऑर्डर करने के लिए आपको अपने खाते में लॉगिन करना
             आवश्यक है।
@@ -859,11 +630,19 @@ const Cart = () => {
           <Button
             onClick={() => navigate("/login")}
             className="
-              mt-8
+              mt-7
               h-12
               w-full
               rounded-2xl
-              text-lg
+              bg-red-600
+              text-base
+              font-bold
+              shadow-lg
+              shadow-red-100
+              transition-all
+              hover:bg-red-700
+              active:scale-[0.98]
+              sm:text-lg
             "
           >
             लॉगिन करें
@@ -873,74 +652,69 @@ const Cart = () => {
     );
   }
 
-  // ============================================================
-  // SUCCESS SCREEN
-  //
-  // IMPORTANT:
-  // This MUST come before empty-cart.
-  // clearCart() makes items empty.
-  // ============================================================
-
-  if (orderSuccess) {
-    return <OrderSuccessAnimation orderId={confirmedOrder?._id} />;
-  }
-
-  // ============================================================
-  // INITIAL LOADING
-  // ============================================================
+  /* ==========================================================
+     LOADING
+  ========================================================== */
 
   if (loading) {
     return (
       <div
         className="
-        fixed
-        inset-0
-        z-50
-        flex
-        items-center
-        justify-center
-        bg-black/10
-        backdrop-blur-sm
-      "
+          fixed
+          inset-0
+          z-[999]
+          flex
+          items-center
+          justify-center
+          bg-white/70
+          backdrop-blur-md
+        "
       >
-        <motion.div
-          animate={{
-            rotate: 360,
-          }}
-          transition={{
-            repeat: Infinity,
-            duration: 0.8,
-            ease: "linear",
-          }}
+        <div
           className="
-            h-12
-            w-12
-            rounded-full
-            border-4
-            border-red-600
-            border-t-transparent
+            flex
+            h-20
+            w-20
+            items-center
+            justify-center
+            rounded-3xl
+            border
+            border-gray-100
+            bg-white
+            shadow-xl
           "
-        />
+        >
+          <Loader2
+            className="
+              h-8
+              w-8
+              animate-spin
+              text-red-600
+            "
+          />
+        </div>
       </div>
     );
   }
 
-  // ============================================================
-  // EMPTY CART
-  // ============================================================
+  /* ==========================================================
+     EMPTY CART
+  ========================================================== */
 
   if (!items.length) {
     return (
       <div
         className="
-        mt-20
-        flex
-        min-h-[80vh]
-        items-center
-        justify-center
-        bg-gray-50
-        px-5
-      "
+          mt-20
+          flex
+          min-h-[80vh]
+          items-center
+          justify-center
+          bg-gray-50/70
+          px-4
+          py-10
+          sm:px-5
+        "
       >
         <motion.div
           initial={{
@@ -956,38 +730,62 @@ const Cart = () => {
             ease: easeOut,
           }}
           className="
+            w-full
             max-w-md
-            rounded-[32px]
+            rounded-[30px]
+            border
+            border-gray-100
             bg-white
-            p-10
+            p-7
             text-center
-            shadow-xl
+            shadow-[0_20px_60px_rgba(0,0,0,0.07)]
+            sm:p-10
           "
         >
-          <img
-            src="./cart.png"
-            alt="Empty cart"
+          <div
             className="
               mx-auto
               mb-5
-              h-20
+              flex
+              h-24
+              w-24
+              items-center
+              justify-center
+              rounded-[28px]
+              bg-gray-50
             "
-          />
+          >
+            <img
+              src="./cart.png"
+              alt="Empty cart"
+              className="
+                h-20
+                w-20
+                object-contain
+              "
+            />
+          </div>
 
           <h2
             className="
-            text-3xl
-            font-bold
-          "
+              text-2xl
+              font-extrabold
+              tracking-tight
+              text-gray-900
+              sm:text-3xl
+            "
           >
             आपका कार्ट खाली है
           </h2>
 
           <p
             className="
-            mt-3
-            text-gray-500
-          "
+              mt-3
+              text-sm
+              leading-6
+              text-gray-500
+              sm:text-base
+            "
           >
             अभी तक आपने कोई सामान नहीं चुना है। अपनी ज़रूरत का सामान जोड़कर
             खरीदारी शुरू करें।
@@ -996,19 +794,26 @@ const Cart = () => {
           <Button
             onClick={() => navigate("/")}
             className="
-              mt-8
+              mt-7
               h-12
               w-full
               rounded-2xl
               border-2
               border-yellow-400
               bg-red-600
-              text-lg
+              text-base
               font-bold
               text-white
+              shadow-lg
+              shadow-red-100
+              transition-all
+              hover:bg-red-700
+              active:scale-[0.98]
+              sm:h-14
+              sm:text-lg
             "
           >
-            <MoveLeft />
+            <MoveLeft className="mr-1 h-5 w-5" />
             खरीदारी शुरू करें
           </Button>
         </motion.div>
@@ -1016,9 +821,9 @@ const Cart = () => {
     );
   }
 
-  // ============================================================
-  // MAIN PAGE
-  // ============================================================
+  /* ==========================================================
+     MAIN PAGE
+  ========================================================== */
 
   return (
     <motion.div
@@ -1028,9 +833,11 @@ const Cart = () => {
       className="
         mx-auto
         mt-20
+        w-full
         max-w-7xl
-        px-4
+        px-3
         pb-10
+        sm:px-4
         lg:px-6
       "
     >
@@ -1058,67 +865,96 @@ const Cart = () => {
           ease: easeOut,
         }}
         className="
-          mb-6
+          mb-5
           overflow-hidden
-          rounded-3xl
+          rounded-[26px]
           border
-          border-red-100
-          bg-gradient-to-tr
-          from-red-400
-          to-red-700
-          shadow-sm
+          border-red-200/60
+          bg-gradient-to-br
+          from-red-500
+          via-red-600
+          to-red-800
+          shadow-[0_15px_40px_rgba(220,38,38,0.16)]
+          sm:mb-6
+          sm:rounded-3xl
         "
       >
         <div
           className="
-          flex
-          flex-col
-          gap-5
-          p-4
-          lg:flex-row
-          lg:items-center
-          lg:justify-between
-        "
+            relative
+            flex
+            flex-col
+            gap-4
+            p-4
+            sm:p-5
+            lg:flex-row
+            lg:items-center
+            lg:justify-between
+          "
         >
-          <div>
-            <div
-              className="
-              flex
-              items-center
-              gap-3
+          {/* Decorative glow */}
+
+          <div
+            className="
+              pointer-events-none
+              absolute
+              -right-16
+              -top-16
+              h-40
+              w-40
+              rounded-full
+              bg-white/10
+              blur-2xl
             "
-            >
+          />
+
+          <div className="relative">
+            <div className="flex items-center gap-3">
               <div
                 className="
-                rounded-2xl
-                p-3
-                text-white
-              "
+                  flex
+                  h-12
+                  w-12
+                  shrink-0
+                  items-center
+                  justify-center
+                  rounded-2xl
+                  bg-white/15
+                  text-white
+                  ring-1
+                  ring-white/20
+                  backdrop-blur-md
+                  sm:h-14
+                  sm:w-14
+                "
               >
-                <ShoppingBag size={24} />
+                <ShoppingBag size={24} className="sm:h-7 sm:w-7" />
               </div>
 
-              <div>
+              <div className="min-w-0">
                 <h1
                   className="
-                  mb-3
-                  text-3xl
-                  font-bold
-                  text-white
-                "
+                    text-2xl
+                    font-extrabold
+                    tracking-tight
+                    text-white
+                    sm:text-3xl
+                  "
                 >
                   आपका कार्ट ({items.length})
                 </h1>
 
                 <p
                   className="
-                  mt-1
-                  text-sm
-                  text-white/70
-                "
+                    mt-1
+                    max-w-2xl
+                    text-xs
+                    leading-5
+                    text-white/75
+                    sm:text-sm
+                  "
                 >
-                  आपका कार्ट आज के ऑर्डर में जोड़ दिया जाएगा, कृपया इसे सावधानी
-                  से जोड़ें।
+                  आपका कार्ट आज के ऑर्डर में जोड़ दिया जाएगा।
                 </p>
               </div>
             </div>
@@ -1132,36 +968,39 @@ const Cart = () => {
 
       <div
         className="
-        mb-15
-        grid
-        gap-6
-        lg:grid-cols-[2fr_360px]
-      "
+          mb-16
+          grid
+          gap-5
+          lg:grid-cols-[minmax(0,1fr)_360px]
+          lg:items-start
+          lg:gap-6
+        "
       >
         {/* ====================================================
-            PRODUCT GRID
-        ==================================================== */}
+    PRODUCT GRID
+==================================================== */}
 
         <motion.div
           variants={containerVariants}
           initial="hidden"
           animate="visible"
           className="
-            grid
-            grid-cols-2
-            gap-4
-            md:grid-cols-2
-          "
+    grid
+    grid-cols-2
+    gap-3
+    sm:gap-4
+  "
         >
           <AnimatePresence initial={false} mode="popLayout">
             {items.map((item) => {
               const imageUrl = getProductImageUrl(item);
-
-              const productId = item.productId?._id || item.productId;
-
               const itemKey = getItemKey(item);
-
               const isUpdating = updatingId === itemKey;
+
+              const companyName = fetchCompanyName(item.company);
+
+              const unitPrice =
+                item.qty > 0 ? Number(item.total || 0) / Number(item.qty) : 0;
 
               return (
                 <motion.div
@@ -1169,257 +1008,325 @@ const Cart = () => {
                   layout="position"
                   variants={cardVariants}
                   exit={cardVariants.exit}
+                  whileTap={{ scale: 0.985 }}
                   className="
-                    relative
-                    rounded-3xl
-                    border
-                    bg-white
-                    p-4
-                    shadow-sm
-                    will-change-transform
-                  "
+            relative
+            min-w-0
+            overflow-hidden
+            rounded-[22px]
+            border
+            border-gray-200
+            bg-white
+            p-3.5
+            shadow-[0_3px_14px_rgba(0,0,0,0.07)]
+            transition-all
+            duration-200
+            hover:shadow-[0_7px_22px_rgba(0,0,0,0.10)]
+            sm:rounded-3xl
+            sm:p-4
+          "
                 >
                   {/* ==================================================
-                      PRODUCT
-                  ================================================== */}
+              PRODUCT HEADER
+          ================================================== */}
 
-                  <div
-                    className="
-                    mb-3
-                    flex
-                    gap-3
-                  "
-                  >
-                    {/* IMAGE */}
+                  <div className="flex min-w-0 items-start gap-3">
+                    {/* PRODUCT IMAGE */}
 
                     <div
                       className="
-                      flex
-                      h-15
-                      w-15
-                      shrink-0
-                      items-center
-                      justify-center
-                      rounded-2xl
-                      bg-gray-100
-                    "
+                flex
+                h-[58px]
+                w-[58px]
+                shrink-0
+                items-center
+                justify-center
+                overflow-hidden
+                rounded-2xl
+                bg-gray-50
+                sm:h-[70px]
+                sm:w-[70px]
+              "
                     >
                       {imageUrl ? (
                         <img
                           src={imageUrl}
-                          alt={item.productId?.name}
+                          alt={item.productId?.name || "Product"}
                           loading="lazy"
                           decoding="async"
                           className="
-                            h-20
-                            w-20
-                            object-contain
-                          "
+                    h-[48px]
+                    w-[48px]
+                    object-contain
+                    sm:h-[58px]
+                    sm:w-[58px]
+                  "
                         />
                       ) : (
                         <Package
                           className="
-                            h-10
-                            w-10
-                            text-gray-400
-                          "
+                    h-8
+                    w-8
+                    text-gray-300
+                    sm:h-10
+                    sm:w-10
+                  "
                         />
                       )}
                     </div>
 
-                    {/* NAME */}
+                    {/* PRODUCT INFORMATION */}
 
-                    <div
-                      className="
-                      flex
-                      flex-1
-                      flex-col
-                      justify-between
-                      px-1
-                    "
-                    >
-                      <div>
+                    <div className="min-w-0 flex-1">
+                      {/* COMPANY */}
+
+                      {companyName && (
                         <span
                           className="
-                          inline-flex
-                          rounded-full
-                          bg-blue-100
-                          px-2
-                          text-[14px]
-                          font-semibold
-                          text-blue-700
-                        "
+                    inline-flex
+                    max-w-full
+                    truncate
+                    rounded-full
+                    bg-blue-50
+                    px-2.5
+                    py-1
+                    text-[12px]
+                    font-extrabold
+                    leading-none
+                    text-blue-600
+                    sm:text-[13px]
+                  "
                         >
-                          {fetchCompanyName(item.company)}
+                          {companyName}
                         </span>
+                      )}
 
-                        <h2
-                          className="
-                          mt-1
-                          line-clamp-2
-                          text-lg
-                          font-bold
-                          text-gray-900
-                        "
-                        >
-                          {item.productId?.name}
-                        </h2>
-                      </div>
+                      {/* PRODUCT NAME */}
+
+                      <h2
+                        className="
+                  mt-1.5
+                  line-clamp-2
+                  text-[18px]
+                  font-black
+                  leading-[1.12]
+                  tracking-[-0.02em]
+                  text-gray-950
+                  sm:text-[20px]
+                "
+                      >
+                        {item.productId?.name || "Product"}
+                      </h2>
+
+                      {/* VARIANT / MEASUREMENT */}
+
+                      <p
+                        className="
+                  mt-1.5
+                  truncate
+                  text-[12px]
+                  font-bold
+                  leading-none
+                  text-gray-500
+                  sm:text-[13px]
+                "
+                      >
+                        {item.measurement} × {item.qty}
+                      </p>
                     </div>
                   </div>
 
                   {/* ==================================================
-                      MEASUREMENT
-                  ================================================== */}
-
-                  <span
-                    className="
-                    rounded-full
-                    px-1
-                    py-1
-                    text-[15px]
-                    font-semibold
-                    text-gray-500
-                  "
-                  >
-                    कुल - {item.measurement}* x {item.qty}
-                  </span>
-
-                  {/* ==================================================
-                      PRICE
-                  ================================================== */}
+              PRICE ROW
+          ================================================== */}
 
                   <div
                     className="
-                    mt-8
-                    flex
-                    flex-col
-                    justify-between
-                  "
+              mt-4
+              flex
+              items-end
+              justify-between
+              gap-2
+            "
                   >
-                    <div
-                      className="
-                      flex
-                      items-end
-                      gap-1
-                    "
-                    >
-                      <p
+                    {/* PRICE */}
+
+                    <div>
+                      <div
                         className="
-                        flex
-                        items-center
-                        text-2xl
-                        font-bold
-                        text-green-700
-                      "
+                  flex
+                  items-center
+                  text-[24px]
+                  font-black
+                  leading-none
+                  tracking-tight
+                  text-green-700
+                  sm:text-[27px]
+                "
                       >
                         <IndianRupee
                           className="
-                            mr-1
-                            h-5
-                            w-5
-                          "
+                    mr-0.5
+                    h-[19px]
+                    w-[19px]
+                    stroke-[2.8]
+                    sm:h-[21px]
+                    sm:w-[21px]
+                  "
                         />
 
-                        {item.total}
-                      </p>
+                        {Number(item.total || 0).toFixed(0)}
+                      </div>
 
                       <p
                         className="
-                        text-[10px]
-                        text-gray-400
-                      "
+                  mt-1
+                  text-[11px]
+                  font-bold
+                  leading-none
+                  text-gray-400
+                  sm:text-[12px]
+                "
                       >
-                        ₹{item.qty ? (item.total / item.qty).toFixed(0) : 0}{" "}
-                        प्रति
+                        ₹{unitPrice.toFixed(0)} प्रति
                       </p>
                     </div>
+
+                    {/* MEASUREMENT PILL */}
+
+                    <span
+                      className="
+                max-w-[85px]
+                truncate
+                rounded-full
+                bg-gray-100
+                px-2.5
+                py-1.5
+                text-[11px]
+                font-extrabold
+                text-gray-600
+                sm:max-w-[100px]
+                sm:text-[12px]
+              "
+                    >
+                      {item.measurement}
+                    </span>
                   </div>
 
                   {/* ==================================================
-                      CONTROLS
-                  ================================================== */}
+              QUANTITY + REMOVE
+          ================================================== */}
 
                   <div
                     className="
-                    mt-4
-                    flex
-                    w-full
-                    items-center
-                    gap-2
-                  "
+              mt-4
+              flex
+              w-full
+              items-center
+              gap-2
+            "
                   >
                     {/* QUANTITY */}
 
                     <div
                       className="
-                      flex
-                      items-center
-                      justify-around
-                      gap-2
-                      rounded-full
-                      border
-                      bg-gray-50
-                    "
+                flex
+                h-11
+                min-w-0
+                flex-1
+                items-center
+                justify-between
+                rounded-full
+                border
+                border-gray-200
+                bg-gray-50
+                px-1
+                sm:h-12
+              "
                     >
+                      {/* MINUS */}
+
                       <Button
+                        type="button"
                         size="icon"
                         variant="ghost"
                         disabled={item.qty <= 1 || isUpdating}
                         onClick={() => updateQuantity(item, "decrease")}
                         className="
-                          h-9
-                          w-9
-                          rounded-full
-                        "
+                  h-9
+                  w-9
+                  shrink-0
+                  rounded-full
+                  text-gray-700
+                  hover:bg-white
+                  hover:text-red-600
+                  sm:h-10
+                  sm:w-10
+                "
                       >
                         <Minus
                           className="
-                          h-4
-                          w-4
-                        "
+                    h-[18px]
+                    w-[18px]
+                    stroke-[2.5]
+                  "
                         />
                       </Button>
+
+                      {/* NUMBER */}
 
                       <motion.span
                         key={item.qty}
                         initial={{
-                          scale: 1.15,
-                          opacity: 0.7,
+                          scale: 1.25,
+                          opacity: 0.5,
                         }}
                         animate={{
                           scale: 1,
                           opacity: 1,
                         }}
                         transition={{
-                          duration: 0.14,
+                          duration: 0.15,
                         }}
                         className="
-                          min-w-[20px]
-                          text-center
-                          text-lg
-                          font-bold
-                        "
+                  min-w-[30px]
+                  text-center
+                  text-[19px]
+                  font-black
+                  leading-none
+                  text-gray-950
+                  sm:text-[21px]
+                "
                       >
                         {item.qty}
                       </motion.span>
 
+                      {/* PLUS */}
+
                       <Button
+                        type="button"
                         size="icon"
                         variant="ghost"
                         disabled={isUpdating}
                         onClick={() => updateQuantity(item, "increase")}
                         className="
-                          h-9
-                          w-9
-                          rounded-full
-                        "
+                  h-9
+                  w-9
+                  shrink-0
+                  rounded-full
+                  text-gray-700
+                  hover:bg-white
+                  hover:text-green-600
+                  sm:h-10
+                  sm:w-10
+                "
                       >
                         <Plus
                           className="
-                          h-4
-                          w-4
-                        "
+                    h-[18px]
+                    w-[18px]
+                    stroke-[2.5]
+                  "
                         />
                       </Button>
                     </div>
@@ -1427,26 +1334,41 @@ const Cart = () => {
                     {/* DELETE */}
 
                     <Button
+                      type="button"
                       size="icon"
-                      variant="destructive"
+                      variant="ghost"
                       disabled={isUpdating}
                       onClick={() => removeItem(item)}
                       className="
-                        h-8
-                        w-8
-                        rounded-full
-                      "
+                h-11
+                w-11
+                shrink-0
+                rounded-full
+                border
+                border-red-100
+                bg-red-50
+                text-red-500
+                transition-all
+                hover:bg-red-100
+                hover:text-red-600
+                active:scale-90
+                sm:h-12
+                sm:w-12
+              "
                     >
                       <Trash2
                         className="
-                        h-4
-                        w-4
-                      "
+                  h-[18px]
+                  w-[18px]
+                  stroke-[2.5]
+                "
                       />
                     </Button>
                   </div>
 
-                  {/* SMALL LOADING */}
+                  {/* ==================================================
+              UPDATE LOADING
+          ================================================== */}
 
                   <AnimatePresence>
                     {isUpdating && (
@@ -1461,20 +1383,40 @@ const Cart = () => {
                           opacity: 0,
                         }}
                         className="
-                          pointer-events-none
-                          absolute
-                          right-4
-                          top-4
-                        "
+                  pointer-events-none
+                  absolute
+                  inset-0
+                  z-20
+                  flex
+                  items-center
+                  justify-center
+                  rounded-[22px]
+                  bg-white/65
+                  backdrop-blur-[2px]
+                  sm:rounded-3xl
+                "
                       >
-                        <Loader2
+                        <div
                           className="
-                            h-4
-                            w-4
-                            animate-spin
-                            text-red-500
-                          "
-                        />
+                    flex
+                    h-10
+                    w-10
+                    items-center
+                    justify-center
+                    rounded-full
+                    bg-white
+                    shadow-lg
+                  "
+                        >
+                          <Loader2
+                            className="
+                      h-5
+                      w-5
+                      animate-spin
+                      text-red-500
+                    "
+                          />
+                        </div>
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -1503,229 +1445,367 @@ const Cart = () => {
             ease: easeOut,
           }}
           className="
-            sticky
-            top-24
             h-fit
-            space-y-4
+            lg:sticky
+            lg:top-24
           "
         >
           <div
             className="
-            rounded-3xl
-            border
-            bg-white
-            p-6
-            shadow-sm
-          "
-          >
-            <h2
-              className="
-              mb-5
-              text-2xl
-              font-bold
+              overflow-hidden
+              rounded-[26px]
+              border
+              border-gray-100
+              bg-white
+              shadow-[0_12px_40px_rgba(0,0,0,0.06)]
+              sm:rounded-3xl
             "
-            >
-              कार्ट का कुल योग
-            </h2>
+          >
+            {/* SUMMARY HEADER */}
 
             <div
               className="
-              space-y-4
-            "
+                border-b
+                border-gray-100
+                px-5
+                py-5
+                sm:px-6
+              "
             >
-              {/* SUBTOTAL */}
-
               <div
                 className="
-                flex
-                items-center
-                justify-between
-                text-gray-600
-              "
-              >
-                <span>उप-योग</span>
-
-                <span
-                  className="
-                  font-semibold
-                "
-                >
-                  ₹{totalPrice}
-                </span>
-              </div>
-
-              {/* DELIVERY */}
-
-              <div
-                className="
-                flex
-                items-center
-                justify-between
-                text-gray-600
-              "
-              >
-                <span>डिलीवरी शुल्क</span>
-
-                <span
-                  className="
-                  font-semibold
-                  text-green-600
-                "
-                >
-                  निःशुल्क
-                </span>
-              </div>
-
-              {/* TOTAL */}
-
-              <div
-                className="
-                flex
-                items-center
-                justify-between
-                border-t
-                pt-4
-              "
-              >
-                <span
-                  className="
-                  text-lg
-                  font-bold
-                "
-                >
-                  कुल भुगतान
-                </span>
-
-                <span
-                  className="
                   flex
-                  items-end
-                  gap-2
-                  text-3xl
-                  font-bold
-                  text-green-700
+                  items-center
+                  justify-between
+                  gap-3
                 "
+              >
+                <h2
+                  className="
+                    text-xl
+                    font-extrabold
+                    tracking-tight
+                    text-gray-900
+                    sm:text-2xl
+                  "
                 >
-                  <span
-                    className="
+                  कार्ट का कुल योग
+                </h2>
+
+                <div
+                  className="
                     flex
+                    h-9
+                    min-w-9
                     items-center
+                    justify-center
                     rounded-full
-                    bg-green-600
-                    px-2
-                    py-1
+                    bg-gray-100
+                    px-2.5
                     text-xs
-                    font-semibold
-                    text-white
+                    font-bold
+                    text-gray-600
                   "
-                  >
-                    ₹{discount} off
-                  </span>
-                  ₹{totalPrice}
-                  <p
-                    className="
-                    py-1
-                    text-[20px]
-                  "
-                  >
-                    /-
-                  </p>
-                </span>
+                >
+                  {items.length}
+                </div>
               </div>
             </div>
 
-            {/* ==================================================
-                CHECKOUT BUTTON
-            ================================================== */}
-
-            <Button
-              onClick={handleCheckout}
-              disabled={checkoutLoading || orderSuccess}
-              className="
-                mt-6
-                h-14
-                w-full
-                rounded-2xl
-                border-2
-                border-yellow-600
-                bg-gradient-to-tr
-                from-red-900
-                via-red-600
-                to-red-400
-                text-[20px]
-                font-semibold
-                text-white
-                transition-transform
-                active:scale-[0.98]
-              "
-            >
-              {checkoutLoading ? (
-                <>
-                  <Loader2
-                    className="
-                      animate-spin
-                    "
-                  />
-                  कृपया प्रतीक्षा करें!
-                </>
-              ) : (
-                <>
-                  <Check size={20} />
-                  ऑर्डर पक्का करें
-                </>
-              )}
-            </Button>
-
-            {/* CONTINUE SHOPPING */}
-
-            <Button
-              variant="outline"
-              onClick={() => navigate("/")}
-              className="
-                mt-3
-                h-14
-                w-full
-                rounded-2xl
-              "
-            >
-              <ChevronLeft />
-              और खरीदारी करें
-            </Button>
-
-            {/* INFO */}
-
             <div
               className="
-              mt-6
-              rounded-2xl
-              bg-green-50
-              p-4
-            "
+                p-5
+                sm:p-6
+              "
             >
-              <h3
-                className="
-                flex
-                gap-2
-                font-semibold
-                text-green-700
-              "
-              >
-                <CircleAlert />
-                आज की डिलीवरी (ऑर्डर)
-              </h3>
+              {/* ==================================================
+                  PRICE DETAILS
+              ================================================== */}
 
-              <p
+              <div className="space-y-4">
+                {/* SUBTOTAL */}
+
+                <div
+                  className="
+                    flex
+                    items-center
+                    justify-between
+                    gap-4
+                    text-sm
+                    text-gray-500
+                  "
+                >
+                  <span>उप-योग</span>
+
+                  <span
+                    className="
+                      font-bold
+                      text-gray-800
+                    "
+                  >
+                    ₹{totalPrice}
+                  </span>
+                </div>
+
+                {/* DELIVERY */}
+
+                <div
+                  className="
+                    flex
+                    items-center
+                    justify-between
+                    gap-4
+                    text-sm
+                    text-gray-500
+                  "
+                >
+                  <span>डिलीवरी शुल्क</span>
+
+                  <span
+                    className="
+                      rounded-full
+                      bg-green-50
+                      px-2.5
+                      py-1
+                      text-xs
+                      font-bold
+                      text-green-600
+                    "
+                  >
+                    निःशुल्क
+                  </span>
+                </div>
+
+                {/* DISCOUNT */}
+
+                <div
+                  className="
+                    flex
+                    items-center
+                    justify-between
+                    gap-4
+                    text-sm
+                    text-gray-500
+                  "
+                >
+                  <span>आपकी बचत</span>
+
+                  <span
+                    className="
+                      font-bold
+                      text-green-600
+                    "
+                  >
+                    ₹{discount}
+                  </span>
+                </div>
+
+                {/* TOTAL */}
+
+                <div
+                  className="
+                    mt-2
+                    border-t
+                    border-dashed
+                    border-gray-200
+                    pt-4
+                  "
+                >
+                  <div
+                    className="
+                      flex
+                      items-end
+                      justify-between
+                      gap-4
+                    "
+                  >
+                    <span
+                      className="
+                        text-base
+                        font-extrabold
+                        text-gray-900
+                        sm:text-lg
+                      "
+                    >
+                      कुल भुगतान
+                    </span>
+
+                    <div
+                      className="
+                        flex
+                        items-baseline
+                        gap-0.5
+                      "
+                    >
+                      <span
+                        className="
+                          text-2xl
+                          font-black
+                          tracking-tight
+                          text-green-700
+                          sm:text-3xl
+                        "
+                      >
+                        ₹{totalPrice}
+                      </span>
+
+                      <span
+                        className="
+                          text-sm
+                          font-bold
+                          text-green-700
+                        "
+                      >
+                        /-
+                      </span>
+                    </div>
+                  </div>
+
+                  <div
+                    className="
+                      mt-2
+                      flex
+                      justify-end
+                    "
+                  >
+                    <span
+                      className="
+                        rounded-full
+                        bg-green-600
+                        px-2.5
+                        py-1
+                        text-[10px]
+                        font-bold
+                        text-white
+                        shadow-sm
+                      "
+                    >
+                      ₹{discount} की बचत
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* ==================================================
+                  CHECKOUT BUTTON
+              ================================================== */}
+
+              <Button
+                onClick={handleCheckout}
+                disabled={checkoutLoading}
                 className="
-                mt-2
-                text-sm
-                leading-6
-                text-gray-600
-              "
+                  mt-6
+                  h-13
+                  w-full
+                  rounded-2xl
+                  border-2
+                  border-yellow-500
+                  bg-gradient-to-r
+                  from-red-800
+                  via-red-600
+                  to-red-500
+                  text-base
+                  font-extrabold
+                  text-white
+                  shadow-lg
+                  shadow-red-100
+                  transition-all
+                  hover:brightness-105
+                  active:scale-[0.98]
+                  sm:h-14
+                  sm:text-lg
+                "
               >
-                आपका ऑर्डर आज की डिलीवरी सूची में शामिल किया जाएगा। समय सीमा
-                समाप्त होने से पहले आप मात्रा बदल सकते हैं या किसी भी उत्पाद को
-                हटा सकते हैं।
-              </p>
+                {checkoutLoading ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    कृपया प्रतीक्षा करें!
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-5 w-5" />
+                    ऑर्डर पक्का करें
+                  </>
+                )}
+              </Button>
+
+              {/* ==================================================
+                  CONTINUE SHOPPING
+              ================================================== */}
+
+              <Button
+                variant="outline"
+                onClick={() => navigate("/")}
+                className="
+                  mt-3
+                  h-12
+                  w-full
+                  rounded-2xl
+                  border-gray-200
+                  bg-white
+                  text-sm
+                  font-bold
+                  text-gray-700
+                  hover:bg-gray-50
+                  sm:h-14
+                  sm:text-base
+                "
+              >
+                <ChevronLeft className="h-5 w-5" />
+                और खरीदारी करें
+              </Button>
+
+              {/* ==================================================
+                  INFO
+              ================================================== */}
+
+              <div
+                className="
+                  mt-5
+                  rounded-2xl
+                  border
+                  border-green-100
+                  bg-gradient-to-br
+                  from-green-50
+                  to-emerald-50
+                  p-4
+                "
+              >
+                <h3
+                  className="
+                    flex
+                    items-center
+                    gap-2
+                    text-sm
+                    font-extrabold
+                    text-green-700
+                  "
+                >
+                  <CircleAlert
+                    className="
+                      h-4
+                      w-4
+                      shrink-0
+                    "
+                  />
+                  आज की डिलीवरी
+                </h3>
+
+                <p
+                  className="
+                    mt-2
+                    text-xs
+                    leading-5
+                    text-gray-600
+                    sm:text-sm
+                    sm:leading-6
+                  "
+                >
+                  आपका ऑर्डर आज की डिलीवरी सूची में शामिल किया जाएगा। समय सीमा
+                  समाप्त होने से पहले आप मात्रा बदल सकते हैं या किसी भी उत्पाद
+                  को हटा सकते हैं।
+                </p>
+              </div>
             </div>
           </div>
         </motion.aside>

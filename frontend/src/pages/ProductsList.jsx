@@ -173,8 +173,6 @@ const ProductsList = () => {
       if (res.data.success) {
         dispatch(setCartData(res.data.cart));
 
-        toast.success("🟢 कार्ट में जोड़ दिया गया", { duration: 1000 });
-
         handleCross();
       } else {
         toast.error(res.data.message);
