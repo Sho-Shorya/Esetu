@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 
-const SplashScreen = () => {
+const SplashScreen = ({ onComplete }) => {
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
@@ -9,25 +9,35 @@ const SplashScreen = () => {
       setProgress((prev) => {
         if (prev >= 100) {
           clearInterval(interval);
+
+          // Give the final "तैयार है" state a tiny moment
+          setTimeout(() => {
+            onComplete?.();
+          }, 250);
+
           return 100;
         }
 
-        return prev + 2;
+        return Math.min(prev + 2, 100);
       });
-    }, 35);
+    }, 25);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [onComplete]);
 
   return (
-    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden bg-white">
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.2 }}
+      className="fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden bg-white"
+    >
       {/* =====================================================
           BACKGROUND
       ====================================================== */}
 
       <div className="pointer-events-none absolute inset-0">
-        {/* Top red glow */}
-
         <div
           className="
             absolute
@@ -42,8 +52,6 @@ const SplashScreen = () => {
           "
         />
 
-        {/* Bottom orange glow */}
-
         <div
           className="
             absolute
@@ -57,8 +65,6 @@ const SplashScreen = () => {
           "
         />
 
-        {/* Small decorative dots */}
-
         <div className="absolute left-[15%] top-[22%] h-1.5 w-1.5 rounded-full bg-red-300" />
 
         <div className="absolute right-[18%] top-[30%] h-1 w-1 rounded-full bg-orange-300" />
@@ -67,14 +73,13 @@ const SplashScreen = () => {
       </div>
 
       {/* =====================================================
-          MAIN CONTENT
+          MAIN
       ====================================================== */}
 
       <div className="relative flex flex-col items-center">
-        {/* Logo glow */}
+        {/* Glow */}
 
         <motion.div
-          initial={{ opacity: 0, scale: 0.7 }}
           animate={{
             opacity: [0.15, 0.3, 0.15],
             scale: [0.9, 1.1, 0.9],
@@ -94,9 +99,7 @@ const SplashScreen = () => {
           "
         />
 
-        {/* =================================================
-            LOGO
-        ================================================== */}
+        {/* Logo */}
 
         <motion.div
           initial={{
@@ -110,7 +113,7 @@ const SplashScreen = () => {
             y: 0,
           }}
           transition={{
-            duration: 0.8,
+            duration: 0.7,
             ease: [0.22, 1, 0.36, 1],
           }}
           className="relative"
@@ -126,8 +129,8 @@ const SplashScreen = () => {
             "
           >
             <img
-              src="./logolow.png"
-              alt="e-Setu"
+              src="/logolow.png"
+              alt="ई-सेतु"
               draggable={false}
               className="
                 h-28
@@ -137,15 +140,15 @@ const SplashScreen = () => {
               "
             />
 
-            {/* Glass shine */}
+            {/* Shine */}
 
             <motion.div
               initial={{ x: -100 }}
               animate={{ x: 150 }}
               transition={{
-                duration: 1.8,
+                duration: 1.6,
                 repeat: Infinity,
-                repeatDelay: 2,
+                repeatDelay: 1.5,
                 ease: "easeInOut",
               }}
               className="
@@ -161,27 +164,25 @@ const SplashScreen = () => {
           </div>
         </motion.div>
 
-        {/* =================================================
-            BRAND
-        ================================================== */}
+        {/* Brand */}
 
         <motion.div
           initial={{
             opacity: 0,
-            y: 15,
+            y: 12,
           }}
           animate={{
             opacity: 1,
             y: 0,
           }}
           transition={{
-            delay: 0.25,
-            duration: 0.6,
+            delay: 0.2,
+            duration: 0.5,
           }}
           className="mt-6 text-center"
         >
           <h1 className="text-[38px] font-black tracking-tight text-red-600">
-            e-Setu
+            ई-सेतु
           </h1>
 
           <p className="mt-1 text-sm font-medium text-neutral-500">
@@ -189,9 +190,7 @@ const SplashScreen = () => {
           </p>
         </motion.div>
 
-        {/* =================================================
-            LOADING
-        ================================================== */}
+        {/* Loading */}
 
         <motion.div
           initial={{
@@ -203,13 +202,11 @@ const SplashScreen = () => {
             y: 0,
           }}
           transition={{
-            delay: 0.45,
-            duration: 0.5,
+            delay: 0.35,
+            duration: 0.4,
           }}
           className="mt-10 w-48"
         >
-          {/* Progress track */}
-
           <div className="relative h-[4px] overflow-hidden rounded-full bg-red-100">
             <motion.div
               className="
@@ -226,13 +223,11 @@ const SplashScreen = () => {
                 width: `${progress}%`,
               }}
               transition={{
-                duration: 0.15,
+                duration: 0.1,
                 ease: "linear",
               }}
             />
           </div>
-
-          {/* Loading text */}
 
           <div className="mt-3 flex items-center justify-center gap-2">
             <motion.span
@@ -265,9 +260,7 @@ const SplashScreen = () => {
         </motion.div>
       </div>
 
-      {/* =====================================================
-          BOTTOM BRAND MESSAGE
-      ====================================================== */}
+      {/* Bottom */}
 
       <motion.div
         initial={{
@@ -279,8 +272,8 @@ const SplashScreen = () => {
           y: 0,
         }}
         transition={{
-          delay: 0.7,
-          duration: 0.6,
+          delay: 0.55,
+          duration: 0.5,
         }}
         className="
           absolute
@@ -305,7 +298,7 @@ const SplashScreen = () => {
           SIMPLE • FAST • APNA
         </span>
       </motion.div>
-    </div>
+    </motion.div>
   );
 };
 

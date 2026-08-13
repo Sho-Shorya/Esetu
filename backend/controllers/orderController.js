@@ -69,13 +69,17 @@ export const syncTodayOrderFlags = async () => {
     throw error;
   }
 };
-
 /* ===========================================================
    Create / Merge Today's Order
 =========================================================== */
+
 export const addOrder = async (req, res) => {
   try {
     const userId = req.userId;
+
+    // ========================================================
+    // 1. AUTH CHECK
+    // ========================================================
 
     if (!userId) {
       return res.status(401).json({
@@ -84,9 +88,9 @@ export const addOrder = async (req, res) => {
       });
     }
 
-    // ============================================================
-    // 1. GET CART + USER IN PARALLEL
-    // ============================================================
+    // ========================================================
+    // 2. GET CART + USER IN PARALLEL
+    // ========================================================
 
     const [cart, user] = await Promise.all([
       Cart.findOne({ userId })
@@ -108,9 +112,9 @@ export const addOrder = async (req, res) => {
       ),
     ]);
 
-    // ============================================================
-    // 2. VALIDATE
-    // ============================================================
+    // ========================================================
+    // 3. VALIDATE CART
+    // ========================================================
 
     if (!cart || cart.items.length === 0) {
       return res.status(400).json({
@@ -119,6 +123,10 @@ export const addOrder = async (req, res) => {
       });
     }
 
+    // ========================================================
+    // 4. VALIDATE USER
+    // ========================================================
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -126,9 +134,9 @@ export const addOrder = async (req, res) => {
       });
     }
 
-    // ============================================================
-    // 3. CHECK ORDERING WINDOW
-    // ============================================================
+    // ========================================================
+    // 5. CHECK ORDERING WINDOW
+    // ========================================================
 
     const withinWindow = await isWithinOrderingWindow();
 
@@ -139,15 +147,15 @@ export const addOrder = async (req, res) => {
       });
     }
 
-    // ============================================================
-    // 4. TODAY RANGE
-    // ============================================================
+    // ========================================================
+    // 6. TODAY RANGE
+    // ========================================================
 
     const { startToday, endToday } = getTodayDateRange();
 
-    // ============================================================
-    // 5. FIND EXISTING ORDER
-    // ============================================================
+    // ========================================================
+    // 7. FIND EXISTING TODAY'S PENDING ORDER
+    // ========================================================
 
     let order = await Order.findOne({
       userId,
@@ -159,9 +167,9 @@ export const addOrder = async (req, res) => {
       },
     });
 
-    // ============================================================
-    // 6. CUTOFF CHECK
-    // ============================================================
+    // ========================================================
+    // 8. CHECK CUTOFF
+    // ========================================================
 
     if (order && isCutoffPassed(order.cutoffTime)) {
       return res.status(400).json({
@@ -170,9 +178,9 @@ export const addOrder = async (req, res) => {
       });
     }
 
-    // ============================================================
-    // 7. BUILD ORDER ITEMS
-    // ============================================================
+    // ========================================================
+    // 9. BUILD ORDER ITEMS
+    // ========================================================
 
     const orderItems = cart.items.map((cartItem) => ({
       productId: cartItem.productId._id,
@@ -202,9 +210,9 @@ export const addOrder = async (req, res) => {
       total: cartItem.total,
     }));
 
-    // ============================================================
-    // 8. CREATE / MERGE ORDER
-    // ============================================================
+    // ========================================================
+    // 10. CREATE / MERGE ORDER
+    // ========================================================
 
     if (order) {
       for (const newItem of orderItems) {
@@ -217,6 +225,7 @@ export const addOrder = async (req, res) => {
 
         if (existingItem) {
           existingItem.qty += newItem.qty;
+
           existingItem.total += newItem.total;
         } else {
           order.items.push(newItem);
@@ -227,88 +236,63 @@ export const addOrder = async (req, res) => {
 
       await order.save();
     } else {
-      // Get cutoff only when actually creating
+      // ------------------------------------------------------
+      // ONLY GET CUTOFF WHEN CREATING NEW ORDER
+      // ------------------------------------------------------
+
       const cutoffTime = await getTodayCutoff();
 
       order = await Order.create({
         userId,
+
         items: orderItems,
+
         totalAmount: cart.totalPrice,
+
         shippingAddress: user.address,
+
         paymentMethod: "COD",
+
         cutoffTime,
       });
     }
 
-    // ============================================================
-    // 9. CLEAR CART
-    // ============================================================
+    // ========================================================
+    // 11. CLEAR CART
+    // ========================================================
 
     cart.items = [];
+
     cart.totalPrice = 0;
 
     await cart.save();
 
-    // ============================================================
-    // 10. RESPOND IMMEDIATELY
-    // ============================================================
+    // ========================================================
+    // 12. SEND RESPONSE IMMEDIATELY
+    // ========================================================
 
     res.status(200).json({
       success: true,
+
       message: "ऑर्डर हो गया। ✅",
+
       order,
     });
 
-    // ============================================================
-    // 11. BACKGROUND NOTIFICATIONS
-    // ============================================================
+    // ========================================================
+    // 13. BACKGROUND NOTIFICATIONS
+    //
+    // IMPORTANT:
+    // Everything below happens AFTER the response.
+    // Notification failure will NOT affect the order.
+    // ========================================================
 
-    setImmediate(async () => {
-      try {
-        // --------------------------------------------------------
-        // USER NOTIFICATION — 3 SEC LATER
-        // --------------------------------------------------------
-
-        if (user.oneSignalSubscriptionId) {
-          setTimeout(() => {
-            sendNotification({
-              subscriptionId: user.oneSignalSubscriptionId,
-              title: "🟠 ऑर्डर सफल",
-              message: "आपका ऑर्डर सफलतापूर्वक प्राप्त हो गया है。",
-            }).catch((error) => {
-              console.error("User notification error:", error);
-            });
-          }, 3000);
-        }
-
-        // --------------------------------------------------------
-        // SUPPLIER NOTIFICATIONS
-        // --------------------------------------------------------
-
-        const suppliers = await User.find({
-          role: "supplier",
-          oneSignalSubscriptionId: {
-            $exists: true,
-            $ne: "",
-          },
-        }).select("firstName lastName oneSignalSubscriptionId");
-
-        await Promise.all(
-          suppliers.map((supp) =>
-            sendNotification({
-              subscriptionId: supp.oneSignalSubscriptionId,
-
-              title: `🟢 ${user.firstName} ${user.lastName} का ऑर्डर आया है`,
-
-              message: "कृपया चेक करके, मंज़ूर या अस्वीकार करें।",
-
-              sendToAll: false,
-            }),
-          ),
-        );
-      } catch (error) {
-        console.error("Background notification error:", error);
-      }
+    setImmediate(() => {
+      sendOrderNotifications({
+        user,
+      }).catch((error) => {
+        console.error("❌ Order notification background error:", error);
+      });
     });
   } catch (error) {
     console.error("Add Order Error:", error);
@@ -321,6 +305,108 @@ export const addOrder = async (req, res) => {
       success: false,
       message: error.message,
     });
+  }
+};
+
+/* ===========================================================
+   ORDER NOTIFICATIONS
+=========================================================== */
+
+const sendOrderNotifications = async ({ user }) => {
+  try {
+    // ========================================================
+    // CUSTOMER NOTIFICATION
+    // ========================================================
+
+    if (user.oneSignalSubscriptionId) {
+      setTimeout(async () => {
+        try {
+          await sendNotification({
+            subscriptionId: user.oneSignalSubscriptionId,
+
+            title: "🟠 ऑर्डर सफल",
+
+            message: "आपका ऑर्डर सफलतापूर्वक प्राप्त हो गया है।",
+
+            sendToAll: false,
+          });
+        } catch (error) {
+          console.error("❌ Customer notification error:", error);
+        }
+      }, 3000);
+    }
+
+    // ========================================================
+    // GET SUPPLIERS
+    // ========================================================
+
+    const suppliers = await User.find({
+      role: "supplier",
+
+      oneSignalSubscriptionId: {
+        $exists: true,
+
+        $nin: [null, ""],
+      },
+    }).select("firstName lastName oneSignalSubscriptionId");
+
+    // ========================================================
+    // NO SUPPLIERS
+    // ========================================================
+
+    if (suppliers.length === 0) {
+      console.log("ℹ️ No suppliers with OneSignal subscription found.");
+
+      return;
+    }
+
+    // ========================================================
+    // CUSTOMER NAME
+    // ========================================================
+
+    const customerName = [user.firstName, user.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    const displayCustomerName = customerName || "एक ग्राहक";
+
+    // ========================================================
+    // SUPPLIER NOTIFICATIONS
+    // ========================================================
+
+    await Promise.allSettled(
+      suppliers.map(async (supplier) => {
+        try {
+          if (!supplier.oneSignalSubscriptionId) {
+            return;
+          }
+
+          await sendNotification({
+            subscriptionId: supplier.oneSignalSubscriptionId,
+
+            title: `🟢 ${displayCustomerName} का ऑर्डर आया है`,
+
+            message: "कृपया चेक करके, मंज़ूर या अस्वीकार करें।",
+
+            sendToAll: false,
+          });
+
+          console.log(
+            `✅ Supplier notification sent to ${supplier.firstName || "supplier"}`,
+          );
+        } catch (error) {
+          console.error(
+            `❌ Supplier notification failed for ${supplier._id}:`,
+            error,
+          );
+        }
+      }),
+    );
+
+    console.log(`📢 Supplier notifications processed: ${suppliers.length}`);
+  } catch (error) {
+    console.error("❌ sendOrderNotifications error:", error);
   }
 };
 /* ===========================================================

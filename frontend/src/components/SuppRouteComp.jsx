@@ -37,10 +37,18 @@ const SuppRouteComp = () => {
   }, [suppliers]);
 
   // =========================================================
+  // IMPORTANT:
+  // Show suppliers[0] immediately while selectedSupplier
+  // state is being initialized by useEffect.
+  // =========================================================
+
+  const activeSupplier = selectedSupplier || suppliers[0] || null;
+
+  // =========================================================
   // LOADING
   // =========================================================
 
-  if (!selectedSupplier) {
+  if (!activeSupplier) {
     return (
       <div
         className="
@@ -73,7 +81,7 @@ const SuppRouteComp = () => {
             <Truck size={15} />
           </div>
 
-          <div className="animate-pulse flex items-center gap-2">
+          <div className="flex animate-pulse items-center gap-2">
             <span className="text-xs font-medium text-red-500">सप्लायर -</span>
 
             <Loader2 size={12} className="animate-spin text-gray-800" />
@@ -84,8 +92,8 @@ const SuppRouteComp = () => {
   }
 
   const supplierName =
-    `${selectedSupplier.firstName || ""} ${
-      selectedSupplier.lastName || ""
+    `${activeSupplier.firstName || ""} ${
+      activeSupplier.lastName || ""
     }`.trim() || "Supplier";
 
   // =========================================================
@@ -102,9 +110,9 @@ const SuppRouteComp = () => {
   // =========================================================
 
   const handleTrack = () => {
-    if (!selectedSupplier?._id) return;
+    if (!activeSupplier?._id) return;
 
-    navigate(`/tracking/${selectedSupplier._id}`);
+    navigate(`/tracking/${activeSupplier._id}`);
   };
 
   return (
@@ -122,8 +130,8 @@ const SuppRouteComp = () => {
           w-full
           items-center
           justify-between
-          border-b
           rounded-b-4xl
+          border-b
           border-red-600/50
           px-5
           py-1.5
@@ -285,14 +293,14 @@ const SuppRouteComp = () => {
               className="
                 fixed
                 bottom-0
-                left-3
-                right-3
+                left-0
+                right-0
                 z-50
-                min-h-120
                 mx-auto
+                min-h-150
                 max-w-[430px]
                 overflow-hidden
-                rounded-t-[28px]
+                rounded-t-[35px]
                 border
                 border-white/80
                 bg-white/95
@@ -355,7 +363,7 @@ const SuppRouteComp = () => {
                       supplier.lastName || ""
                     }`.trim() || "Supplier";
 
-                  const isSelected = selectedSupplier?._id === supplier._id;
+                  const isSelected = activeSupplier?._id === supplier._id;
 
                   return (
                     <motion.button

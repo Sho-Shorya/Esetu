@@ -6,28 +6,30 @@ import {
   X,
   ChevronDown,
   LoaderCircle,
-  BadgePercent,
   UserRoundPen,
   ReceiptText,
-  ListChecks,
-  MoveUpRight,
   TrendingUp,
   LayoutDashboard,
 } from "lucide-react";
-import React, { useState, useRef, useEffect } from "react";
+
+import React, { useState, useRef, useEffect, useCallback } from "react";
+
 import { Link, useNavigate } from "react-router-dom";
+
 import { Button } from "./ui/button";
+
 import { useDispatch, useSelector } from "react-redux";
-import {
-  setUserData,
-  clearUserData,
-  clearSupplierData,
-} from "../redux/userSlice";
+
+import { clearUserData, clearSupplierData } from "../redux/userSlice";
+
 import axios from "axios";
 import { toast } from "sonner";
+
 import { API_BASE_URL } from "@/lib/constants";
+
 import { BiPowerOff } from "react-icons/bi";
-import { CgProductHunt } from "react-icons/cg";
+
+import SplashScreen from "./SplashScreen";
 
 const Navbar = () => {
   const dispatch = useDispatch();
@@ -37,30 +39,54 @@ const Navbar = () => {
 
   const { cartData } = useSelector((state) => state.product || {});
 
+  // =========================================================
+  // STATES
+  // =========================================================
+
   const [slideBar, setSlideBar] = useState(false);
+
   const [loading, setLoading] = useState(false);
+
   const [cartCount, setCartCount] = useState(0);
+
   const [search, setSearch] = useState("");
+
   const [badgePulse, setBadgePulse] = useState(false);
+
   const [showUserMenu, setShowUserMenu] = useState(false);
+
   const [adminConfirmLogout, setAdminConfirmLogout] = useState(false);
+
   const [userConfirmLogout, setUserConfirmLogout] = useState(false);
+
+  const [showSplash, setShowSplash] = useState(false);
 
   const userMenuRef = useRef(null);
 
-  // Update cart badge
+  // =========================================================
+  // CART BADGE
+  // =========================================================
+
   useEffect(() => {
     const count = cartData?.items?.length || 0;
+
     setCartCount(count);
 
     if (count > 0) {
       setBadgePulse(true);
-      const timer = setTimeout(() => setBadgePulse(false), 300);
+
+      const timer = setTimeout(() => {
+        setBadgePulse(false);
+      }, 300);
+
       return () => clearTimeout(timer);
     }
   }, [cartData]);
 
-  // Close user menu
+  // =========================================================
+  // CLOSE USER MENU
+  // =========================================================
+
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (
@@ -79,30 +105,36 @@ const Navbar = () => {
     };
 
     document.addEventListener("click", handleClickOutside);
+
     document.addEventListener("keydown", handleEscape);
 
     return () => {
       document.removeEventListener("click", handleClickOutside);
+
       document.removeEventListener("keydown", handleEscape);
     };
   }, [showUserMenu]);
 
-  const logoutHandler = async () => {
-    setLoading(true);
+  // =========================================================
+  // LOGOUT API
+  // =========================================================
 
+  const performLogout = useCallback(async () => {
     const token = localStorage.getItem("token");
 
+    // Clear local auth immediately.
+    dispatch(clearUserData());
+    dispatch(clearSupplierData());
+
+    localStorage.removeItem("token");
+
+    // API logout happens in background.
     if (!token) {
-      dispatch(clearUserData());
-      dispatch(clearSupplierData());
-      localStorage.removeItem("token");
-      navigate(supplierData ? "/admin-login" : "/login");
-      setLoading(false);
       return;
     }
 
     try {
-      const res = await axios.post(
+      await axios.post(
         `${API_BASE_URL}/api/v1/user/logout`,
         {},
         {
@@ -111,35 +143,49 @@ const Navbar = () => {
           },
         },
       );
-
-      if (res.data.success) {
-        toast.success(res.data.message || "Logged out successfully");
-        dispatch(clearUserData());
-        dispatch(clearSupplierData());
-        localStorage.removeItem("token");
-        navigate(supplierData ? "/admin-login" : "/login");
-      } else {
-        toast.error(res.data.message || "Logout failed");
-      }
-    } catch (err) {
-      const status = err?.response?.status;
-      const message =
-        err?.response?.data?.message || err.message || "Logout failed";
-
-      console.error("Logout Error:", err);
-
-      if (status === 401 || status === 403) {
-        dispatch(clearUserData());
-        dispatch(clearSupplierData());
-        localStorage.removeItem("token");
-        navigate(supplierData ? "/admin-login" : "/login");
-      }
-
-      toast.error(message);
-    } finally {
-      setLoading(false);
+    } catch (error) {
+      console.error("Background logout error:", error);
     }
+  }, [dispatch]);
+
+  // =========================================================
+  // START LOGOUT
+  // =========================================================
+
+  const startLogout = () => {
+    if (loading || showSplash) return;
+
+    setLoading(true);
+
+    setShowUserMenu(false);
+    setSlideBar(false);
+    setAdminConfirmLogout(false);
+    setUserConfirmLogout(false);
+
+    // IMPORTANT:
+    // Splash appears immediately.
+    setShowSplash(true);
+
+    // Logout backend in background.
+    performLogout();
   };
+
+  // =========================================================
+  // SPLASH COMPLETE
+  // =========================================================
+
+  const handleSplashComplete = useCallback(() => {
+    setShowSplash(false);
+    setLoading(false);
+
+    navigate("/login", {
+      replace: true,
+    });
+  }, [navigate]);
+
+  // =========================================================
+  // SEARCH
+  // =========================================================
 
   const onSearchSubmit = (e) => {
     e.preventDefault();
@@ -152,6 +198,10 @@ const Navbar = () => {
     navigate(`/products?search=${encodeURIComponent(search.trim())}`);
   };
 
+  // =========================================================
+  // USER DISPLAY
+  // =========================================================
+
   const avatarInitial = (
     userData?.firstName?.[0] ||
     supplierData?.firstName?.[0] ||
@@ -160,18 +210,64 @@ const Navbar = () => {
 
   const avatarUrl = userData?.profilePic || supplierData?.profilePic || "";
 
+  const isSupplier = Boolean(supplierData);
+
+  const displayName = supplierData?.firstName || userData?.firstName || "User";
+
+  // =========================================================
+  // SPLASH
+  // =========================================================
+
+  if (showSplash) {
+    return <SplashScreen onComplete={handleSplashComplete} />;
+  }
+
+  // =========================================================
+  // NAVBAR
+  // =========================================================
+
   return (
-    <header className=" fixed top-0 left-0 right-0 z-40 border-b bg-gray-100 backdrop-blur-sm">
-      <div className="max-w-6xl mx-auto px-4 lg:px-6">
+    <header
+      className="
+        fixed
+        left-0
+        right-0
+        top-0
+        z-40
+        border-b
+        border-black/[0.06]
+        bg-white/90
+        shadow-[0_1px_12px_rgba(0,0,0,0.04)]
+        backdrop-blur-xl
+      "
+    >
+      <div className="mx-auto max-w-6xl px-4 lg:px-6">
         <div className="flex h-16 items-center justify-between">
-          {/* Left */}
-          <div className="flex items-center gap-4">
+          {/* =================================================
+              LEFT
+          ================================================= */}
+
+          <div className="flex items-center gap-3">
+            {/* Mobile Menu */}
+
             <button
-              className="lg:hidden p-2 text-gray-700 hover:text-red-500"
+              type="button"
+              className="
+                rounded-xl
+                p-2
+                text-neutral-700
+                transition
+                hover:bg-red-50
+                hover:text-red-600
+                active:scale-95
+                lg:hidden
+              "
               onClick={() => setSlideBar(true)}
             >
               <Menu className="h-6 w-6" />
             </button>
+
+            {/* Logo */}
 
             <Link
               to={supplierData ? "/admin-dashboard" : "/"}
@@ -181,154 +277,354 @@ const Navbar = () => {
                   behavior: "smooth",
                 });
               }}
-              className="flex items-center gap-3"
+              className="
+                group
+                flex
+                items-center
+                gap-2.5
+              "
             >
-              <img src="/logo.png" alt="logo" className="h-10" />
+              <div
+                className="
+                  relative
+                  flex
+                  h-10
+                  w-10
+                  items-center
+                  justify-center
+                  overflow-hidden
+                  rounded-xl
+                  bg-white
+                  shadow-sm
+                  ring-1
+                  ring-black/[0.06]
+                  transition
+                  group-hover:scale-105
+                "
+              >
+                <img
+                  src="/logo.png"
+                  alt="ई-सेतु"
+                  className="h-9 w-9 object-contain"
+                />
+              </div>
 
               <span
-                className={`text-2xl ${supplierData ? "text-emerald-600" : "text-red-600"} font-bold`}
+                className={`
+                  text-[24px]
+                  font-black
+                  tracking-tight
+                  ${isSupplier ? "text-emerald-600" : "text-red-600"}
+                `}
               >
                 ई-सेतु
               </span>
             </Link>
           </div>
 
-          {/* Desktop Navigation */}
-          <div className="hidden lg:flex items-center gap-8">
-            <nav className="flex items-center gap-6 text-sm font-medium">
-              <Link to="/product" className="hover:text-emerald-600">
+          {/* =================================================
+              DESKTOP NAVIGATION
+          ================================================= */}
+
+          <div className="hidden items-center gap-7 lg:flex">
+            <nav className="flex items-center gap-5 text-sm font-semibold text-neutral-600">
+              <Link
+                to="/product"
+                className="
+                  transition
+                  hover:text-red-600
+                "
+              >
                 Products
               </Link>
-
-              {/* <Link to="/categories" className="hover:text-emerald-600">
-                Categories
-              </Link>
-
-              <Link to="/offers" className="hover:text-emerald-600">
-                Offers
-              </Link> */}
             </nav>
+
+            {/* Search */}
 
             <form
               onSubmit={onSearchSubmit}
-              className="flex items-center rounded-lg bg-white px-3 py-2 shadow-sm"
+              className="
+                flex
+                h-10
+                items-center
+                overflow-hidden
+                rounded-xl
+                border
+                border-neutral-200
+                bg-neutral-50
+                transition
+                focus-within:border-red-300
+                focus-within:bg-white
+                focus-within:ring-4
+                focus-within:ring-red-500/5
+              "
             >
-              <Search className="h-5 w-5 text-gray-400" />
+              <Search className="ml-3 h-4 w-4 text-neutral-400" />
 
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search products..."
-                className="w-64 bg-transparent px-2 outline-none"
+                className="
+                  w-56
+                  bg-transparent
+                  px-2.5
+                  text-sm
+                  outline-none
+                  placeholder:text-neutral-400
+                "
               />
-              <Button type="submit" className="ml-2 px-3">
+
+              <Button
+                type="submit"
+                className="
+                  mr-1
+                  h-8
+                  rounded-lg
+                  bg-red-600
+                  px-3
+                  text-xs
+                  font-semibold
+                  hover:bg-red-700
+                "
+              >
                 Search
               </Button>
             </form>
           </div>
 
-          {/* Right Section */}
-          <div className="flex items-center gap-4">
-            {/* Cart */}
-            {userData && (
-              <Link to="/cart" className="relative p-2">
-                <ShoppingCart className="text-2xl text-gray-700" />
+          {/* =================================================
+              RIGHT
+          ================================================= */}
 
-                <span
-                  className={`absolute -top-2 -right-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs font-semibold text-white transition-transform ${
-                    badgePulse ? "scale-110" : "scale-100"
-                  }`}
+          <div className="flex items-center gap-2.5">
+            {/* Cart */}
+
+            {userData && (
+              <div
+                className="
+    flex
+    items-center
+    gap-1
+    rounded-2xl
+    border
+    border-red-100
+    bg-red-50
+    pl-1
+    pr-3
+    shadow-[0_3px_12px_rgba(239,68,68,0.10)]
+    transition-all
+    duration-200
+    hover:bg-red-100
+    hover:shadow-[0_5px_16px_rgba(239,68,68,0.15)]
+  "
+              >
+                <Link
+                  to="/cart"
+                  className="
+      relative
+      flex
+      h-10
+      w-10
+      items-center
+      justify-center
+      rounded-xl
+      text-neutral-700
+      transition-all
+      duration-200
+      hover:text-red-600
+      active:scale-95
+    "
                 >
-                  {cartCount}
-                </span>
-              </Link>
+                  <ShoppingCart className="h-5 w-5" />
+
+                  <span
+                    className={`
+        absolute
+        -right-1
+        -top-1
+        flex
+        h-5
+        min-w-5
+        items-center
+        justify-center
+        rounded-full
+        bg-red-600
+        px-1
+        text-[10px]
+        font-bold
+        text-white
+        shadow-sm
+        transition-transform
+        duration-200
+        ${badgePulse ? "scale-110" : "scale-100"}
+      `}
+                  >
+                    {cartCount}
+                  </span>
+                </Link>
+
+                <span className="text-sm font-bold text-red-700">कार्ट</span>
+              </div>
             )}
 
-            {/* User / Supplier Menu */}
+            {/* =================================================
+                USER / SUPPLIER
+            ================================================= */}
+
             {userData || supplierData ? (
               <div className="relative" ref={userMenuRef}>
-                {supplierData && (
-                  <button
-                    onClick={() => setShowUserMenu((prev) => !prev)}
-                    className="flex items-center gap-2 rounded-full bg-white px-2 py-1 shadow-sm"
-                  >
-                    {avatarUrl ? (
-                      <img
-                        src={avatarUrl}
-                        alt="Profile"
-                        className="h-9 w-9 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full font-semibold text-emerald-700 bg-emerald-100">
-                        {avatarInitial}
-                      </div>
-                    )}
+                <button
+                  type="button"
+                  onClick={() => setShowUserMenu((prev) => !prev)}
+                  className="
+                    flex
+                    items-center
+                    gap-2
+                    rounded-full
+                    border
+                    border-black/[0.06]
+                    bg-white
+                    p-1
+                    pr-2
+                    shadow-sm
+                    transition
+                    hover:shadow-md
+                    active:scale-[0.97]
+                  "
+                >
+                  {avatarUrl ? (
+                    <img
+                      src={avatarUrl}
+                      alt="Profile"
+                      className="
+                        h-9
+                        w-9
+                        rounded-full
+                        object-cover
+                      "
+                    />
+                  ) : (
+                    <div
+                      className={`
+                        flex
+                        h-9
+                        w-9
+                        items-center
+                        justify-center
+                        rounded-full
+                        font-bold
+                        ${
+                          isSupplier
+                            ? "bg-emerald-100 text-emerald-700"
+                            : "bg-red-100 text-red-700"
+                        }
+                      `}
+                    >
+                      {avatarInitial}
+                    </div>
+                  )}
 
-                    <ChevronDown className="h-4 w-4 text-gray-500" />
-                  </button>
-                )}
-                {userData && (
-                  <button
-                    onClick={() => setShowUserMenu((prev) => !prev)}
-                    className="flex items-center gap-2 rounded-full bg-white px-2 py-1 shadow-sm"
-                  >
-                    {avatarUrl ? (
-                      <img
-                        src={avatarUrl}
-                        alt="Profile"
-                        className="h-9 w-9 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full font-semibold text-red-700 bg-red-100">
-                        {avatarInitial}
-                      </div>
-                    )}
+                  <ChevronDown
+                    className={`
+                      h-4
+                      w-4
+                      text-neutral-400
+                      transition-transform
+                      ${showUserMenu ? "rotate-180" : ""}
+                    `}
+                  />
+                </button>
 
-                    <ChevronDown className="h-4 w-4 text-gray-500" />
-                  </button>
-                )}
+                {/* =================================================
+                    DESKTOP USER MENU
+                ================================================= */}
 
                 {showUserMenu && (
-                  <div className="absolute right-0 mt-2 w-64 rounded-lg border bg-white shadow-xl">
-                    <div className="border-b px-4 py-3">
+                  <div
+                    className="
+                      absolute
+                      right-0
+                      mt-2
+                      w-64
+                      overflow-hidden
+                      rounded-2xl
+                      border
+                      border-black/[0.06]
+                      bg-white
+                      shadow-[0_20px_50px_rgba(0,0,0,0.12)]
+                    "
+                  >
+                    {/* Profile */}
+
+                    <div className="border-b border-neutral-100 p-4">
                       <div className="flex items-center gap-3">
                         {avatarUrl ? (
                           <img
                             src={avatarUrl}
                             alt="Profile"
-                            className="h-10 w-10 rounded-full object-cover"
+                            className="
+                              h-11
+                              w-11
+                              rounded-full
+                              object-cover
+                            "
                           />
-                        ) : userData && (
-                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 font-semibold text-red-700">
-                              {avatarInitial}
-                            </div>
-                          ) ? (
-                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 font-semibold text-red-700">
+                        ) : (
+                          <div
+                            className={`
+                              flex
+                              h-11
+                              w-11
+                              items-center
+                              justify-center
+                              rounded-full
+                              font-bold
+                              ${
+                                isSupplier
+                                  ? "bg-emerald-100 text-emerald-700"
+                                  : "bg-red-100 text-red-700"
+                              }
+                            `}
+                          >
                             {avatarInitial}
                           </div>
-                        ) : (
-                          ""
                         )}
 
-                        <div>
-                          <h3 className="font-semibold">
-                            {supplierData?.firstName || userData?.firstName}
+                        <div className="min-w-0">
+                          <h3 className="truncate font-bold text-neutral-800">
+                            {displayName}
                           </h3>
 
-                          <p className="text-sm text-gray-500">
+                          <p className="truncate text-xs text-neutral-400">
                             {supplierData?.phoneNumber || userData?.phoneNumber}
                           </p>
                         </div>
                       </div>
                     </div>
 
-                    <nav className="flex flex-col py-2">
+                    {/* Links */}
+
+                    <nav className="p-2">
                       <Link
                         to={`/profile/${(supplierData || userData)._id}`}
                         onClick={() => setShowUserMenu(false)}
-                        className="px-4 py-3 text-lg hover:bg-emerald-50 transition"
+                        className="
+                          flex
+                          items-center
+                          gap-3
+                          rounded-xl
+                          px-3
+                          py-2.5
+                          text-sm
+                          font-semibold
+                          text-neutral-700
+                          transition
+                          hover:bg-neutral-50
+                        "
                       >
+                        <UserRoundPen className="h-4 w-4" />
                         प्रोफ़ाइल
                       </Link>
 
@@ -336,8 +632,22 @@ const Navbar = () => {
                         <Link
                           to="/order-history"
                           onClick={() => setShowUserMenu(false)}
-                          className="px-4 py-3 text-lg hover:bg-emerald-50 transition"
+                          className="
+                            flex
+                            items-center
+                            gap-3
+                            rounded-xl
+                            px-3
+                            py-2.5
+                            text-sm
+                            font-semibold
+                            text-neutral-700
+                            transition
+                            hover:bg-red-50
+                            hover:text-red-600
+                          "
                         >
+                          <ReceiptText className="h-4 w-4" />
                           सभी ऑर्डर
                         </Link>
                       )}
@@ -346,54 +656,92 @@ const Navbar = () => {
                         <Link
                           to="/admin-dashboard"
                           onClick={() => setShowUserMenu(false)}
-                          className="px-4 py-3 text-lg hover:bg-emerald-50 transition"
+                          className="
+                            flex
+                            items-center
+                            gap-3
+                            rounded-xl
+                            px-3
+                            py-2.5
+                            text-sm
+                            font-semibold
+                            text-neutral-700
+                            transition
+                            hover:bg-emerald-50
+                            hover:text-emerald-600
+                          "
                         >
+                          <LayoutDashboard className="h-4 w-4" />
                           डैशबोर्ड
                         </Link>
                       )}
                     </nav>
 
-                    <div className="border-t px-4 py-3">
+                    {/* Logout */}
+
+                    <div className="border-t border-neutral-100 p-3">
                       <button
+                        type="button"
                         onClick={() => {
                           setShowUserMenu(false);
 
                           if (supplierData) {
                             setAdminConfirmLogout(true);
-                          }
-                          if (userData) {
+                          } else {
                             setUserConfirmLogout(true);
                           }
                         }}
-                        disabled={loading}
-                        className={`flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2 text-white transition ${
-                          supplierData
-                            ? "bg-emerald-600 hover:bg-emerald-700"
-                            : "bg-red-600 hover:bg-red-700"
-                        }`}
+                        className={`
+                          flex
+                          w-full
+                          items-center
+                          justify-center
+                          gap-2
+                          rounded-xl
+                          px-4
+                          py-2.5
+                          text-sm
+                          font-bold
+                          text-white
+                          transition
+                          active:scale-[0.98]
+                          ${
+                            supplierData
+                              ? "bg-emerald-600 hover:bg-emerald-700"
+                              : "bg-red-600 hover:bg-red-700"
+                          }
+                        `}
                       >
-                        {loading ? (
-                          <LoaderCircle className="h-5 w-5 animate-spin" />
-                        ) : (
-                          <>
-                            <BiPowerOff className="text-lg" />
-                            <span>लॉग आउट</span>
-                          </>
-                        )}
+                        <BiPowerOff className="text-lg" />
+                        लॉग आउट
                       </button>
                     </div>
                   </div>
                 )}
               </div>
             ) : (
-              <div className="hidden lg:flex items-center gap-2">
-                <Button onClick={() => navigate("/signup")} variant="outline">
+              <div className="hidden items-center gap-2 lg:flex">
+                <Button
+                  onClick={() => navigate("/signup")}
+                  variant="outline"
+                  className="rounded-xl"
+                >
                   Sign Up
                 </Button>
 
                 <Button
                   onClick={() => navigate("/login")}
-                  className="bg-gradient-to-r from-blue-600 to-purple-600 text-white"
+                  className="
+                    rounded-xl
+                    bg-gradient-to-r
+                    from-red-600
+                    to-red-500
+                    font-semibold
+                    text-white
+                    shadow-sm
+                    hover:from-red-700
+                    hover:to-red-600
+                  "
                 >
                   Login
                 </Button>
@@ -403,134 +751,275 @@ const Navbar = () => {
         </div>
       </div>
 
-      {/* Mobile Overlay */}
+      {/* =====================================================
+          MOBILE OVERLAY
+      ====================================================== */}
+
       {slideBar && (
         <div
           onClick={() => setSlideBar(false)}
-          className="fixed inset-0 z-40 bg-black/40"
+          className="
+            fixed
+            inset-0
+            z-40
+            bg-black/40
+            backdrop-blur-[2px]
+          "
         />
       )}
 
-      {/* Mobile Sidebar */}
+      {/* =====================================================
+          MOBILE SIDEBAR
+      ====================================================== */}
+
       <div
-        className={`fixed top-0 right-0 z-50 h-screen w-[80%] bg-white transition-transform duration-300 ${
-          slideBar ? "translate-x-0" : "translate-x-full"
-        }`}
+        className={`
+          fixed
+          right-0
+          top-0
+          z-50
+          h-screen
+          w-[82%]
+          max-w-sm
+          bg-white
+          shadow-2xl
+          transition-transform
+          duration-300
+          ${slideBar ? "translate-x-0" : "translate-x-full"}
+        `}
       >
         <div className="p-5">
+          {/* Header */}
+
           <div className="flex items-center justify-between">
             <Link
               to={supplierData ? "/admin-dashboard" : "/"}
               onClick={() => setSlideBar(false)}
-              className="flex items-center gap-3"
+              className="flex items-center gap-2.5"
             >
-              <img src="/logo.png" alt="logo" className="h-8" />
-              <span className="text-xl font-bold">E-Setu</span>
+              <img
+                src="/logo.png"
+                alt="ई-सेतु"
+                className="h-9 w-9 object-contain"
+              />
+
+              <span
+                className={`
+                  text-xl
+                  font-black
+                  ${supplierData ? "text-emerald-600" : "text-red-600"}
+                `}
+              >
+                ई-सेतु
+              </span>
             </Link>
 
             <button
+              type="button"
               onClick={() => setSlideBar(false)}
-              className="rounded-md p-2 hover:bg-gray-100"
+              className="
+                rounded-xl
+                bg-neutral-100
+                p-2
+                text-neutral-600
+                active:scale-90
+              "
             >
-              <X className="h-6 w-6" />
+              <X className="h-5 w-5" />
             </button>
           </div>
 
-          <div className="mt-8 flex flex-col gap-5">
+          {/* Mobile Search */}
+
+          <form
+            onSubmit={(e) => {
+              onSearchSubmit(e);
+              setSlideBar(false);
+            }}
+            className="
+              mt-7
+              flex
+              h-11
+              items-center
+              rounded-xl
+              border
+              border-neutral-200
+              bg-neutral-50
+            "
+          >
+            <Search className="ml-3 h-4 w-4 text-neutral-400" />
+
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search products..."
+              className="
+                min-w-0
+                flex-1
+                bg-transparent
+                px-2
+                text-sm
+                outline-none
+              "
+            />
+          </form>
+
+          {/* Links */}
+
+          <div className="mt-7 flex flex-col gap-1">
             <Link
               to={supplierData ? "/product-view" : "/products"}
               onClick={() => setSlideBar(false)}
-              className="rounded-md  flex gap-2 items-center  px-3 py-2 text-lg hover:bg-emerald-50"
+              className="
+                flex
+                items-center
+                gap-3
+                rounded-xl
+                px-3
+                py-3
+                text-base
+                font-semibold
+                text-neutral-700
+                hover:bg-red-50
+                hover:text-red-600
+              "
             >
-              <TrendingUp className="animate-pulse" /> प्रोडक्ट्स
+              <TrendingUp className="h-5 w-5" />
+              प्रोडक्ट्स
             </Link>
-
-            {/* <Link
-              to="/categories"
-              onClick={() => setSlideBar(false)}
-              className="rounded-md  flex gap-2 items-center px-3 py-2 text-lg hover:bg-emerald-50"
-            >
-              📂 Categories
-            </Link>
-
-            <Link
-              to="/offers"
-              onClick={() => setSlideBar(false)}
-              className="rounded-md flex gap-2 items-center px-3 py-2 text-lg hover:bg-emerald-50"
-            >
-              <BadgePercent className="animate-pulse" /> ऑफर्स
-            </Link> */}
 
             {!supplierData && userData && (
               <Link
                 to="/cart"
                 onClick={() => setSlideBar(false)}
-                className="flex items-center justify-between rounded-md px-3 py-2 hover:bg-emerald-50"
+                className="
+                  flex
+                  items-center
+                  justify-between
+                  rounded-xl
+                  px-3
+                  py-3
+                  text-base
+                  font-semibold
+                  text-neutral-700
+                  hover:bg-red-50
+                "
               >
-                <span className="text-lg  flex gap-2 items-center">
-                  <ShoppingCart /> कार्ट
+                <span className="flex items-center gap-3">
+                  <ShoppingCart className="h-5 w-5" />
+                  कार्ट
                 </span>
 
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-red-600 text-sm font-semibold text-white">
+                <span
+                  className="
+                    flex
+                    h-7
+                    min-w-7
+                    items-center
+                    justify-center
+                    rounded-full
+                    bg-red-600
+                    px-1.5
+                    text-xs
+                    font-bold
+                    text-white
+                  "
+                >
                   {cartCount}
                 </span>
               </Link>
             )}
 
-            {userData || supplierData ? (
+            {(userData || supplierData) && (
               <>
                 <Link
                   to={`/profile/${(supplierData || userData)._id}`}
                   onClick={() => setSlideBar(false)}
-                  className="rounded-md px-3 py-2  flex gap-2 items-center text-lg hover:bg-emerald-50"
+                  className="
+                    flex
+                    items-center
+                    gap-3
+                    rounded-xl
+                    px-3
+                    py-3
+                    text-base
+                    font-semibold
+                    text-neutral-700
+                    hover:bg-neutral-50
+                  "
                 >
-                  <UserRoundPen /> प्रोफ़ाइल
+                  <UserRoundPen className="h-5 w-5" />
+                  प्रोफ़ाइल
                 </Link>
 
                 <Link
                   to={supplierData ? "/admin-dashboard" : "/order-history"}
                   onClick={() => setSlideBar(false)}
-                  className="rounded-md px-3  flex gap-2 items-center py-2 text-lg hover:bg-emerald-50"
+                  className="
+                    flex
+                    items-center
+                    gap-3
+                    rounded-xl
+                    px-3
+                    py-3
+                    text-base
+                    font-semibold
+                    text-neutral-700
+                    hover:bg-neutral-50
+                  "
                 >
                   {supplierData ? (
-                    <div className="flex items-center gap-2">
-                      <LayoutDashboard /> डैशबोर्ड
-                    </div>
+                    <>
+                      <LayoutDashboard className="h-5 w-5" />
+                      डैशबोर्ड
+                    </>
                   ) : (
                     <>
-                      <ReceiptText /> सभी ऑर्डर
+                      <ReceiptText className="h-5 w-5" />
+                      सभी ऑर्डर
                     </>
                   )}
                 </Link>
 
-                <Button
+                {/* Mobile Logout */}
+
+                <button
+                  type="button"
                   onClick={() => {
                     setSlideBar(false);
 
                     if (supplierData) {
                       setAdminConfirmLogout(true);
-                    }
-                    if (userData) {
+                    } else {
                       setUserConfirmLogout(true);
                     }
                   }}
-                  disabled={loading}
-                  className={`mt-4 ${supplierData ? "bg-emerald-600" : "bg-red-600"} `}
+                  className={`
+                    mt-5
+                    flex
+                    w-full
+                    items-center
+                    justify-center
+                    gap-2
+                    rounded-xl
+                    px-4
+                    py-3
+                    font-bold
+                    text-white
+                    ${supplierData ? "bg-emerald-600" : "bg-red-600"}
+                  `}
                 >
-                  {loading ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
-                    <>
-                      <BiPowerOff className="text-lg" />
-                      <span>लॉग आउट</span>
-                    </>
-                  )}
-                </Button>
+                  <BiPowerOff className="text-lg" />
+                  लॉग आउट
+                </button>
               </>
-            ) : (
-              <div className="mt-6 flex gap-2">
+            )}
+
+            {!userData && !supplierData && (
+              <div className="mt-5 flex gap-2">
                 <Button
-                  className="flex-1"
+                  className="flex-1 rounded-xl"
                   variant="outline"
                   onClick={() => {
                     setSlideBar(false);
@@ -541,7 +1030,7 @@ const Navbar = () => {
                 </Button>
 
                 <Button
-                  className="flex-1"
+                  className="flex-1 rounded-xl bg-red-600"
                   onClick={() => {
                     setSlideBar(false);
                     navigate("/login");
@@ -555,30 +1044,65 @@ const Navbar = () => {
         </div>
       </div>
 
-      {/* Admin Logout Confirmation */}
-      {adminConfirmLogout && (
-        <div className="fixed inset-0 z-[60] absolute flex items-center h-screen justify-center bg-black/60">
-          <div className="w-[90%] max-w-sm rounded-xl bg-emerald-50 p-6 shadow-xl">
-            <h2 className="text-center text-xl font-semibold">लॉग आउट?</h2>
+      {/* =====================================================
+          ADMIN LOGOUT CONFIRMATION
+      ====================================================== */}
 
-            <p className="mt-2 text-center text-gray-500">
+      {adminConfirmLogout && (
+        <div
+          className="
+            fixed
+            inset-0
+            z-[60]
+            flex
+            h-screen
+            items-center
+            justify-center
+            bg-black/60
+            p-5
+            backdrop-blur-sm
+          "
+        >
+          <div
+            className="
+              w-full
+              max-w-sm
+              rounded-3xl
+              bg-white
+              p-6
+              shadow-2xl
+            "
+          >
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600">
+              <BiPowerOff className="text-2xl" />
+            </div>
+
+            <h2 className="mt-4 text-center text-xl font-bold text-neutral-900">
+              लॉग आउट?
+            </h2>
+
+            <p className="mt-2 text-center text-sm text-neutral-500">
               क्या आप सच में लॉग आउट करना चाहते हैं?
             </p>
 
-            <div className="mt-6 flex justify-center gap-4">
+            <div className="mt-6 flex justify-center gap-3">
               <Button
                 variant="outline"
                 onClick={() => setAdminConfirmLogout(false)}
+                className="rounded-xl px-6"
               >
                 नहीं
               </Button>
 
               <Button
-                className="bg-emerald-600 hover:bg-emerald-700"
-                onClick={() => {
-                  setAdminConfirmLogout(false);
-                  logoutHandler();
-                }}
+                disabled={loading}
+                className="
+                  rounded-xl
+                  bg-emerald-600
+                  px-6
+                  hover:bg-emerald-700
+                "
+                onClick={startLogout}
               >
                 हाँ
               </Button>
@@ -587,30 +1111,65 @@ const Navbar = () => {
         </div>
       )}
 
-      {/* user Logout Confirmation */}
-      {userConfirmLogout && (
-        <div className="fixed inset-0 z-[60] absolute flex items-center h-screen justify-center bg-black/60">
-          <div className="w-[90%] max-w-sm rounded-xl bg-emerald-50 p-6 shadow-xl">
-            <h2 className="text-center text-xl font-semibold">लॉग आउट?</h2>
+      {/* =====================================================
+          USER LOGOUT CONFIRMATION
+      ====================================================== */}
 
-            <p className="mt-2 text-center text-gray-500">
+      {userConfirmLogout && (
+        <div
+          className="
+            fixed
+            inset-0
+            z-[60]
+            flex
+            h-screen
+            items-center
+            justify-center
+            bg-black/60
+            p-5
+            backdrop-blur-sm
+          "
+        >
+          <div
+            className="
+              w-full
+              max-w-sm
+              rounded-3xl
+              bg-white
+              p-6
+              shadow-2xl
+            "
+          >
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-red-100 text-red-600">
+              <BiPowerOff className="text-2xl" />
+            </div>
+
+            <h2 className="mt-4 text-center text-xl font-bold text-neutral-900">
+              लॉग आउट?
+            </h2>
+
+            <p className="mt-2 text-center text-sm text-neutral-500">
               क्या आप सच में लॉग आउट करना चाहते हैं?
             </p>
 
-            <div className="mt-6 flex justify-center gap-4">
+            <div className="mt-6 flex justify-center gap-3">
               <Button
                 variant="outline"
                 onClick={() => setUserConfirmLogout(false)}
+                className="rounded-xl px-6"
               >
                 नहीं
               </Button>
 
               <Button
-                className="bg-red-600 hover:bg-red-700"
-                onClick={() => {
-                  setUserConfirmLogout(false);
-                  logoutHandler();
-                }}
+                disabled={loading}
+                className="
+                  rounded-xl
+                  bg-red-600
+                  px-6
+                  hover:bg-red-700
+                "
+                onClick={startLogout}
               >
                 हाँ
               </Button>
