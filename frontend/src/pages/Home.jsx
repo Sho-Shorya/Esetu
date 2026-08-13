@@ -10,7 +10,7 @@ import Timer from "@/components/Timer";
 const Home = () => {
   const [search, setSearch] = useState("");
   const navigate = useNavigate();
-  const { userData } = useSelector((state) => state.user);
+  const { userData, prodLoading } = useSelector((state) => state.user);
   const searchQuery =
     new URLSearchParams(location.search).get("search")?.trim().toLowerCase() ||
     "";
@@ -24,7 +24,7 @@ const Home = () => {
   const [selectedCompany, setSelectedCompany] = useState("all");
   return (
     <div className="w-full overflow-hidden pt-14">
-      <Timer />
+      {!prodLoading && <Timer />}
       {userData ? (
         <div className="w-full">
           <ProductsList selectedCompany={selectedCompany} />

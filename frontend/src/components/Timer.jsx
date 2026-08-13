@@ -28,7 +28,9 @@ const formatTime = (seconds) => {
   const safeSeconds = Math.max(0, Math.floor(seconds));
 
   const hours = Math.floor(safeSeconds / 3600);
+
   const minutes = Math.floor((safeSeconds % 3600) / 60);
+
   const secs = safeSeconds % 60;
 
   return `${pad(hours)}:${pad(minutes)}:${pad(secs)}`;
@@ -36,7 +38,9 @@ const formatTime = (seconds) => {
 
 const getTomorrow = (date) => {
   const tomorrow = new Date(date);
+
   tomorrow.setDate(tomorrow.getDate() + 1);
+
   return tomorrow;
 };
 
@@ -45,6 +49,9 @@ const getTomorrow = (date) => {
 // ======================================================
 
 const Timer = () => {
+  // IMPORTANT:
+  // null means API has not returned yet.
+  // We DO NOT calculate the timer until this has a value.
   const [customCutoff, setCustomCutoff] = useState(null);
 
   const [remainingSeconds, setRemainingSeconds] = useState(0);
@@ -66,15 +73,23 @@ const Timer = () => {
           `${API_BASE_URL}/api/v1/settings/public/app-settings`,
         );
 
-        if (
-          mounted &&
-          res.data?.success &&
-          res.data?.settings?.dailyOrderCutoff
-        ) {
-          setCustomCutoff(res.data.settings.dailyOrderCutoff);
+        if (!mounted) return;
+
+        const backendCutoff = res.data?.settings?.dailyOrderCutoff;
+
+        if (res.data?.success && backendCutoff) {
+          setCustomCutoff(backendCutoff);
+        } else {
+          // Backend didn't provide a cutoff.
+          // Use the default only in this case.
+          setCustomCutoff(DEFAULT_CUTOFF);
         }
       } catch (error) {
         console.log("Using default cutoff");
+
+        if (mounted) {
+          setCustomCutoff(DEFAULT_CUTOFF);
+        }
       }
     };
 
@@ -90,6 +105,45 @@ const Timer = () => {
   // ====================================================
 
   useEffect(() => {
+    // ==================================================
+    // VERY IMPORTANT FIX
+    // ==================================================
+    //
+    // Don't calculate anything while the API is still
+    // loading.
+    //
+    // Previously:
+    //
+    // customCutoff = null
+    // ↓
+    // DEFAULT_CUTOFF = 12:00
+    // ↓
+    // timer calculates using 12:00
+    // ↓
+    // "ORDER CLOSED" appears
+    // ↓
+    // API responds
+    // ↓
+    // real cutoff appears
+    //
+    // Now:
+    //
+    // customCutoff = null
+    // ↓
+    // status = loading
+    // ↓
+    // Timer returns null
+    // ↓
+    // API responds
+    // ↓
+    // real cutoff is used
+    // ==================================================
+
+    if (!customCutoff) {
+      setStatus("loading");
+      return;
+    }
+
     let mounted = true;
 
     const updateTimer = () => {
@@ -97,9 +151,7 @@ const Timer = () => {
 
       const now = new Date();
 
-      const cutoffString = customCutoff || DEFAULT_CUTOFF;
-
-      const todayCutoff = parseCutoff(cutoffString, now);
+      const todayCutoff = parseCutoff(customCutoff, now);
 
       // -----------------------------------------------
       // BEFORE TODAY'S CUTOFF
@@ -109,27 +161,31 @@ const Timer = () => {
         const diff = (todayCutoff.getTime() - now.getTime()) / 1000;
 
         setRemainingSeconds(Math.max(0, diff));
+
         setStatus("countdown");
 
         return;
       }
 
       // -----------------------------------------------
-      // AFTER CUTOFF
+      // AFTER TODAY'S CUTOFF
       // -----------------------------------------------
 
       const tomorrow = getTomorrow(now);
 
-      const tomorrowCutoff = parseCutoff(cutoffString, tomorrow);
+      const tomorrowCutoff = parseCutoff(customCutoff, tomorrow);
 
       const diff = (tomorrowCutoff.getTime() - now.getTime()) / 1000;
 
       setRemainingSeconds(Math.max(0, diff));
+
       setStatus("timeout");
     };
 
+    // Calculate immediately
     updateTimer();
 
+    // Then update every second
     const interval = setInterval(updateTimer, 1000);
 
     return () => {
@@ -270,7 +326,8 @@ const Timer = () => {
                 backdrop-blur-2xl
               "
             >
-              {/* glow */}
+              {/* GLOW */}
+
               <div
                 className="
                   absolute
@@ -285,7 +342,8 @@ const Timer = () => {
                 "
               />
 
-              {/* icon */}
+              {/* ICON */}
+
               <div
                 className="
                   relative
@@ -303,18 +361,38 @@ const Timer = () => {
                 <Check size={17} strokeWidth={3} />
               </div>
 
-              {/* text */}
-              <div className="relative leading-none min-w-[69px]">
-                <p className="text-[10px] font-medium text-white/50">
+              {/* TEXT */}
+
+              <div
+                className="
+                  relative
+                  min-w-[69px]
+                  leading-none
+                "
+              >
+                <p
+                  className="
+                    text-[10px]
+                    font-medium
+                    text-white/50
+                  "
+                >
                   आज के ऑर्डर
                 </p>
 
-                <p className="mt-[4px] text-[13px] font-bold">
+                <p
+                  className="
+                    mt-[4px]
+                    text-[13px]
+                    font-bold
+                  "
+                >
                   बंद हो चुके हैं
                 </p>
               </div>
 
-              {/* tomorrow */}
+              {/* TOMORROW */}
+
               <div
                 className="
                   relative
@@ -325,11 +403,24 @@ const Timer = () => {
                   text-right
                 "
               >
-                <p className="text-[9px] min-w-[60px] text-white/40">
+                <p
+                  className="
+                    min-w-[60px]
+                    text-[9px]
+                    text-white/40
+                  "
+                >
                   अगला कटऑफ
                 </p>
 
-                <p className="mt-[3px] text-[11px] font-bold text-emerald-400">
+                <p
+                  className="
+                    mt-[3px]
+                    text-[11px]
+                    font-bold
+                    text-emerald-400
+                  "
+                >
                   {cutoffLabel.toUpperCase()}
                 </p>
               </div>
@@ -494,7 +585,13 @@ const Timer = () => {
                 CONTENT
             ================================================= */}
 
-            <div className="relative min-w-[92px] leading-none">
+            <div
+              className="
+                relative
+                min-w-[92px]
+                leading-none
+              "
+            >
               <p
                 className={`
                   text-[10px]

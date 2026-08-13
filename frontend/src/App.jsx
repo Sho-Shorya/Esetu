@@ -32,6 +32,7 @@ import getRoutes from "../hooks/getRoutes";
 import VerifyOtp from "./pages/VerifyOtp";
 import EditProduct from "./components/EditProduct";
 import LiveTracking from "./components/LiveTracking";
+import OrderSuccess from "./pages/OrderSuccess";
 function App() {
   const token = localStorage.getItem("token");
 
@@ -128,6 +129,7 @@ function App() {
           )
         }
       />
+      <Route path="/order-success" element={<OrderSuccess />} />
       <Route
         path="/product-page"
         element={

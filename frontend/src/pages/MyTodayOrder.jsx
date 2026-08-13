@@ -1,23 +1,33 @@
 import axios from "axios";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "sonner";
 import { FaClock } from "react-icons/fa";
 import { MdDeleteOutline } from "react-icons/md";
+import { Check, Dot } from "lucide-react";
+
 import { API_BASE_URL } from "../lib/constants";
+
 import {
   setLoading,
   setTodayOrders,
   removeOrder,
   updateOrderItems,
 } from "../redux/orderSlice";
-import { Check, Dot } from "lucide-react";
+
 import Timer from "@/components/Timer";
+
+// ======================================================
+// HELPERS
+// ======================================================
 
 const getCountdown = (cutoffTime, now) => {
   const diff = Math.max(0, new Date(cutoffTime).getTime() - now.getTime());
+
   const hours = Math.floor(diff / 3600000);
+
   const minutes = Math.floor((diff % 3600000) / 60000);
+
   const seconds = Math.floor((diff % 60000) / 1000);
 
   return `${hours.toString().padStart(2, "0")}:${minutes
@@ -25,21 +35,24 @@ const getCountdown = (cutoffTime, now) => {
     .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
 };
 
+// ======================================================
+// COMPONENT
+// ======================================================
+
 const MyTodayOrder = () => {
   const dispatch = useDispatch();
 
   const { todayOrders, loading } = useSelector((state) => state.orders);
 
   const [removingId, setRemovingId] = useState(null);
-  const [now, setNow] = useState(new Date());
 
   const token = localStorage.getItem("token");
 
-  /* ========================================
-            Fetch Today's Orders
-  ======================================== */
+  // ====================================================
+  // FETCH TODAY'S ORDERS
+  // ====================================================
 
-  const getTodayOrders = async () => {
+  const getTodayOrders = useCallback(async () => {
     if (!token) return;
 
     dispatch(setLoading(true));
@@ -59,106 +72,314 @@ const MyTodayOrder = () => {
     } finally {
       dispatch(setLoading(false));
     }
-  };
+  }, [token, dispatch]);
+
+  // ====================================================
+  // LOAD ONCE
+  // ====================================================
 
   useEffect(() => {
     getTodayOrders();
-  }, []);
+  }, [getTodayOrders]);
 
-  useEffect(() => {
-    const interval = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(interval);
-  }, []);
+  // ====================================================
+  // FAST OPTIMISTIC REMOVE
+  // ====================================================
 
-  /* ========================================
-              Remove Item
-  ======================================== */
+  const removeItem = useCallback(
+    async (orderId, itemId) => {
+      // Prevent duplicate requests
+      if (removingId === itemId) {
+        return;
+      }
 
-  const removeItem = async (orderId, itemId) => {
-    try {
+      // Find the order before modifying Redux
+      const order = todayOrders.find((order) => order._id === orderId);
+
+      if (!order) return;
+
+      // Find the item
+      const item = order.items.find((item) => item._id === itemId);
+
+      if (!item) return;
+
+      // ------------------------------------------------
+      // SAVE ORIGINAL STATE
+      // ------------------------------------------------
+
+      const originalOrder = order;
+
+      // ------------------------------------------------
+      // UI UPDATES IMMEDIATELY
+      // ------------------------------------------------
+
       setRemovingId(itemId);
 
-      const res = await axios.delete(
-        `${API_BASE_URL}/api/v1/order/remove-item/${orderId}/${itemId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
+      const remainingItems = order.items.filter((item) => item._id !== itemId);
 
-      if (res.data.success) {
+      // If this was the last item,
+      // optimistically remove the entire order.
+      if (remainingItems.length === 0) {
+        dispatch(removeOrder(orderId));
+      } else {
+        // Otherwise immediately update
+        // the order's items.
+        dispatch(
+          updateOrderItems({
+            ...order,
+            items: remainingItems,
+
+            // Recalculate total
+            totalAmount: remainingItems.reduce(
+              (sum, item) => sum + Number(item.total || 0),
+              0,
+            ),
+          }),
+        );
+      }
+
+      // ------------------------------------------------
+      // BACKGROUND API REQUEST
+      // ------------------------------------------------
+
+      try {
+        const res = await axios.delete(
+          `${API_BASE_URL}/api/v1/order/remove-item/${orderId}/${itemId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          },
+        );
+
+        if (!res.data.success) {
+          // --------------------------------------------
+          // ROLLBACK
+          // --------------------------------------------
+
+          dispatch(updateOrderItems(originalOrder));
+
+          toast.error(res.data.message || "Item remove nahi hua.");
+
+          return;
+        }
+
+        // ------------------------------------------------
+        // SERVER RESPONSE
+        // ------------------------------------------------
+
         if (res.data.deleted) {
+          // Server confirms whole order deleted
           dispatch(removeOrder(orderId));
-        } else {
+        } else if (res.data.order) {
+          // Server confirms updated order
           dispatch(updateOrderItems(res.data.order));
         }
 
-        toast.success("आइटम हटा दिया", { duration: 1000 });
+        toast.success("आइटम हटा दिया", {
+          duration: 1000,
+        });
+      } catch (error) {
+        // ------------------------------------------------
+        // ROLLBACK IF REQUEST FAILS
+        // ------------------------------------------------
+
+        dispatch(updateOrderItems(originalOrder));
+
+        toast.error(error.response?.data?.message || "Item remove nahi hua.");
+      } finally {
+        setRemovingId(null);
       }
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Item remove nahi hua.");
-    } finally {
-      setRemovingId(null);
-    }
-  };
+    },
+    [todayOrders, removingId, token, dispatch],
+  );
 
-  /* ========================================
-            Total Orders
-  ======================================== */
-
-  const totalOrders = useMemo(() => {
-    return todayOrders.length;
-  }, [todayOrders]);
+  // ====================================================
+  // LOADING
+  // ====================================================
 
   if (loading) {
     return (
-      <div className="mt-20 flex justify-center">
-        <div className="h-12 w-12 rounded-full border-4 border-green-600 border-t-transparent animate-spin"></div>
+      <div className="absolute h-full w-full flex items-center justify-center">
+        <div
+          className="
+            h-12
+            w-12
+            animate-spin
+            rounded-full
+            border-4
+            border-red-600
+            border-t-transparent
+          "
+        />
       </div>
     );
   }
-  return (
-    <div className="min-h-screen bg-gray-100 pb-60 pt-18">
-      <div className="max-w-6xl mx-auto px-3">
-        {/* Header */}
-        <Timer />
-        <div className="bg-white rounded-3xl shadow-md border border-gray-200 p-5 mb-5">
-          <div className="flex  relative items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-800">आज का ऑर्डर</h1>
 
-              <p className="text-sm text-gray-500 mt-3">
+  // ====================================================
+  // UI
+  // ====================================================
+
+  return (
+    <div
+      className="
+        min-h-screen
+        bg-gray-100
+        pb-60
+        pt-18
+      "
+    >
+      <div
+        className="
+          mx-auto
+          max-w-6xl
+          px-3
+        "
+      >
+        {/* ==================================================
+            HEADER
+        ================================================== */}
+
+        <Timer />
+
+        <div
+          className="
+            mb-5
+            rounded-3xl
+            border
+            border-gray-200
+            bg-white
+            p-5
+            shadow-md
+          "
+        >
+          <div
+            className="
+              relative
+              flex
+              items-center
+              justify-between
+            "
+          >
+            <div>
+              <h1
+                className="
+                  text-2xl
+                  font-bold
+                  text-gray-800
+                "
+              >
+                आज का ऑर्डर
+              </h1>
+
+              <p
+                className="
+                  mt-3
+                  text-sm
+                  text-gray-500
+                "
+              >
                 आपके Pending और Approved ऑर्डर
               </p>
             </div>
-            <div className="w-35 h-full relative">
-              <img src="./penpaper.png" className="z-5 h-30 w-35" />
+
+            <div
+              className="
+                relative
+                h-full
+                w-35
+              "
+            >
+              <img
+                src="./penpaper.png"
+                alt=""
+                className="
+                  z-5
+                  h-30
+                  w-35
+                "
+              />
             </div>
           </div>
         </div>
+
+        {/* ==================================================
+            EMPTY STATE
+        ================================================== */}
+
         {todayOrders.length === 0 ? (
-          <div className="bg-white rounded-3xl shadow-md border border-gray-200 p-12 text-center">
-            <img src="/empty-cart.png" alt="" className="w-44 mx-auto" />
+          <div
+            className="
+              rounded-3xl
+              border
+              border-gray-200
+              bg-white
+              p-12
+              text-center
+              shadow-md
+            "
+          >
+            <img src="/empty-cart.png" alt="" className="mx-auto w-44" />
 
-            <h2 className="text-2xl font-bold mt-4">आज कोई ऑर्डर नहीं है</h2>
+            <h2
+              className="
+                mt-4
+                text-2xl
+                font-bold
+              "
+            >
+              आज कोई ऑर्डर नहीं है
+            </h2>
 
-            <p className="text-gray-500 mt-2">
+            <p
+              className="
+                mt-2
+                text-gray-500
+              "
+            >
               Cart से ऑर्डर करने के बाद वह यहां दिखाई देगा।
             </p>
           </div>
         ) : (
+          /* ==================================================
+             ORDERS
+          ================================================== */
+
           <div className="space-y-5">
             {todayOrders.map((order) => (
               <div
                 key={order._id}
-                className="bg-white rounded-3xl shadow-md border border-gray-200 overflow-hidden"
+                className="
+                    overflow-hidden
+                    rounded-3xl
+                    border
+                    border-gray-200
+                    bg-white
+                    shadow-md
+                  "
               >
-                {/* Order Header */}
+                {/* ==========================================
+                      ORDER HEADER
+                  ========================================== */}
 
-                <div className="bg-gray-50 px-5 py-4 border-b flex items-center justify-between">
+                <div
+                  className="
+                      flex
+                      items-center
+                      justify-between
+                      border-b
+                      bg-gray-50
+                      px-5
+                      py-4
+                    "
+                >
                   <div>
-                    <p className="font-bold text-lg">
+                    <p
+                      className="
+                          text-lg
+                          font-bold
+                        "
+                    >
                       {new Date(order.createdAt).toLocaleString("en-IN", {
                         day: "numeric",
                         month: "short",
@@ -168,41 +389,121 @@ const MyTodayOrder = () => {
                         hour12: true,
                       })}
                     </p>
-                    <h2 className=" text-xs text-gray-500 mt-1">
+
+                    <h2
+                      className="
+                          mt-1
+                          text-xs
+                          text-gray-500
+                        "
+                    >
                       Order #{order._id.slice(-6)}
                     </h2>
                   </div>
 
+                  {/* STATUS */}
+
                   <div className="relative">
                     {order.status === "Pending" && (
-                      <span className="bg-yellow-100 text-orange-700 text-sm font-semibold px-4 py-2 rounded-1xl">
+                      <span
+                        className="
+                            rounded-1xl
+                            bg-yellow-100
+                            px-4
+                            py-2
+                            text-sm
+                            font-semibold
+                            text-orange-700
+                          "
+                      >
                         Pending
-                        <Dot className="-top-4 animate-ping -right-3 absolute bg-red h-10 w-10" />
+                        <Dot
+                          className="
+                              absolute
+                              -right-3
+                              -top-4
+                              h-10
+                              w-10
+                              animate-ping
+                              bg-red
+                            "
+                        />
                       </span>
                     )}
 
                     {order.status === "Approved" && (
-                      <span className="bg-green-100 text-green-700 text-sm font-semibold px-4 py-2 rounded-full">
+                      <span
+                        className="
+                            rounded-full
+                            bg-green-100
+                            px-4
+                            py-2
+                            text-sm
+                            font-semibold
+                            text-green-700
+                          "
+                      >
                         Approved
-                        <Check className="h-3 -top-1 -right-1 absolute " />
+                        <Check
+                          className="
+                              absolute
+                              -right-1
+                              -top-1
+                              h-3
+                            "
+                        />
                       </span>
                     )}
 
                     {order.status === "Declined" && (
-                      <span className="bg-red-100 text-red-700 text-sm font-semibold px-4 py-2 rounded-full">
+                      <span
+                        className="
+                            rounded-full
+                            bg-red-100
+                            px-4
+                            py-2
+                            text-sm
+                            font-semibold
+                            text-red-700
+                          "
+                      >
                         Declined
                       </span>
                     )}
                   </div>
                 </div>
 
-                {/* Cutoff Time */}
+                {/* ==========================================
+                      CUTOFF
+                  ========================================== */}
 
-                <div className="px-5 py-3 border-b bg-orange-50 flex items-center gap-2">
+                <div
+                  className="
+                      flex
+                      items-center
+                      gap-2
+                      border-b
+                      bg-orange-50
+                      px-5
+                      py-3
+                    "
+                >
                   <FaClock className="text-orange-600" />
 
-                  <p className="text-sm text-orange-700  font-medium">
-                    <span className="ml-2 mr-[5px] font-bold">
+                  <p
+                    className="
+                        text-sm
+                        font-medium
+                        text-orange-700
+                      "
+                  >
+                    <span
+                      className="
+                          ml-2
+                          mr-[5px]
+                          font-bold
+                        "
+                    >
                       {new Date(order.cutoffTime).toLocaleTimeString([], {
                         hour: "2-digit",
                         minute: "2-digit",
@@ -212,40 +513,105 @@ const MyTodayOrder = () => {
                   </p>
                 </div>
 
-                {/* Items */}
+                {/* ==========================================
+                      ITEMS
+                  ========================================== */}
 
-                <div className="divide-y ">
+                <div className="divide-y">
                   {order.items.map((item) => (
-                    <div key={item._id} className="p-5 flex gap-4">
+                    <div
+                      key={item._id}
+                      className="
+                            flex
+                            gap-4
+                            p-5
+                          "
+                    >
                       <div className="flex-1">
-                        <div className="flex justify-between">
+                        {/* PRODUCT INFO */}
+
+                        <div
+                          className="
+                                flex
+                                justify-between
+                              "
+                        >
                           <div>
-                            <p className="text-sm text-green-700 mt-1">
+                            <p
+                              className="
+                                    mt-1
+                                    text-sm
+                                    text-green-700
+                                  "
+                            >
                               {item.companyName}
                             </p>
-                            <h2 className="font-bold text-lg text-gray-800">
+
+                            <h2
+                              className="
+                                    text-lg
+                                    font-bold
+                                    text-gray-800
+                                  "
+                            >
                               {item.name}
                             </h2>
                           </div>
 
                           <div className="text-right">
-                            <h2 className="text-xl font-bold text-green-700">
+                            <h2
+                              className="
+                                    text-xl
+                                    font-bold
+                                    text-green-700
+                                  "
+                            >
                               ₹{item.total}
                             </h2>
 
-                            <p className="text-sm text-gray-500">
+                            <p
+                              className="
+                                    text-sm
+                                    text-gray-500
+                                  "
+                            >
                               ₹{item.price} each
                             </p>
                           </div>
                         </div>
 
-                        <div className="mt-4 flex items-center justify-between">
+                        {/* ITEM ACTIONS */}
+
+                        <div
+                          className="
+                                mt-4
+                                flex
+                                items-center
+                                justify-between
+                              "
+                        >
                           <div className="flex gap-3">
-                            <span className="bg-gray-100 rounded-xl px-3 py-2 text-sm">
+                            <span
+                              className="
+                                    rounded-xl
+                                    bg-gray-100
+                                    px-3
+                                    py-2
+                                    text-sm
+                                  "
+                            >
                               Qty : {item.qty}
                             </span>
 
-                            <span className="bg-gray-100 rounded-xl px-3 py-2 text-sm">
+                            <span
+                              className="
+                                    rounded-xl
+                                    bg-gray-100
+                                    px-3
+                                    py-2
+                                    text-sm
+                                  "
+                            >
                               {item.measurement}
                             </span>
                           </div>
@@ -254,9 +620,23 @@ const MyTodayOrder = () => {
                             <button
                               disabled={removingId === item._id}
                               onClick={() => removeItem(order._id, item._id)}
-                              className="flex items-center gap-2 bg-red-50 hover:bg-red-100 text-red-600 px-4 py-2 rounded-xl transition-all"
+                              className="
+                                    flex
+                                    items-center
+                                    gap-2
+                                    rounded-xl
+                                    bg-red-50
+                                    px-4
+                                    py-2
+                                    text-red-600
+                                    transition-all
+                                    hover:bg-red-100
+                                    disabled:cursor-not-allowed
+                                    disabled:opacity-60
+                                  "
                             >
                               <MdDeleteOutline size={20} />
+
                               {removingId === item._id
                                 ? "Removing..."
                                 : "Remove"}
@@ -266,130 +646,329 @@ const MyTodayOrder = () => {
                       </div>
                     </div>
                   ))}
+                </div>
 
-                  {/* <div className="border-b bg-yellow-50 px-5 py-3 text-sm text-yellow-800 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="font-semibold">Order Edit Cutoff</div>
-                    <div>
-                      {new Date(order.cutoffTime) <= now ? (
-                        <span className="rounded-full bg-red-100 px-3 py-1 text-red-700">
-                          Cutoff passed — order locked
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-emerald-100 px-3 py-1 text-emerald-700">
-                          Edit available till{" "}
-                          {getCountdown(order.cutoffTime, now)}
-                        </span>
-                      )}
-                    </div>
-                  </div> */}
-                  {/* Order Footer */}
+                {/* ==========================================
+                      ORDER FOOTER
+                  ========================================== */}
 
-                  <div className="border-t bg-gray-50 px-5 py-4">
-                    <p className="w-full flex items-center justify-center text-red-600 font-bold text-2xl">
-                      Total
-                    </p>
-                    <div className="flex justify-between items-center mb-3">
-                      <span className="text-gray-600 font-medium">
-                        Payment Method
-                      </span>
+                <div
+                  className="
+                      border-t
+                      bg-gray-50
+                      px-5
+                      py-4
+                    "
+                >
+                  <p
+                    className="
+                        flex
+                        w-full
+                        items-center
+                        justify-center
+                        text-2xl
+                        font-bold
+                        text-red-600
+                      "
+                  >
+                    Total
+                  </p>
 
-                      <span className="font-semibold text-gray-800">
-                        {order.paymentMethod}
-                      </span>
-                    </div>
+                  <div
+                    className="
+                        mb-3
+                        flex
+                        items-center
+                        justify-between
+                      "
+                  >
+                    <span
+                      className="
+                          font-medium
+                          text-gray-600
+                        "
+                    >
+                      Payment Method
+                    </span>
 
-                    <div className="border-t pt-4 flex justify-between items-center">
-                      <div>
-                        <p className="text-sm text-gray-500">Total Items</p>
-
-                        <h2 className="text-xl font-bold">
-                          {order.items.reduce((sum, item) => sum + item.qty, 0)}
-                        </h2>
-                      </div>
-
-                      <div className="text-right">
-                        <p className="text-sm text-gray-500">Grand Total</p>
-
-                        <h2 className="text-3xl font-bold text-green-700">
-                          ₹{order.totalAmount}
-                        </h2>
-                      </div>
-                    </div>
-
-                    {order.status === "Pending" && (
-                      <div className="mt-5 rounded-2xl bg-yellow-50 border border-yellow-200 p-4">
-                        <h3 className="font-semibold text-yellow-700">
-                          Order Pending
-                        </h3>
-
-                        <p className="text-sm text-yellow-700 mt-1">
-                          आपका ऑर्डर अभी Pending है। Admin के approve करने तक या
-                          तय समय तक आप items remove कर सकते हैं।
-                        </p>
-                      </div>
-                    )}
-
-                    {order.status === "Approved" && (
-                      <div className="mt-5 rounded-2xl bg-green-50 border border-green-200 p-4">
-                        <h3 className="font-semibold text-green-700">
-                          Order Approved
-                        </h3>
-
-                        <p className="text-sm text-green-700 mt-1">
-                          आपका ऑर्डर स्वीकार कर लिया गया है और जल्द तैयार किया
-                          जाएगा।
-                        </p>
-                      </div>
-                    )}
-
-                    {order.status === "Preparing" && (
-                      <div className="mt-5 rounded-2xl bg-blue-50 border border-blue-200 p-4">
-                        <h3 className="font-semibold text-blue-700">
-                          Preparing Your Order
-                        </h3>
-
-                        <p className="text-sm text-blue-700 mt-1">
-                          आपकी grocery पैक की जा रही है।
-                        </p>
-                      </div>
-                    )}
-
-                    {order.status === "Out For Delivery" && (
-                      <div className="mt-5 rounded-2xl bg-purple-50 border border-purple-200 p-4">
-                        <h3 className="font-semibold text-purple-700">
-                          Out For Delivery
-                        </h3>
-
-                        <p className="text-sm text-purple-700 mt-1">
-                          आपका ऑर्डर रास्ते में है।
-                        </p>
-                      </div>
-                    )}
-
-                    {order.status === "Delivered" && (
-                      <div className="mt-5 rounded-2xl bg-emerald-50 border border-emerald-200 p-4">
-                        <h3 className="font-semibold text-emerald-700">
-                          Delivered Successfully
-                        </h3>
-
-                        <p className="text-sm text-emerald-700 mt-1">
-                          धन्यवाद! आपका ऑर्डर सफलतापूर्वक डिलीवर हो गया।
-                        </p>
-                      </div>
-                    )}
-
-                    {order.status === "Cancelled" && (
-                      <div className="mt-5 rounded-2xl bg-red-50 border border-red-200 p-4">
-                        <h3 className="font-semibold text-red-700">
-                          Order Cancelled
-                        </h3>
-
-                        <p className="text-sm text-red-700 mt-1">
-                          यह ऑर्डर रद्द कर दिया गया है।
-                        </p>
-                      </div>
-                    )}
+                    <span
+                      className="
+                          font-semibold
+                          text-gray-800
+                        "
+                    >
+                      {order.paymentMethod}
+                    </span>
                   </div>
+
+                  <div
+                    className="
+                        flex
+                        items-center
+                        justify-between
+                        border-t
+                        pt-4
+                      "
+                  >
+                    <div>
+                      <p
+                        className="
+                            text-sm
+                            text-gray-500
+                          "
+                      >
+                        Total Items
+                      </p>
+
+                      <h2
+                        className="
+                            text-xl
+                            font-bold
+                          "
+                      >
+                        {order.items.reduce((sum, item) => sum + item.qty, 0)}
+                      </h2>
+                    </div>
+
+                    <div className="text-right">
+                      <p
+                        className="
+                            text-sm
+                            text-gray-500
+                          "
+                      >
+                        Grand Total
+                      </p>
+
+                      <h2
+                        className="
+                            text-3xl
+                            font-bold
+                            text-green-700
+                          "
+                      >
+                        ₹{order.totalAmount}
+                      </h2>
+                    </div>
+                  </div>
+
+                  {/* ========================================
+                        PENDING
+                    ======================================== */}
+
+                  {order.status === "Pending" && (
+                    <div
+                      className="
+                          mt-5
+                          rounded-2xl
+                          border
+                          border-yellow-200
+                          bg-yellow-50
+                          p-4
+                        "
+                    >
+                      <h3
+                        className="
+                            font-semibold
+                            text-yellow-700
+                          "
+                      >
+                        Order Pending
+                      </h3>
+
+                      <p
+                        className="
+                            mt-1
+                            text-sm
+                            text-yellow-700
+                          "
+                      >
+                        आपका ऑर्डर अभी Pending है। Admin के approve करने तक या
+                        तय समय तक आप items remove कर सकते हैं।
+                      </p>
+                    </div>
+                  )}
+
+                  {/* ========================================
+                        APPROVED
+                    ======================================== */}
+
+                  {order.status === "Approved" && (
+                    <div
+                      className="
+                          mt-5
+                          rounded-2xl
+                          border
+                          border-green-200
+                          bg-green-50
+                          p-4
+                        "
+                    >
+                      <h3
+                        className="
+                            font-semibold
+                            text-green-700
+                          "
+                      >
+                        Order Approved
+                      </h3>
+
+                      <p
+                        className="
+                            mt-1
+                            text-sm
+                            text-green-700
+                          "
+                      >
+                        आपका ऑर्डर स्वीकार कर लिया गया है और जल्द तैयार किया
+                        जाएगा।
+                      </p>
+                    </div>
+                  )}
+
+                  {/* ========================================
+                        PREPARING
+                    ======================================== */}
+
+                  {order.status === "Preparing" && (
+                    <div
+                      className="
+                          mt-5
+                          rounded-2xl
+                          border
+                          border-blue-200
+                          bg-blue-50
+                          p-4
+                        "
+                    >
+                      <h3
+                        className="
+                            font-semibold
+                            text-blue-700
+                          "
+                      >
+                        Preparing Your Order
+                      </h3>
+
+                      <p
+                        className="
+                            mt-1
+                            text-sm
+                            text-blue-700
+                          "
+                      >
+                        आपकी grocery पैक की जा रही है।
+                      </p>
+                    </div>
+                  )}
+
+                  {/* ========================================
+                        OUT FOR DELIVERY
+                    ======================================== */}
+
+                  {order.status === "Out For Delivery" && (
+                    <div
+                      className="
+                          mt-5
+                          rounded-2xl
+                          border
+                          border-purple-200
+                          bg-purple-50
+                          p-4
+                        "
+                    >
+                      <h3
+                        className="
+                            font-semibold
+                            text-purple-700
+                          "
+                      >
+                        Out For Delivery
+                      </h3>
+
+                      <p
+                        className="
+                            mt-1
+                            text-sm
+                            text-purple-700
+                          "
+                      >
+                        आपका ऑर्डर रास्ते में है।
+                      </p>
+                    </div>
+                  )}
+
+                  {/* ========================================
+                        DELIVERED
+                    ======================================== */}
+
+                  {order.status === "Delivered" && (
+                    <div
+                      className="
+                          mt-5
+                          rounded-2xl
+                          border
+                          border-emerald-200
+                          bg-emerald-50
+                          p-4
+                        "
+                    >
+                      <h3
+                        className="
+                            font-semibold
+                            text-emerald-700
+                          "
+                      >
+                        Delivered Successfully
+                      </h3>
+
+                      <p
+                        className="
+                            mt-1
+                            text-sm
+                            text-emerald-700
+                          "
+                      >
+                        धन्यवाद! आपका ऑर्डर सफलतापूर्वक डिलीवर हो गया।
+                      </p>
+                    </div>
+                  )}
+
+                  {/* ========================================
+                        CANCELLED
+                    ======================================== */}
+
+                  {order.status === "Cancelled" && (
+                    <div
+                      className="
+                          mt-5
+                          rounded-2xl
+                          border
+                          border-red-200
+                          bg-red-50
+                          p-4
+                        "
+                    >
+                      <h3
+                        className="
+                            font-semibold
+                            text-red-700
+                          "
+                      >
+                        Order Cancelled
+                      </h3>
+
+                      <p
+                        className="
+                            mt-1
+                            text-sm
+                            text-red-700
+                          "
+                      >
+                        यह ऑर्डर रद्द कर दिया गया है।
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
