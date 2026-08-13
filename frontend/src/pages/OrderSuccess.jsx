@@ -11,26 +11,21 @@ const OrderSuccess = () => {
     // PLAY SUCCESS SOUND
     // =========================================================
 
-    const audio = new Audio("/order-success1.wav");
+    const audio = new Audio("/order-success.mp3");
 
-    audioRef.current = audio;
-
-    audio.volume = 0.9;
+    audio.volume = 1;
     audio.preload = "auto";
 
     const playSound = async () => {
       try {
         await audio.play();
       } catch (error) {
-        // Don't show an error to the user if browser blocks audio.
         console.log("Success sound could not play:", error);
       }
     };
 
-    // Start loading immediately
     audio.load();
 
-    // Play once browser has enough audio data
     if (audio.readyState >= 3) {
       playSound();
     } else {
@@ -40,32 +35,23 @@ const OrderSuccess = () => {
     }
 
     // =========================================================
-    // NAVIGATE TO TODAY'S ORDERS
+    // STAY FOR 3 SECONDS
     // =========================================================
 
     const timer = setTimeout(() => {
       navigate("/my-orders", {
         replace: true,
       });
-    }, 2000);
+    }, 3000);
 
     return () => {
       clearTimeout(timer);
 
       audio.removeEventListener("canplaythrough", playSound);
 
-      // DON'T call audio.pause() here.
-      //
-      // Calling pause() while play() is still starting
-      // causes:
-      //
-      // AbortError:
-      // The play() request was interrupted by a call to pause()
-      //
-      audioRef.current = null;
+      // Don't pause the audio here.
     };
   }, [navigate]);
-
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center bg-white px-5">
       <motion.div
