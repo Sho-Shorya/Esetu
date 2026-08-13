@@ -73,7 +73,6 @@ export const syncTodayOrderFlags = async () => {
 /* ===========================================================
    Create / Merge Today's Order
 =========================================================== */
-
 export const addOrder = async (req, res) => {
   try {
     const userId = req.userId;
@@ -86,18 +85,32 @@ export const addOrder = async (req, res) => {
     }
 
     // ============================================================
-    // 1. GET CART
+    // 1. GET CART + USER IN PARALLEL
     // ============================================================
 
-    const cart = await Cart.findOne({ userId })
-      .populate({
-        path: "items.productId",
-        populate: {
-          path: "category",
+    const [cart, user] = await Promise.all([
+      Cart.findOne({ userId })
+        .populate({
+          path: "items.productId",
+          select: "name hinglishName media category",
+          populate: {
+            path: "category",
+            select: "name",
+          },
+        })
+        .populate({
+          path: "items.company",
           select: "name",
-        },
-      })
-      .populate("items.company");
+        }),
+
+      User.findById(userId).select(
+        "firstName lastName address oneSignalSubscriptionId",
+      ),
+    ]);
+
+    // ============================================================
+    // 2. VALIDATE
+    // ============================================================
 
     if (!cart || cart.items.length === 0) {
       return res.status(400).json({
@@ -105,14 +118,6 @@ export const addOrder = async (req, res) => {
         message: "Cart is empty.",
       });
     }
-
-    // ============================================================
-    // 2. GET USER
-    // ============================================================
-
-    const user = await User.findById(userId).select(
-      "firstName lastName address oneSignalSubscriptionId",
-    );
 
     if (!user) {
       return res.status(404).json({
@@ -166,119 +171,77 @@ export const addOrder = async (req, res) => {
     }
 
     // ============================================================
-    // 7. MERGE EXISTING ORDER
+    // 7. BUILD ORDER ITEMS
+    // ============================================================
+
+    const orderItems = cart.items.map((cartItem) => ({
+      productId: cartItem.productId._id,
+
+      name: cartItem.productId.name,
+
+      hinglishName: cartItem.productId.hinglishName || "",
+
+      image: cartItem.productId.media?.[0] || "",
+
+      companyId: cartItem.company._id,
+
+      companyName: cartItem.company.name,
+
+      categoryId:
+        cartItem.productId.category?._id || cartItem.productId.category || null,
+
+      categoryName: cartItem.productId.category?.name || "",
+
+      measurement: cartItem.measurement,
+
+      qty: cartItem.qty,
+
+      price:
+        cartItem.price ?? (cartItem.qty ? cartItem.total / cartItem.qty : 0),
+
+      total: cartItem.total,
+    }));
+
+    // ============================================================
+    // 8. CREATE / MERGE ORDER
     // ============================================================
 
     if (order) {
-      for (const cartItem of cart.items) {
+      for (const newItem of orderItems) {
         const existingItem = order.items.find(
           (item) =>
-            item.productId.toString() === cartItem.productId._id.toString() &&
-            item.companyId.toString() === cartItem.company._id.toString() &&
-            item.measurement === cartItem.measurement,
+            item.productId.toString() === newItem.productId.toString() &&
+            item.companyId.toString() === newItem.companyId.toString() &&
+            item.measurement === newItem.measurement,
         );
 
         if (existingItem) {
-          existingItem.qty += cartItem.qty;
-          existingItem.total += cartItem.total;
+          existingItem.qty += newItem.qty;
+          existingItem.total += newItem.total;
         } else {
-          order.items.push({
-            productId: cartItem.productId._id,
-
-            name: cartItem.productId.name,
-
-            hinglishName: cartItem.productId.hinglishName || "",
-
-            image: cartItem.productId.media?.[0] || "",
-
-            companyId: cartItem.company._id,
-
-            companyName: cartItem.company.name,
-
-            categoryId:
-              cartItem.productId.category?._id ||
-              cartItem.productId.category ||
-              null,
-
-            categoryName:
-              cartItem.productId.category?.name ||
-              cartItem.productId.category ||
-              "",
-
-            measurement: cartItem.measurement,
-
-            qty: cartItem.qty,
-
-            price:
-              cartItem.price ??
-              (cartItem.qty ? cartItem.total / cartItem.qty : 0),
-
-            total: cartItem.total,
-          });
+          order.items.push(newItem);
         }
       }
 
       order.totalAmount += cart.totalPrice;
 
       await order.save();
-    }
-
-    // ============================================================
-    // 8. CREATE NEW ORDER
-    // ============================================================
-    else {
-      const orderItems = cart.items.map((cartItem) => ({
-        productId: cartItem.productId._id,
-
-        name: cartItem.productId.name,
-
-        hinglishName: cartItem.productId.hinglishName || "",
-
-        image: cartItem.productId.media?.[0] || "",
-
-        companyId: cartItem.company._id,
-
-        companyName: cartItem.company.name,
-
-        categoryId:
-          cartItem.productId.category?._id ||
-          cartItem.productId.category ||
-          null,
-
-        categoryName:
-          cartItem.productId.category?.name ||
-          cartItem.productId.category ||
-          "",
-
-        measurement: cartItem.measurement,
-
-        qty: cartItem.qty,
-
-        price:
-          cartItem.price ?? (cartItem.qty ? cartItem.total / cartItem.qty : 0),
-
-        total: cartItem.total,
-      }));
-
+    } else {
+      // Get cutoff only when actually creating
       const cutoffTime = await getTodayCutoff();
 
       order = await Order.create({
         userId,
-
         items: orderItems,
-
         totalAmount: cart.totalPrice,
-
         shippingAddress: user.address,
-
         paymentMethod: "COD",
-
         cutoffTime,
       });
     }
 
     // ============================================================
-    // 9. CLEAR CART IMMEDIATELY
+    // 9. CLEAR CART
     // ============================================================
 
     cart.items = [];
@@ -287,7 +250,7 @@ export const addOrder = async (req, res) => {
     await cart.save();
 
     // ============================================================
-    // 10. SEND RESPONSE IMMEDIATELY
+    // 10. RESPOND IMMEDIATELY
     // ============================================================
 
     res.status(200).json({
@@ -297,27 +260,31 @@ export const addOrder = async (req, res) => {
     });
 
     // ============================================================
-    // 11. NOTIFICATIONS IN BACKGROUND
+    // 11. BACKGROUND NOTIFICATIONS
     // ============================================================
 
-    // IMPORTANT:
-    // Do NOT await these.
-    // They should never block checkout.
-
-    Promise.resolve().then(async () => {
+    setImmediate(async () => {
       try {
-        // User notification
+        // --------------------------------------------------------
+        // USER NOTIFICATION — 3 SEC LATER
+        // --------------------------------------------------------
+
         if (user.oneSignalSubscriptionId) {
-          await sendNotification({
-            subscriptionId: user.oneSignalSubscriptionId,
-
-            title: "🟠 ऑर्डर सफल",
-
-            message: "आपका ऑर्डर सफलतापूर्वक प्राप्त हो गया है。",
-          });
+          setTimeout(() => {
+            sendNotification({
+              subscriptionId: user.oneSignalSubscriptionId,
+              title: "🟠 ऑर्डर सफल",
+              message: "आपका ऑर्डर सफलतापूर्वक प्राप्त हो गया है。",
+            }).catch((error) => {
+              console.error("User notification error:", error);
+            });
+          }, 3000);
         }
 
-        // Find suppliers
+        // --------------------------------------------------------
+        // SUPPLIER NOTIFICATIONS
+        // --------------------------------------------------------
+
         const suppliers = await User.find({
           role: "supplier",
           oneSignalSubscriptionId: {
@@ -326,7 +293,6 @@ export const addOrder = async (req, res) => {
           },
         }).select("firstName lastName oneSignalSubscriptionId");
 
-        // Send supplier notifications in parallel
         await Promise.all(
           suppliers.map((supp) =>
             sendNotification({
@@ -340,15 +306,13 @@ export const addOrder = async (req, res) => {
             }),
           ),
         );
-      } catch (notificationError) {
-        console.error("Notification error:", notificationError);
+      } catch (error) {
+        console.error("Background notification error:", error);
       }
     });
   } catch (error) {
-    console.error("Add Order Error :", error);
+    console.error("Add Order Error:", error);
 
-    // Don't try to send another response if headers
-    // have already been sent.
     if (res.headersSent) {
       return;
     }
@@ -359,7 +323,6 @@ export const addOrder = async (req, res) => {
     });
   }
 };
-
 /* ===========================================================
    Recalculate Order Total
 =========================================================== */

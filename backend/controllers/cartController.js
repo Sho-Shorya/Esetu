@@ -25,15 +25,32 @@ export const getCart = async (req, res) => {
     });
   }
 };
-
 export const addToCart = async (req, res) => {
   try {
     const userId = req.userId;
-    const qty = Number(req.body.qty) || 1;
+
+    if (!userId) {
+      return res.status(401).json({
+        success: false,
+        message: "Please login first",
+      });
+    }
+
     const { productId, company, measurement } = req.body;
-    // Check product
-    const product =
-      await Product.findById(productId).populate("variants.company");
+    const qty = Number(req.body.qty) || 1;
+
+    if (!productId || !company || !measurement) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing cart details",
+      });
+    }
+
+    // =========================================================
+    // 1. GET PRODUCT
+    // =========================================================
+
+    const product = await Product.findById(productId).lean();
 
     if (!product) {
       return res.status(404).json({
@@ -42,10 +59,13 @@ export const addToCart = async (req, res) => {
       });
     }
 
-    // Find selected variant
+    // =========================================================
+    // 2. FIND VARIANT
+    // =========================================================
+
     const selectedVariant = product.variants.find(
       (variant) =>
-        variant.company._id.toString() === company &&
+        variant.company?.toString() === company &&
         variant.measurement === measurement,
     );
 
@@ -63,62 +83,82 @@ export const addToCart = async (req, res) => {
       });
     }
 
+    const price = Number(selectedVariant.price);
+
+    // =========================================================
+    // 3. GET CART
+    // =========================================================
+
     let cart = await Cart.findOne({ userId });
 
     if (!cart) {
       cart = new Cart({
         userId,
         items: [],
+        totalPrice: 0,
       });
     }
 
-    // Add the new item...
+    // =========================================================
+    // 4. FIND EXISTING ITEM
+    // =========================================================
 
-    const existingIndex = cart.items.findIndex(
+    const existingItem = cart.items.find(
       (item) =>
         item.productId.toString() === productId &&
         item.company.toString() === company &&
         item.measurement === measurement,
     );
 
-    if (existingIndex > -1) {
-      cart.items[existingIndex].qty += qty;
-      cart.items[existingIndex].price = selectedVariant.price;
-      cart.items[existingIndex].total =
-        cart.items[existingIndex].qty * selectedVariant.price;
-    } else {
-      const total = selectedVariant.price * qty;
+    // =========================================================
+    // 5. UPDATE / ADD
+    // =========================================================
 
+    if (existingItem) {
+      existingItem.qty += qty;
+      existingItem.price = price;
+      existingItem.total = existingItem.qty * price;
+    } else {
       cart.items.push({
         productId,
         company,
         measurement,
         qty,
-        price: selectedVariant.price,
-        total,
+        price,
+        total: qty * price,
       });
     }
-    const total = selectedVariant.price * qty;
+
+    // =========================================================
+    // 6. RECALCULATE CART TOTAL
+    // =========================================================
 
     cart.totalPrice = cart.items.reduce((sum, item) => sum + item.total, 0);
 
+    // =========================================================
+    // 7. SAVE
+    // =========================================================
+
     await cart.save();
 
-    const populatedCart = await Cart.findById(cart._id)
-      .populate("items.productId")
-      .populate("items.company");
+    // =========================================================
+    // 8. RETURN LIGHTWEIGHT RESPONSE
+    // =========================================================
 
     return res.status(200).json({
       success: true,
       message: "कार्ट में जोड़ा गया!",
-      cart: populatedCart,
+      cart: {
+        items: cart.items,
+        totalPrice: cart.totalPrice,
+      },
     });
   } catch (error) {
-    console.log(error);
+    console.error("Add to cart error:", error);
 
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message: "कार्ट में जोड़ने में समस्या हुई",
     });
   }
 };

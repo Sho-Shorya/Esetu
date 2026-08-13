@@ -407,7 +407,7 @@ const MyTodayOrder = () => {
                     {order.status === "Pending" && (
                       <span
                         className="
-                      rounded-1xl
+                      rounded-2xl
                             bg-yellow-100
                             px-4
                             py-2
