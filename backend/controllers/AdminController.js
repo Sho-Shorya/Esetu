@@ -357,31 +357,3 @@ export const updateUser = async (req, res) => {
     });
   }
 };
-
-export const getSuppIds = async (req, res) => {
-  try {
-    const suppliers = await User.find(
-      { role: "supplier" },
-      {
-        _id: 1,
-        firstName: 1,
-        lastName: 1,
-        place: 1,
-        phoneNumber: 1,
-      },
-    ).lean();
-
-    return res.status(200).json({
-      success: true,
-      suppliers,
-    });
-  } catch (error) {
-    console.error("Error getting supplier details:", error);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to get supplier details",
-      error: error.message,
-    });
-  }
-};

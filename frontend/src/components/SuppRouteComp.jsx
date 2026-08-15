@@ -1,54 +1,244 @@
 import React, { useEffect, useState } from "react";
 import { ChevronDown, Loader2, MoveRight, Truck, Check, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
+
+import { setUserData } from "../redux/userSlice";
+// ⬆️ Change this path if your userSlice is somewhere else
+
+const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 const SuppRouteComp = () => {
-  const { suppliers = [] } = useSelector((state) => state.routes);
-
-  const [selectedSupplier, setSelectedSupplier] = useState(null);
-  const [selectSupp, setSelectSupp] = useState(false);
-
   const navigate = useNavigate();
+  const dispatch = useDispatch();
 
   // =========================================================
-  // DEFAULT SUPPLIER
+  // REDUX
+  // =========================================================
+
+  const { userData } = useSelector((state) => state.user);
+
+  // The user's saved supplier ID
+  const selectedSupplierId = userData?.selectedSupplier || null;
+
+  // =========================================================
+  // LOCAL STATE
+  // =========================================================
+
+  const [suppliers, setSuppliers] = useState([]);
+  const [selectSupp, setSelectSupp] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [savingSupplier, setSavingSupplier] = useState(false);
+
+  // =========================================================
+  // FETCH SUPPLIERS
   // =========================================================
 
   useEffect(() => {
-    if (!suppliers.length) {
-      setSelectedSupplier(null);
-      return;
-    }
+    let mounted = true;
 
-    setSelectedSupplier((current) => {
-      if (current) {
-        const stillExists = suppliers.find((supp) => supp._id === current._id);
+    const fetchSuppliers = async () => {
+      try {
+        setLoading(true);
 
-        if (stillExists) {
-          return stillExists;
+        const response = await axios.get(
+          `${API_BASE_URL}/api/v1/user/get-suppIds`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          },
+        );
+
+        if (!mounted) return;
+
+        if (!response.data?.success) {
+          setSuppliers([]);
+          return;
+        }
+
+        const supplierList = response.data.suppliers || [];
+
+        setSuppliers(supplierList);
+
+        // =====================================================
+        // GET SAVED SUPPLIER FROM BACKEND
+        // =====================================================
+
+        const savedSupplierId = response.data.selectedSupplierId || null;
+
+        // =====================================================
+        // USER ALREADY HAS A SAVED SUPPLIER
+        // =====================================================
+
+        if (savedSupplierId) {
+          const savedSupplierExists = supplierList.some(
+            (supplier) => supplier._id === savedSupplierId,
+          );
+
+          if (savedSupplierExists) {
+            // Update Redux userData if necessary
+            if (userData?.selectedSupplier !== savedSupplierId) {
+              dispatch(
+                setUserData({
+                  ...userData,
+                  selectedSupplier: savedSupplierId,
+                }),
+              );
+            }
+
+            return;
+          }
+        }
+
+        // =====================================================
+        // FIRST TIME USER
+        // OR SAVED SUPPLIER NO LONGER EXISTS
+        // =====================================================
+
+        if (supplierList.length > 0) {
+          const firstSupplierId = supplierList[0]._id;
+
+          // Update Redux immediately
+          dispatch(
+            setUserData({
+              ...userData,
+              selectedSupplier: firstSupplierId,
+            }),
+          );
+
+          // Save to MongoDB
+          try {
+            await axios.put(
+              `${API_BASE_URL}/api/v1/user/select-supplier/${firstSupplierId}`,
+              {},
+              {
+                headers: {
+                  Authorization: `Bearer ${localStorage.getItem("token")}`,
+                },
+              },
+            );
+          } catch (error) {
+            console.error("Failed to save default supplier:", error);
+          }
+        }
+      } catch (error) {
+        console.error("Failed to fetch suppliers:", error);
+
+        if (mounted) {
+          setSuppliers([]);
+        }
+      } finally {
+        if (mounted) {
+          setLoading(false);
         }
       }
+    };
 
-      // Otherwise first supplier
-      return suppliers[0];
-    });
-  }, [suppliers]);
+    fetchSuppliers();
+
+    return () => {
+      mounted = false;
+    };
+
+    // We intentionally fetch once when component mounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // =========================================================
-  // IMPORTANT:
-  // Show suppliers[0] immediately while selectedSupplier
-  // state is being initialized by useEffect.
+  // ACTIVE SUPPLIER
   // =========================================================
 
-  const activeSupplier = selectedSupplier || suppliers[0] || null;
+  const activeSupplier =
+    suppliers.find((supplier) => supplier._id === selectedSupplierId) ||
+    suppliers[0] ||
+    null;
+
+  // =========================================================
+  // SUPPLIER NAME
+  // =========================================================
+
+  const supplierName =
+    `${activeSupplier?.firstName || ""} ${
+      activeSupplier?.lastName || ""
+    }`.trim() || "Supplier";
+
+  // =========================================================
+  // SELECT SUPPLIER
+  // =========================================================
+
+  const handleSelectSupplier = async (supplier) => {
+    if (!supplier?._id || savingSupplier) return;
+
+    const previousSupplierId = userData?.selectedSupplier;
+
+    // =======================================================
+    // UPDATE UI IMMEDIATELY
+    // =======================================================
+
+    dispatch(
+      setUserData({
+        ...userData,
+        selectedSupplier: supplier._id,
+      }),
+    );
+
+    setSelectSupp(false);
+    setSavingSupplier(true);
+
+    // =======================================================
+    // SAVE TO BACKEND
+    // =======================================================
+
+    try {
+      const response = await axios.put(
+        `${API_BASE_URL}/api/v1/user/select-supplier/${supplier._id}`,
+        {},
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        },
+      );
+
+      if (!response.data?.success) {
+        throw new Error(response.data?.message || "Failed to save supplier");
+      }
+    } catch (error) {
+      console.error("Failed to save selected supplier:", error);
+
+      // =====================================================
+      // ROLLBACK REDUX IF SAVE FAILED
+      // =====================================================
+
+      dispatch(
+        setUserData({
+          ...userData,
+          selectedSupplier: previousSupplierId || null,
+        }),
+      );
+    } finally {
+      setSavingSupplier(false);
+    }
+  };
+
+  // =========================================================
+  // TRACK
+  // =========================================================
+
+  const handleTrack = () => {
+    if (!activeSupplier?._id) return;
+
+    navigate(`/tracking/${activeSupplier._id}`);
+  };
 
   // =========================================================
   // LOADING
   // =========================================================
 
-  if (!activeSupplier) {
+  if (loading) {
     return (
       <div
         className="
@@ -66,11 +256,14 @@ const SuppRouteComp = () => {
         "
       >
         <div className="flex min-w-0 items-center gap-2.5">
+          {/* Truck */}
+
           <div
             className="
               flex
               h-7
               w-7
+              shrink-0
               items-center
               justify-center
               rounded-full
@@ -81,39 +274,65 @@ const SuppRouteComp = () => {
             <Truck size={15} />
           </div>
 
-          <div className="flex animate-pulse items-center gap-2">
+          {/* Loading */}
+
+          <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-red-500">सप्लायर -</span>
 
-            <Loader2 size={12} className="animate-spin text-gray-800" />
+            <Loader2 size={13} className="animate-spin text-neutral-700" />
           </div>
         </div>
       </div>
     );
   }
 
-  const supplierName =
-    `${activeSupplier.firstName || ""} ${
-      activeSupplier.lastName || ""
-    }`.trim() || "Supplier";
-
   // =========================================================
-  // SELECT SUPPLIER
+  // NO SUPPLIER
   // =========================================================
 
-  const handleSelectSupplier = (supplier) => {
-    setSelectedSupplier(supplier);
-    setSelectSupp(false);
-  };
+  if (!activeSupplier) {
+    return (
+      <div
+        className="
+          relative
+          z-30
+          flex
+          min-h-12
+          w-full
+          items-center
+          border-b
+          border-red-600/20
+          px-5
+          py-1.5
+        "
+      >
+        <div className="flex items-center gap-2.5">
+          <div
+            className="
+              flex
+              h-7
+              w-7
+              items-center
+              justify-center
+              rounded-full
+              bg-red-50
+              text-red-500
+            "
+          >
+            <Truck size={15} />
+          </div>
+
+          <span className="text-xs font-medium text-neutral-400">
+            कोई सप्लायर उपलब्ध नहीं
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   // =========================================================
-  // TRACK
+  // MAIN UI
   // =========================================================
-
-  const handleTrack = () => {
-    if (!activeSupplier?._id) return;
-
-    navigate(`/tracking/${activeSupplier._id}`);
-  };
 
   return (
     <>
@@ -174,7 +393,7 @@ const SuppRouteComp = () => {
             <Truck size={15} />
           </div>
 
-          {/* Name */}
+          {/* Supplier name */}
 
           <div className="flex min-w-0 items-center gap-1.5">
             <span className="shrink-0 text-xs font-medium text-red-500">
@@ -370,6 +589,7 @@ const SuppRouteComp = () => {
                       key={supplier._id}
                       type="button"
                       whileTap={{ scale: 0.98 }}
+                      disabled={savingSupplier}
                       onClick={() => handleSelectSupplier(supplier)}
                       className={`
                         relative
@@ -390,9 +610,11 @@ const SuppRouteComp = () => {
                             ? "border-red-200 bg-red-50"
                             : "border-transparent bg-neutral-50 hover:bg-neutral-100"
                         }
+
+                        ${savingSupplier ? "opacity-70" : ""}
                       `}
                     >
-                      {/* Truck icon */}
+                      {/* Truck */}
 
                       <div
                         className={`
@@ -422,7 +644,6 @@ const SuppRouteComp = () => {
                             truncate
                             text-sm
                             font-bold
-
                             ${isSelected ? "text-red-700" : "text-neutral-800"}
                           `}
                         >
@@ -438,8 +659,12 @@ const SuppRouteComp = () => {
 
                       {isSelected && (
                         <motion.div
-                          initial={{ scale: 0 }}
-                          animate={{ scale: 1 }}
+                          initial={{
+                            scale: 0,
+                          }}
+                          animate={{
+                            scale: 1,
+                          }}
                           className="
                             flex
                             h-7

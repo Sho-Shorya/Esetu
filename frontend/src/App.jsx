@@ -33,6 +33,7 @@ import VerifyOtp from "./pages/VerifyOtp";
 import EditProduct from "./components/EditProduct";
 import LiveTracking from "./components/LiveTracking";
 import OrderSuccess from "./pages/OrderSuccess";
+import InvoiceHistory from "./components/InvoiceHistory";
 function App() {
   const token = localStorage.getItem("token");
 
@@ -325,6 +326,17 @@ function App() {
         }
       />
       <Route path="/tracking/:supplierId" element={<LiveTracking />} />
+      <Route
+        path="/invoice-history"
+        element={
+          <>
+            <InvoiceHistory />
+            <Nav />
+            <Footer />
+            <Navbar />
+          </>
+        }
+      />
     </Routes>
   );
 }

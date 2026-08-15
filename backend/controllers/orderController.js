@@ -726,7 +726,6 @@ export const updateOrderStatus = async (req, res) => {
     }
 
     await order.save();
-    await order.save();
 
     // Fetch populated order
     const updatedOrder = await Order.findById(order._id)

@@ -23,6 +23,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    selectedSupplier: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
   },
   { timestamps: true },
 ); //gives timeStamps for "Created at" and "updated at"

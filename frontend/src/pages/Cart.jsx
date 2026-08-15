@@ -970,6 +970,7 @@ const Cart = () => {
       className="
         mx-auto
         mt-20
+        pb-15
         w-full
         max-w-7xl
         px-3
@@ -1633,7 +1634,7 @@ const Cart = () => {
                     text-gray-500
                   "
                 >
-                  <span>डिलीवरी शुल्क</span>
+                  <span>डिलीवरी</span>
 
                   <span
                     className="
@@ -1647,30 +1648,6 @@ const Cart = () => {
                     "
                   >
                     निःशुल्क
-                  </span>
-                </div>
-
-                {/* DISCOUNT */}
-
-                <div
-                  className="
-                    flex
-                    items-center
-                    justify-between
-                    gap-4
-                    text-sm
-                    text-gray-500
-                  "
-                >
-                  <span>आपकी बचत</span>
-
-                  <span
-                    className="
-                      font-bold
-                      text-green-600
-                    "
-                  >
-                    ₹{discount}
                   </span>
                 </div>
 

@@ -407,3 +407,78 @@ export const saveSubscriptionId = async (req, res) => {
     });
   }
 };
+export const getSuppIds = async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    const [suppliers, user] = await Promise.all([
+      User.find(
+        { role: "supplier" },
+        {
+          _id: 1,
+          firstName: 1,
+          lastName: 1,
+          place: 1,
+          phoneNumber: 1,
+        },
+      ).lean(),
+
+      User.findById(userId).select("selectedSupplier").lean(),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      suppliers,
+      selectedSupplierId: user?.selectedSupplier || null,
+    });
+  } catch (error) {
+    console.error("Error getting supplier details:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to get supplier details",
+      error: error.message,
+    });
+  }
+};
+export const selectSupplier = async (req, res) => {
+  try {
+    const userId = req.userId;
+    const { supplierId } = req.params;
+
+    const supplier = await User.findOne({
+      _id: supplierId,
+      role: "supplier",
+    });
+
+    if (!supplier) {
+      return res.status(404).json({
+        success: false,
+        message: "Supplier not found",
+      });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      {
+        selectedSupplier: supplierId,
+      },
+      {
+        new: true,
+      },
+    ).select("selectedSupplier");
+
+    return res.status(200).json({
+      success: true,
+      message: "Supplier selected successfully",
+      selectedSupplierId: user.selectedSupplier,
+    });
+  } catch (error) {
+    console.error("selectSupplier error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to select supplier",
+    });
+  }
+};
