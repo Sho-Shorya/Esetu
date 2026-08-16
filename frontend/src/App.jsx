@@ -95,6 +95,8 @@ function App() {
               <Navbar />
               <Footer />
             </>
+          ) : supplierData ? (
+            <Navigate to="/admin-login" replace />
           ) : (
             <Navigate to="/login" replace />
           )

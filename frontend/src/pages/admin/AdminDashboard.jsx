@@ -273,7 +273,7 @@ const AdminDashboard = () => {
         <section
           className="
             relative
-            h-[220px]
+            h-[170px]
             overflow-hidden
             rounded-[32px]
             border
@@ -318,25 +318,6 @@ const AdminDashboard = () => {
           {/* Hero content */}
 
           <div className="absolute left-5 top-5 z-20 sm:left-8 sm:top-7">
-            <div className="flex items-center gap-2">
-              <div
-                className="
-                  flex
-                  h-8
-                  w-8
-                  items-center
-                  justify-center
-                  rounded-xl
-                  bg-white/80
-                  shadow-sm
-                "
-              >
-                <Sparkles className="h-4 w-4 text-emerald-600" />
-              </div>
-
-              <span className="text-xs font-bold text-emerald-700">ई-सेतु</span>
-            </div>
-
             <h1
               className="
                 mt-5
@@ -351,8 +332,8 @@ const AdminDashboard = () => {
               नमस्ते 🙏
             </h1>
 
-            <p className="mt-2 text-sm font-medium text-slate-500">
-              आज का स्टोर
+            <p className="mt-2 w-[180px] text-[10px] font-medium text-slate-500">
+              E-setu सप्लायर डैशबोर्ड में आपका स्वागत है।
             </p>
 
             {/* STORE STATUS */}
@@ -413,8 +394,8 @@ const AdminDashboard = () => {
               bottom-[-15px]
               right-[-18px]
               z-10
-              h-[215px]
-              w-[250px]
+              h-[190px]
+              w-[215px]
               sm:bottom-[-28px]
               sm:right-4
               sm:h-[285px]
@@ -443,46 +424,36 @@ const AdminDashboard = () => {
         ===================================================== */}
 
         <section className="mt-4 grid grid-cols-2 gap-3 sm:gap-4">
-          {/* ORDERS */}
-
+          {/* ==================== ORDERS ==================== */}
           <button
             onClick={() => navigate("/today-orders")}
             className="
-              group
-              relative
-              min-h-[175px]
-              overflow-hidden
-              rounded-[28px]
-              bg-emerald-500
-              p-4
-              text-left
-              shadow-[0_12px_28px_rgba(16,185,129,0.18)]
-              transition-all
-              duration-200
-              hover:-translate-y-1
-              hover:bg-emerald-600
-              active:scale-[0.98]
-              sm:min-h-[195px]
-              sm:p-5
-            "
+      group relative min-h-[150px] overflow-hidden rounded-[28px]
+      bg-emerald-500  text-left
+      shadow-[0_12px_28px_rgba(16,185,129,0.18)]
+      transition-all duration-200 p-2 flex items-center flex-col
+      hover:-translate-y-1 hover:bg-emerald-600
+      active:scale-[0.98]
+      sm:min-h-[195px] pt-4
+    "
           >
             <div className="absolute -bottom-20 -right-16 h-48 w-48 rounded-full bg-white/10" />
 
             <div className="relative z-10 flex items-start justify-between">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 text-white">
-                <ShoppingBag className="h-5 w-5" />
-              </div>
+              <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/15 px-2 py-1.5 text-white shadow-lg backdrop-blur-md">
+                <div className="flex h-6 w-6 items-center justify-center rounded-xl bg-white/10">
+                  <ShoppingBag className="h-3 w-3" />
+                </div>
 
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10">
-                <ArrowUpRight className="h-4 w-4 text-white/80" />
+                <p className="text-xs font-bold text-white/90">आज के ऑर्डर</p>
+
+                <div className="flex h-6 w-6 items-center justify-center rounded-xl bg-white/10">
+                  <ArrowUpRight className="h-4 w-4 text-white/80 transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+                </div>
               </div>
             </div>
 
-            <p className="relative z-10 mt-4 text-xs font-bold text-white/70">
-              आज के ऑर्डर
-            </p>
-
-            <div className="relative z-10 mt-1">
+            <div className="relative z-10 mt-5">
               {loadingStats ? (
                 <Loader2 className="h-9 w-9 animate-spin text-white" />
               ) : (
@@ -493,42 +464,38 @@ const AdminDashboard = () => {
             </div>
           </button>
 
-          {/* USERS */}
-
+          {/* ==================== USERS ==================== */}
           <button
             onClick={() => navigate("/admin-users")}
             className="
-              group
-              min-h-[175px]
-              rounded-[28px]
-              border
-              border-slate-200
-              bg-white
-              p-4
-              text-left
-              shadow-[0_6px_22px_rgba(15,23,42,0.045)]
-              transition-all
-              duration-200
-              hover:-translate-y-1
-              hover:shadow-[0_12px_28px_rgba(15,23,42,0.08)]
-              active:scale-[0.98]
-              sm:min-h-[195px]
-              sm:p-5
-            "
+      group relative min-h-[150px] overflow-hidden rounded-[28px]
+      bg-white p-4 text-left
+      border border-slate-200
+      shadow-[0_6px_22px_rgba(15,23,42,0.045)]
+      transition-all duration-200  p-2 flex items-center flex-col
+      hover:-translate-y-1
+      hover:shadow-[0_12px_28px_rgba(15,23,42,0.08)]
+      active:scale-[0.98]
+      sm:min-h-[195px] sm:p-5
+    "
           >
-            <div className="flex items-start justify-between">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-slate-600">
-                <Users className="h-5 w-5" />
-              </div>
+            <div className="absolute -bottom-20 -right-16 h-48 w-48 rounded-full bg-slate-50" />
 
-              <ArrowUpRight className="h-4 w-4 text-slate-300 transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+            <div className="relative z-10 flex items-start justify-between">
+              <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-2 py-1.5 text-slate-700 shadow-sm">
+                <div className="flex h-5 w-5 items-center justify-center rounded-xl bg-white">
+                  <Users className="h-4 w-4 text-slate-600" />
+                </div>
+
+                <p className="text-xs font-bold text-slate-600">कुल खरीददार</p>
+
+                <div className="flex h-6 w-6 items-center justify-center rounded-xl bg-white">
+                  <ArrowUpRight className="h-4 w-4 text-slate-400 transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+                </div>
+              </div>
             </div>
 
-            <p className=" mt-4 text-xs font-bold text-slate-500">
-              कुल खरीददार
-            </p>
-
-            <div className="mt-1">
+            <div className="relative z-10 mt-5">
               {loadingStats ? (
                 <Loader2 className="h-9 w-9 animate-spin text-slate-300" />
               ) : (
@@ -539,91 +506,89 @@ const AdminDashboard = () => {
             </div>
           </button>
 
-          {/* PRODUCTS */}
-
+          {/* ==================== PRODUCTS ==================== */}
           <button
             onClick={() => navigate("/product-page")}
             className="
-              group
-              min-h-[175px]
-              rounded-[28px]
-              border
-              border-slate-200
-              bg-white
-              p-4
-              text-left
-              shadow-[0_6px_22px_rgba(15,23,42,0.045)]
-              transition-all
-              duration-200
-              hover:-translate-y-1
-              hover:shadow-[0_12px_28px_rgba(15,23,42,0.08)]
-              active:scale-[0.98]
-              sm:min-h-[195px]
-              sm:p-5
-            "
+      group relative min-h-[150px] overflow-hidden rounded-[28px]
+      bg-white p-4 text-left
+      border border-slate-200
+      shadow-[0_6px_22px_rgba(15,23,42,0.045)]
+      transition-all duration-200  p-2 flex items-center flex-col
+      hover:-translate-y-1
+      hover:shadow-[0_12px_28px_rgba(15,23,42,0.08)]
+      active:scale-[0.98]
+      sm:min-h-[195px] sm:p-5
+    "
           >
-            <div className="flex items-start justify-between">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-50 text-orange-500">
-                <Package className="h-5 w-5" />
-              </div>
+            <div className="absolute -bottom-20 -right-16 h-48 w-48 rounded-full bg-orange-50" />
 
-              <ArrowUpRight className="h-4 w-4 text-slate-300 transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+            <div className="relative z-10 flex items-start justify-between">
+              <div className="flex items-center gap-2 rounded-2xl border border-orange-100 bg-orange-50 px-2 py-1.5 text-orange-600 shadow-sm">
+                <div className="flex h-6 w-6 items-center justify-center rounded-xl bg-white">
+                  <Package className="h-4 w-4 text-orange-500" />
+                </div>
+
+                <p className="text-xs font-bold text-orange-600">कुल उत्पाद</p>
+
+                <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white">
+                  <ArrowUpRight className="h-4 w-4 text-orange-400 transition group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
+                </div>
+              </div>
             </div>
 
-            <p className="mt-7 text-xs font-bold text-slate-500">कुल उत्पाद</p>
-
-            <div className="mt-1">
+            <div className="relative z-10 mt-5">
               <span className="text-[44px] font-black leading-none tracking-tight text-slate-900">
                 {productData.length}
               </span>
             </div>
           </button>
 
-          {/* CUTOFF */}
-
+          {/* ==================== CUTOFF ==================== */}
           <div
             className="
-              min-h-[175px]
-              rounded-[28px]
-              border
-              border-emerald-100
-              bg-gradient-to-br
-              from-white
-              to-emerald-50
-              p-4
-              shadow-[0_6px_22px_rgba(15,23,42,0.045)]
-              sm:min-h-[195px]
-              sm:p-5
-            "
+      relative min-h-[150px] overflow-hidden rounded-[28px]
+      border border-emerald-100
+      bg-gradient-to-br from-white to-emerald-50
+      p-4
+      shadow-[0_6px_22px_rgba(15,23,42,0.045)]
+      sm:min-h-[195px] sm:p-5  p-2 flex items-center flex-col
+    "
           >
-            <div className="flex items-start justify-between">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-600">
-                <Clock3 className="h-5 w-5" />
-              </div>
+            <div className="absolute -bottom-20 -right-16 h-48 w-48 rounded-full bg-emerald-100/40" />
 
-              <span
-                className={`
-                  rounded-full
-                  px-2.5
-                  py-1
-                  text-[9px]
-                  font-black
-                  ${
-                    orderWindow.isOpen
-                      ? "bg-emerald-100 text-emerald-700"
-                      : "bg-orange-100 text-orange-700"
-                  }
-                `}
-              >
-                {orderWindow.isOpen ? "चालू" : "बंद"}
-              </span>
+            <div className="relative z-10 flex items-start justify-between">
+              <div className="flex items-center gap-2 rounded-2xl border border-emerald-100 bg-emerald-50 px-2 py-1.5 text-emerald-700 shadow-sm">
+                <div className="flex h-5 w-5 items-center justify-center rounded-xl bg-white">
+                  <Clock3 className="h-3 w-3 text-emerald-600" />
+                </div>
+
+                <p className="text-xs font-bold text-emerald-700">ऑर्डर कटऑफ</p>
+
+                <div className="flex h-6 w-6 items-center justify-center rounded-xl bg-white">
+                  <ArrowUpRight className="h-4 w-4 text-emerald-500" />
+                </div>
+              </div>
             </div>
 
-            <p className="mt-7 text-xs font-bold text-slate-500">ऑर्डर कटऑफ</p>
-
-            <p className="mt-1 text-[34px] font-black leading-none tracking-tight text-emerald-700">
-              {orderWindow.cutoffFormatted}
-            </p>
+            <div className="relative z-10 mt-5 flex items-end justify-between">
+              <p className="text-[30px] font-black leading-none tracking-tight text-emerald-700">
+                {orderWindow.cutoffFormatted}
+              </p>
+            </div>
+            <span
+              className={`
+          rounded-full px-2.5 py-1 absolute bottom-3 right-3
+          text-[9px] font-black
+          ${
+            orderWindow.isOpen
+              ? "bg-emerald-100 text-emerald-700"
+              : "bg-orange-100 text-orange-700"
+          }
+        `}
+            >
+              {orderWindow.isOpen ? "चालू" : "बंद"}
+            </span>
           </div>
         </section>
 
