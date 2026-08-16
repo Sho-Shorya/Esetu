@@ -138,10 +138,9 @@ const sendDailyReceiptNotification = async () => {
       await sendNotification({
         subscriptionId: user.oneSignalSubscriptionId,
 
-        title: "📄 आज की रसीद तैयार है",
+        title: "📜 आज की रसीद तैयार है",
 
-        message:
-          "आज के सभी ऑर्डर की रसीद तैयार हो गई है। रसीद देखने और डाउनलोड करने के लिए यहाँ टैप करें।",
+        message: "रसीद देखने और डाउनलोड करने के लिए यहाँ टैप करें।",
 
         /*
         IMPORTANT:

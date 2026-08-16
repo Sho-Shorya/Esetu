@@ -68,6 +68,43 @@ const statusStyle = {
 };
 
 /* ======================================================
+   DATE FILTERS
+====================================================== */
+
+const DATE_FILTERS = [
+  {
+    id: "all",
+    label: "सभी",
+    shortLabel: "सभी",
+  },
+  {
+    id: "today",
+    label: "आज",
+    shortLabel: "आज",
+  },
+  {
+    id: "7days",
+    label: "7 दिन",
+    shortLabel: "7 दिन",
+  },
+  {
+    id: "1month",
+    label: "1 महीना",
+    shortLabel: "1 माह",
+  },
+  {
+    id: "3months",
+    label: "3 महीने",
+    shortLabel: "3 माह",
+  },
+  {
+    id: "6months",
+    label: "6 महीने",
+    shortLabel: "6 माह",
+  },
+];
+
+/* ======================================================
    LOADING CARD
 ====================================================== */
 
@@ -109,6 +146,9 @@ const Orders = () => {
 
   const [expandedOrder, setExpandedOrder] = useState(null);
   const [downloadingInvoice, setDownloadingInvoice] = useState(null);
+
+  // DATE FILTER
+  const [dateFilter, setDateFilter] = useState("all");
 
   /* ====================================================
      FETCH ORDERS + RECEIPTS
@@ -160,6 +200,85 @@ const Orders = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  /* ====================================================
+     FILTER ORDERS
+  ==================================================== */
+
+  const filteredOrders = useMemo(() => {
+    if (dateFilter === "all") {
+      return orders;
+    }
+
+    const now = new Date();
+
+    /* --------------------------------------------------
+       TODAY
+       Start/end of local day
+    -------------------------------------------------- */
+
+    if (dateFilter === "today") {
+      const startOfToday = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate(),
+      );
+
+      const endOfToday = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() + 1,
+      );
+
+      return orders.filter((order) => {
+        if (!order.createdAt) return false;
+
+        const orderDate = new Date(order.createdAt);
+
+        return orderDate >= startOfToday && orderDate < endOfToday;
+      });
+    }
+
+    /* --------------------------------------------------
+       OTHER DATE RANGES
+    -------------------------------------------------- */
+
+    const startDate = new Date(now);
+
+    if (dateFilter === "7days") {
+      startDate.setDate(startDate.getDate() - 7);
+    }
+
+    if (dateFilter === "1month") {
+      startDate.setMonth(startDate.getMonth() - 1);
+    }
+
+    if (dateFilter === "3months") {
+      startDate.setMonth(startDate.getMonth() - 3);
+    }
+
+    if (dateFilter === "6months") {
+      startDate.setMonth(startDate.getMonth() - 6);
+    }
+
+    return orders.filter((order) => {
+      if (!order.createdAt) return false;
+
+      const orderDate = new Date(order.createdAt);
+
+      return orderDate >= startDate && orderDate <= now;
+    });
+  }, [orders, dateFilter]);
+
+  /* ====================================================
+     FILTER LABEL
+  ==================================================== */
+
+  const activeFilterLabel = useMemo(() => {
+    return (
+      DATE_FILTERS.find((filter) => filter.id === dateFilter)?.label || "सभी"
+    );
+  }, [dateFilter]);
 
   /* ====================================================
      ORDERS WHICH HAVE GENERATED RECEIPTS
@@ -241,7 +360,6 @@ const Orders = () => {
 
       document.body.removeChild(link);
 
-      // Give browser time to start download
       setTimeout(() => {
         window.URL.revokeObjectURL(url);
       }, 1000);
@@ -254,9 +372,6 @@ const Orders = () => {
 
   /* ====================================================
      FORMAT DATE
-     
-     Example:
-     15 August 2026
   ==================================================== */
 
   const formatDate = (date) => {
@@ -294,14 +409,14 @@ const Orders = () => {
      STATS
   ==================================================== */
 
-  const totalOrders = orders.length;
+  const totalOrders = filteredOrders.length;
 
   const totalSpent = useMemo(() => {
-    return orders.reduce(
+    return filteredOrders.reduce(
       (sum, order) => sum + Number(order.totalAmount || 0),
       0,
     );
-  }, [orders]);
+  }, [filteredOrders]);
 
   /* ====================================================
      TOGGLE ORDER
@@ -309,6 +424,17 @@ const Orders = () => {
 
   const toggleOrder = (orderId) => {
     setExpandedOrder((current) => (current === orderId ? null : orderId));
+  };
+
+  /* ====================================================
+     CHANGE FILTER
+  ==================================================== */
+
+  const handleFilterChange = (filterId) => {
+    setDateFilter(filterId);
+
+    // Close expanded order when changing period
+    setExpandedOrder(null);
   };
 
   /* ====================================================
@@ -410,79 +536,221 @@ const Orders = () => {
         </div>
       </motion.div>
 
+      <motion.button
+        initial={{
+          opacity: 0,
+          y: 8,
+        }}
+        animate={{
+          opacity: 1,
+          y: 0,
+        }}
+        whileTap={{
+          scale: 0.98,
+        }}
+        onClick={() => navigate("/invoice-history")}
+        className="
+          mt-3
+          mb-3
+          flex
+          w-full
+          items-center
+          justify-between
+          rounded-[22px]
+          border
+          border-red-100
+          bg-white
+          p-3.5
+          text-left
+          shadow-sm
+          transition
+          hover:border-red-200
+          hover:shadow-md
+        "
+      >
+        <div className="flex items-center gap-3">
+          <div
+            className="
+              flex
+              h-11
+              w-11
+              items-center
+              justify-center
+              rounded-2xl
+              bg-red-600
+              text-white
+              shadow-sm
+            "
+          >
+            <ReceiptText className="h-5 w-5" />
+          </div>
+
+          <div>
+            <p className="text-base font-black text-slate-900">सभी रसीदें</p>
+
+            <p className="text-[11px] text-slate-400">
+              {invoices.length} रसीद उपलब्ध
+            </p>
+          </div>
+        </div>
+
+        <div
+          className="
+            flex
+            h-9
+            w-9
+            items-center
+            justify-center
+            rounded-xl
+            bg-red-50
+            text-red-600
+          "
+        >
+          <ArrowRight className="h-4 w-4" />
+        </div>
+      </motion.button>
       {/* ==================================================
           CONTENT
       ================================================== */}
 
       <div className="mx-auto max-w-5xl px-4 py-5">
         {/* ==================================================
-            ALL RECEIPTS
+            DATE FILTER
         ================================================== */}
 
-        <motion.button
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => navigate("/invoice-history")}
-          className="
-            mb-5
-            flex
-            w-full
-            items-center
-            justify-between
-            rounded-[22px]
-            border
-            border-red-100
-            bg-white
-            p-3.5
-            text-left
-            shadow-sm
-            transition
-            hover:border-red-200
-            hover:shadow-md
-          "
+        <motion.div
+          initial={{
+            opacity: 0,
+            y: 8,
+          }}
+          animate={{
+            opacity: 1,
+            y: 0,
+          }}
+          transition={{
+            duration: 0.3,
+            delay: 0.05,
+          }}
+          className="mb-5"
         >
-          <div className="flex items-center gap-3">
-            <div
-              className="
-                flex
-                h-11
-                w-11
-                items-center
-                justify-center
-                rounded-2xl
-                bg-red-600
-                text-white
-                shadow-sm
-              "
-            >
-              <ReceiptText className="h-5 w-5" />
+          {/* FILTER HEADER */}
+
+          <div className="mb-2.5 flex items-center justify-between px-1">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="h-4 w-4 text-red-600" />
+
+              <p className="text-sm font-black text-slate-800">ऑर्डर की अवधि</p>
             </div>
 
-            <div>
-              <p className="text-base font-black text-slate-900">सभी रसीदें</p>
-
-              <p className="text-[11px] text-slate-400">
-                {invoices.length} रसीद उपलब्ध
-              </p>
-            </div>
+            <span className="text-[10px] font-semibold text-slate-400">
+              {activeFilterLabel}
+            </span>
           </div>
+
+          {/* FILTER SCROLLER */}
 
           <div
             className="
+              -mx-1
               flex
-              h-9
-              w-9
-              items-center
-              justify-center
-              rounded-xl
-              bg-red-50
-              text-red-600
+              gap-2
+              overflow-x-auto
+              px-1
+              pb-1
+              scrollbar-none
             "
           >
-            <ArrowRight className="h-4 w-4" />
+            {DATE_FILTERS.map((filter) => {
+              const isActive = dateFilter === filter.id;
+
+              return (
+                <motion.button
+                  key={filter.id}
+                  whileTap={{
+                    scale: 0.94,
+                  }}
+                  onClick={() => handleFilterChange(filter.id)}
+                  className={`
+                    relative
+                    shrink-0
+                    overflow-hidden
+                    rounded-2xl
+                    border
+                    px-4
+                    py-2.5
+                    text-xs
+                    font-bold
+                    transition-all
+                    duration-200
+                    ${
+                      isActive
+                        ? "border-red-600 bg-red-600 text-white shadow-md shadow-red-200"
+                        : "border-slate-200 bg-white text-slate-600 shadow-sm hover:border-red-200 hover:text-red-600"
+                    }
+                  `}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeDateFilter"
+                      className="absolute inset-0 bg-red-600"
+                      transition={{
+                        type: "spring",
+                        stiffness: 400,
+                        damping: 30,
+                      }}
+                    />
+                  )}
+
+                  <span className="relative z-10">{filter.label}</span>
+                </motion.button>
+              );
+            })}
           </div>
-        </motion.button>
+        </motion.div>
+
+        {/* ==================================================
+            FILTER SUMMARY
+        ================================================== */}
+
+        {!loading && orders.length > 0 && (
+          <motion.div
+            key={dateFilter}
+            initial={{
+              opacity: 0,
+              y: -4,
+            }}
+            animate={{
+              opacity: 1,
+              y: 0,
+            }}
+            className="
+              mb-4
+              flex
+              items-center
+              justify-between
+              rounded-2xl
+              border
+              border-red-100
+              bg-red-50/70
+              px-3.5
+              py-2.5
+            "
+          >
+            <div className="flex items-center gap-2">
+              <div className="h-1.5 w-1.5 rounded-full bg-red-500" />
+
+              <p className="text-[11px] font-semibold text-red-700">
+                {dateFilter === "all"
+                  ? "सभी ऑर्डर"
+                  : `${activeFilterLabel} के ऑर्डर`}
+              </p>
+            </div>
+
+            <p className="text-[10px] font-bold text-red-500">
+              {filteredOrders.length} ऑर्डर
+            </p>
+          </motion.div>
+        )}
 
         {/* ==================================================
             LOADING
@@ -493,12 +761,13 @@ const Orders = () => {
             <LoadingCard />
             <LoadingCard />
           </div>
-        ) : orders.length === 0 ? (
+        ) : filteredOrders.length === 0 ? (
           /* ==================================================
              EMPTY
           ================================================== */
 
           <motion.div
+            key={`empty-${dateFilter}`}
             initial={{
               opacity: 0,
               y: 10,
@@ -534,31 +803,58 @@ const Orders = () => {
             </div>
 
             <h2 className="mt-4 text-xl font-black text-slate-900">
-              अभी कोई ऑर्डर नहीं
+              {dateFilter === "all"
+                ? "अभी कोई ऑर्डर नहीं"
+                : `${activeFilterLabel} में कोई ऑर्डर नहीं`}
             </h2>
 
             <p className="mt-1 text-sm text-slate-500">
-              आपके ऑर्डर यहाँ दिखाई देंगे
+              {dateFilter === "all"
+                ? "आपके ऑर्डर यहाँ दिखाई देंगे"
+                : "इस अवधि में आपका कोई ऑर्डर नहीं मिला"}
             </p>
 
-            <button
-              onClick={() => navigate("/")}
-              className="
-                mt-5
-                rounded-xl
-                bg-red-600
-                px-5
-                py-3
-                text-sm
-                font-bold
-                text-white
-                transition
-                hover:bg-red-700
-                active:scale-95
-              "
-            >
-              खरीदारी करें
-            </button>
+            {dateFilter !== "all" ? (
+              <button
+                onClick={() => setDateFilter("all")}
+                className="
+                  mt-5
+                  rounded-xl
+                  border
+                  border-red-200
+                  bg-red-50
+                  px-5
+                  py-3
+                  text-sm
+                  font-bold
+                  text-red-600
+                  transition
+                  hover:bg-red-100
+                  active:scale-95
+                "
+              >
+                सभी ऑर्डर देखें
+              </button>
+            ) : (
+              <button
+                onClick={() => navigate("/")}
+                className="
+                  mt-5
+                  rounded-xl
+                  bg-red-600
+                  px-5
+                  py-3
+                  text-sm
+                  font-bold
+                  text-white
+                  transition
+                  hover:bg-red-700
+                  active:scale-95
+                "
+              >
+                खरीदारी करें
+              </button>
+            )}
           </motion.div>
         ) : (
           /* ==================================================
@@ -566,7 +862,7 @@ const Orders = () => {
           ================================================== */
 
           <div className="space-y-4">
-            {orders.map((order, index) => {
+            {filteredOrders.map((order, index) => {
               const isExpanded = expandedOrder === order._id;
 
               const hasReceipt = receiptOrderIds.has(String(order._id));
@@ -741,29 +1037,29 @@ const Orders = () => {
                             key={`${order._id}-${itemIndex}`}
                             layout
                             className="
-                              flex
-                              items-center
-                              gap-3
-                              rounded-2xl
-                              border
-                              border-slate-100
-                              bg-white
-                              p-2.5
-                            "
+                                flex
+                                items-center
+                                gap-3
+                                rounded-2xl
+                                border
+                                border-slate-100
+                                bg-white
+                                p-2.5
+                              "
                           >
                             {/* PRODUCT ICON */}
 
                             <div
                               className="
-                                flex
-                                h-11
-                                w-11
-                                shrink-0
-                                items-center
-                                justify-center
-                                rounded-xl
-                                bg-slate-50
-                              "
+                                  flex
+                                  h-11
+                                  w-11
+                                  shrink-0
+                                  items-center
+                                  justify-center
+                                  rounded-xl
+                                  bg-slate-50
+                                "
                             >
                               {item.image ? (
                                 <img
@@ -800,14 +1096,14 @@ const Orders = () => {
                                 {item.measurement && (
                                   <span
                                     className="
-                                      rounded-full
-                                      bg-slate-100
-                                      px-2
-                                      py-0.5
-                                      text-[9px]
-                                      font-semibold
-                                      text-slate-500
-                                    "
+                                        rounded-full
+                                        bg-slate-100
+                                        px-2
+                                        py-0.5
+                                        text-[9px]
+                                        font-semibold
+                                        text-slate-500
+                                      "
                                   >
                                     {item.measurement}
                                   </span>
@@ -815,14 +1111,14 @@ const Orders = () => {
 
                                 <span
                                   className="
-                                    rounded-full
-                                    bg-red-50
-                                    px-2
-                                    py-0.5
-                                    text-[9px]
-                                    font-bold
-                                    text-red-600
-                                  "
+                                      rounded-full
+                                      bg-red-50
+                                      px-2
+                                      py-0.5
+                                      text-[9px]
+                                      font-bold
+                                      text-red-600
+                                    "
                                 >
                                   × {item.qty || item.quantity || 1}
                                 </span>
@@ -915,14 +1211,13 @@ const Orders = () => {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {/* ==================================================
-                            RECEIPT DOWNLOAD
-                            ONLY IF GENERATED
-                        ================================================== */}
+                        {/* RECEIPT DOWNLOAD */}
 
                         {hasReceipt && invoice && (
                           <motion.button
-                            whileTap={{ scale: 0.95 }}
+                            whileTap={{
+                              scale: 0.95,
+                            }}
                             onClick={() => downloadInvoice(order._id)}
                             disabled={isDownloading}
                             className="
