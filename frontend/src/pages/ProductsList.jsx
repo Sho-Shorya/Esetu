@@ -42,7 +42,7 @@ const ProductsList = () => {
   const productsRef = useRef(null);
   const [addLoading, setAddLoading] = useState(false);
   const cartSound = () => {
-    const audio = new Audio("/addtocar5.mp3");
+    const audio = new Audio("/addtocart6.mp3");
     audio.volume = 1;
     audio.play().catch((error) => {
       console.log("Sound could not play:", error);
