@@ -9,11 +9,14 @@ import {
   Clock3,
   Download,
   History,
+  IndianRupee,
   Package2,
   ReceiptText,
   RefreshCw,
   ShoppingBag,
   WalletCards,
+  CheckCircle2,
+  CircleAlert,
 } from "lucide-react";
 
 import { API_BASE_URL } from "@/lib/constants";
@@ -75,32 +78,22 @@ const DATE_FILTERS = [
   {
     id: "all",
     label: "सभी",
-    shortLabel: "सभी",
   },
   {
-    id: "today",
-    label: "आज",
-    shortLabel: "आज",
+    id: "yesterday",
+    label: "कल",
   },
   {
     id: "7days",
     label: "7 दिन",
-    shortLabel: "7 दिन",
   },
   {
     id: "1month",
-    label: "1 महीना",
-    shortLabel: "1 माह",
+    label: "1 माह",
   },
   {
     id: "3months",
-    label: "3 महीने",
-    shortLabel: "3 माह",
-  },
-  {
-    id: "6months",
-    label: "6 महीने",
-    shortLabel: "6 माह",
+    label: "3 माह",
   },
 ];
 
@@ -110,10 +103,10 @@ const DATE_FILTERS = [
 
 const LoadingCard = () => {
   return (
-    <div className="overflow-hidden rounded-[24px] border border-slate-100 bg-white shadow-sm">
+    <div className="overflow-hidden rounded-[22px] border border-slate-100 bg-white">
       <div className="h-1 animate-pulse bg-slate-200" />
 
-      <div className="space-y-4 p-4">
+      <div className="space-y-3 p-4">
         <div className="flex items-center justify-between">
           <div className="space-y-2">
             <div className="h-5 w-32 animate-pulse rounded-lg bg-slate-200" />
@@ -123,9 +116,7 @@ const LoadingCard = () => {
           <div className="h-8 w-20 animate-pulse rounded-full bg-slate-200" />
         </div>
 
-        <div className="h-14 animate-pulse rounded-2xl bg-slate-100" />
-
-        <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
+        <div className="h-12 animate-pulse rounded-xl bg-slate-100" />
       </div>
     </div>
   );
@@ -147,11 +138,10 @@ const Orders = () => {
   const [expandedOrder, setExpandedOrder] = useState(null);
   const [downloadingInvoice, setDownloadingInvoice] = useState(null);
 
-  // DATE FILTER
   const [dateFilter, setDateFilter] = useState("all");
 
   /* ====================================================
-     FETCH ORDERS + RECEIPTS
+     FETCH
   ==================================================== */
 
   const fetchData = async (isRefresh = false) => {
@@ -212,36 +202,35 @@ const Orders = () => {
 
     const now = new Date();
 
-    /* --------------------------------------------------
-       TODAY
-       Start/end of local day
-    -------------------------------------------------- */
+    /* -------------------------------
+       YESTERDAY
+    -------------------------------- */
 
-    if (dateFilter === "today") {
-      const startOfToday = new Date(
+    if (dateFilter === "yesterday") {
+      const startYesterday = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        now.getDate() - 1,
+      );
+
+      const endYesterday = new Date(
         now.getFullYear(),
         now.getMonth(),
         now.getDate(),
       );
 
-      const endOfToday = new Date(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate() + 1,
-      );
-
       return orders.filter((order) => {
         if (!order.createdAt) return false;
 
-        const orderDate = new Date(order.createdAt);
+        const date = new Date(order.createdAt);
 
-        return orderDate >= startOfToday && orderDate < endOfToday;
+        return date >= startYesterday && date < endYesterday;
       });
     }
 
-    /* --------------------------------------------------
-       OTHER DATE RANGES
-    -------------------------------------------------- */
+    /* -------------------------------
+       OTHER RANGES
+    -------------------------------- */
 
     const startDate = new Date(now);
 
@@ -255,10 +244,6 @@ const Orders = () => {
 
     if (dateFilter === "3months") {
       startDate.setMonth(startDate.getMonth() - 3);
-    }
-
-    if (dateFilter === "6months") {
-      startDate.setMonth(startDate.getMonth() - 6);
     }
 
     return orders.filter((order) => {
@@ -281,7 +266,7 @@ const Orders = () => {
   }, [dateFilter]);
 
   /* ====================================================
-     ORDERS WHICH HAVE GENERATED RECEIPTS
+     RECEIPTS
   ==================================================== */
 
   const receiptOrderIds = useMemo(() => {
@@ -298,10 +283,6 @@ const Orders = () => {
     return ids;
   }, [invoices]);
 
-  /* ====================================================
-     FIND RECEIPT FOR ORDER
-  ==================================================== */
-
   const getInvoiceForOrder = (orderId) => {
     return invoices.find(
       (invoice) =>
@@ -313,7 +294,7 @@ const Orders = () => {
   };
 
   /* ====================================================
-     DIRECT PDF DOWNLOAD
+     DOWNLOAD INVOICE
   ==================================================== */
 
   const downloadInvoice = async (orderId) => {
@@ -326,9 +307,7 @@ const Orders = () => {
 
       const token = localStorage.getItem("token");
 
-      if (!token) {
-        return;
-      }
+      if (!token) return;
 
       const response = await axios.get(
         `${API_BASE_URL}/api/v1/user/invoice/${invoice._id}/pdf`,
@@ -349,15 +328,11 @@ const Orders = () => {
       const link = document.createElement("a");
 
       link.href = url;
-
       link.download = `e-setu-invoice-${invoice.dateKey || invoice._id}.pdf`;
-
       link.style.display = "none";
 
       document.body.appendChild(link);
-
       link.click();
-
       document.body.removeChild(link);
 
       setTimeout(() => {
@@ -371,7 +346,7 @@ const Orders = () => {
   };
 
   /* ====================================================
-     FORMAT DATE
+     FORMATTERS
   ==================================================== */
 
   const formatDate = (date) => {
@@ -384,10 +359,6 @@ const Orders = () => {
     });
   };
 
-  /* ====================================================
-     FORMAT TIME
-  ==================================================== */
-
   const formatTime = (date) => {
     if (!date) return "";
 
@@ -397,43 +368,41 @@ const Orders = () => {
     });
   };
 
-  /* ====================================================
-     FORMAT MONEY
-  ==================================================== */
-
   const formatMoney = (amount) => {
     return `₹${Number(amount || 0).toLocaleString("en-IN")}`;
   };
 
   /* ====================================================
      STATS
+     
+     IMPORTANT:
+     No "कुल खर्च"
+     No "total order amount"
+     
+     Only:
+     ऑर्डर
+     पैसे बाकी
   ==================================================== */
 
   const totalOrders = filteredOrders.length;
 
-  const totalSpent = useMemo(() => {
-    return filteredOrders.reduce(
-      (sum, order) => sum + Number(order.totalAmount || 0),
-      0,
-    );
+  const pendingPayment = useMemo(() => {
+    return filteredOrders
+      .filter((order) => order.status !== "Cancelled")
+      .filter((order) => order.paymentStatus !== "Paid")
+      .reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
   }, [filteredOrders]);
 
   /* ====================================================
-     TOGGLE ORDER
+     TOGGLE
   ==================================================== */
 
   const toggleOrder = (orderId) => {
     setExpandedOrder((current) => (current === orderId ? null : orderId));
   };
 
-  /* ====================================================
-     CHANGE FILTER
-  ==================================================== */
-
   const handleFilterChange = (filterId) => {
     setDateFilter(filterId);
-
-    // Close expanded order when changing period
     setExpandedOrder(null);
   };
 
@@ -442,346 +411,306 @@ const Orders = () => {
   ==================================================== */
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-28 pt-16">
+    <div className="min-h-screen bg-slate-50 pb-28 pt-20">
       {/* ==================================================
-          HEADER
+          1. RECEIPTS
       ================================================== */}
 
-      <motion.div
-        initial={{ opacity: 0, y: -12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-        className="
-          rounded-b-[30px]
-          bg-gradient-to-br
-          from-red-600
-          via-red-600
-          to-red-700
-          px-5
-          pb-5
-          pt-7
-          text-white
-          shadow-lg
-        "
-      >
-        <div className="mx-auto max-w-5xl">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div
-                className="
-                  flex
-                  h-11
-                  w-11
-                  items-center
-                  justify-center
-                  rounded-2xl
-                  bg-white/15
-                  ring-1
-                  ring-white/20
-                "
-              >
-                <History className="h-5 w-5" />
-              </div>
-
-              <div>
-                <h1 className="text-2xl font-black">मेरा हिसाब</h1>
-
-                <p className="text-xs text-red-100">आपके ऑर्डर</p>
-              </div>
-            </div>
-
-            {/* REFRESH */}
-
-            <button
-              onClick={() => fetchData(true)}
-              disabled={refreshing}
+      <div className="mx-auto max-w-5xl px-4">
+        <motion.button
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          whileTap={{ scale: 0.985 }}
+          onClick={() => navigate("/invoice-history")}
+          className="
+            flex
+            w-full
+            items-center
+            justify-between
+            rounded-2xl
+            border
+            border-red-100
+            bg-white
+            px-3.5
+            py-2.5
+            shadow-sm
+            transition
+            hover:border-red-200
+          "
+        >
+          <div className="flex items-center gap-2.5">
+            <div
               className="
                 flex
-                h-10
-                w-10
+                h-8
+                w-8
                 items-center
                 justify-center
                 rounded-xl
-                bg-white/15
-                ring-1
-                ring-white/20
-                transition
-                active:scale-95
-                disabled:opacity-60
+                bg-red-600
+                text-white
               "
             >
-              <RefreshCw
-                className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-              />
-            </button>
-          </div>
-
-          {/* STATS */}
-
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <div className="rounded-2xl bg-white/15 px-3 py-2.5">
-              <p className="text-[10px] text-red-100">ऑर्डर</p>
-
-              <p className="mt-0.5 text-xl font-black">{totalOrders}</p>
+              <ReceiptText className="h-4 w-4" />
             </div>
 
-            <div className="rounded-2xl bg-white/15 px-3 py-2.5">
-              <p className="text-[10px] text-red-100">कुल खर्च</p>
+            <div className="text-left">
+              <p className="text-sm font-black text-slate-900">सभी रसीदें</p>
+            </div>
+          </div>
 
-              <p className="mt-0.5 text-xl font-black">
-                {formatMoney(totalSpent)}
+          <ArrowRight className="h-4 w-4 text-red-500" />
+        </motion.button>
+      </div>
+
+      {/* ==================================================
+          2. MERA HISAB
+      ================================================== */}
+
+      <motion.div
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="mx-auto max-w-5xl px-4 pt-5"
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div
+              className="
+                flex
+                h-11
+                w-11
+                items-center
+                justify-center
+                rounded-2xl
+                bg-red-600
+                text-white
+                shadow-sm
+              "
+            >
+              <History className="h-5 w-5" />
+            </div>
+
+            <div>
+              <h1 className="text-[25px] font-black tracking-tight text-slate-900">
+                मेरा हिसाब
+              </h1>
+
+              <p className="mt-0.5 text-xs font-medium text-slate-400">
+                आपके ऑर्डर और बाकी भुगतान
               </p>
             </div>
           </div>
+
+          <button
+            onClick={() => fetchData(true)}
+            disabled={refreshing}
+            className="
+              flex
+              h-10
+              w-10
+              items-center
+              justify-center
+              rounded-xl
+              bg-white
+              shadow-sm
+              ring-1
+              ring-slate-100
+              transition
+              active:scale-95
+              disabled:opacity-60
+            "
+          >
+            <RefreshCw
+              className={`h-4 w-4 text-slate-600 ${
+                refreshing ? "animate-spin" : ""
+              }`}
+            />
+          </button>
         </div>
       </motion.div>
 
-      <motion.button
-        initial={{
-          opacity: 0,
-          y: 8,
-        }}
-        animate={{
-          opacity: 1,
-          y: 0,
-        }}
-        whileTap={{
-          scale: 0.98,
-        }}
-        onClick={() => navigate("/invoice-history")}
-        className="
-          mt-3
-          mb-3
-          flex
-          w-full
-          items-center
-          justify-between
-          rounded-[22px]
-          border
-          border-red-100
-          bg-white
-          p-3.5
-          text-left
-          shadow-sm
-          transition
-          hover:border-red-200
-          hover:shadow-md
-        "
-      >
-        <div className="flex items-center gap-3">
-          <div
-            className="
-              flex
-              h-11
-              w-11
-              items-center
-              justify-center
-              rounded-2xl
-              bg-red-600
-              text-white
-              shadow-sm
-            "
-          >
-            <ReceiptText className="h-5 w-5" />
-          </div>
+      {/* ==================================================
+          3. TIMEFRAME
+      ================================================== */}
 
-          <div>
-            <p className="text-base font-black text-slate-900">सभी रसीदें</p>
+      <div className="mx-auto max-w-5xl px-4 pt-6">
+        <div className="mb-2 flex items-center gap-2">
+          <CalendarDays className="h-4 w-4 text-red-600" />
 
-            <p className="text-[11px] text-slate-400">
-              {invoices.length} रसीद उपलब्ध
-            </p>
-          </div>
+          <p className="text-sm font-black text-slate-800">समय</p>
+
+          <span className="ml-auto text-[10px] font-bold text-slate-400">
+            {activeFilterLabel}
+          </span>
         </div>
 
         <div
           className="
             flex
-            h-9
-            w-9
-            items-center
-            justify-center
-            rounded-xl
-            bg-red-50
-            text-red-600
+            w-full
+            overflow-hidden
+            rounded-2xl
+            border
+            border-slate-200
+            bg-white
+            p-1
+            shadow-sm
           "
         >
-          <ArrowRight className="h-4 w-4" />
+          {DATE_FILTERS.map((filter) => {
+            const isActive = dateFilter === filter.id;
+
+            return (
+              <button
+                key={filter.id}
+                onClick={() => handleFilterChange(filter.id)}
+                className={`
+                  relative
+                  min-w-0
+                  flex-1
+                  rounded-xl
+                  px-1
+                  py-2.5
+                  text-[11px]
+                  font-black
+                  transition-all
+                  sm:text-xs
+                  ${
+                    isActive
+                      ? "bg-red-600 text-white shadow-sm"
+                      : "text-slate-500 hover:bg-slate-50 hover:text-red-600"
+                  }
+                `}
+              >
+                {filter.label}
+              </button>
+            );
+          })}
         </div>
-      </motion.button>
+      </div>
+
       {/* ==================================================
-          CONTENT
+          4. ORDER / PAISE BAAKI
       ================================================== */}
 
-      <div className="mx-auto max-w-5xl px-4 py-5">
-        {/* ==================================================
-            DATE FILTER
-        ================================================== */}
-
-        <motion.div
-          initial={{
-            opacity: 0,
-            y: 8,
-          }}
-          animate={{
-            opacity: 1,
-            y: 0,
-          }}
-          transition={{
-            duration: 0.3,
-            delay: 0.05,
-          }}
-          className="mb-5"
-        >
-          {/* FILTER HEADER */}
-
-          <div className="mb-2.5 flex items-center justify-between px-1">
-            <div className="flex items-center gap-2">
-              <CalendarDays className="h-4 w-4 text-red-600" />
-
-              <p className="text-sm font-black text-slate-800">ऑर्डर की अवधि</p>
-            </div>
-
-            <span className="text-[10px] font-semibold text-slate-400">
-              {activeFilterLabel}
-            </span>
-          </div>
-
-          {/* FILTER SCROLLER */}
+      <div className="mx-auto max-w-5xl px-4 pt-4">
+        <div className="grid grid-cols-2 gap-3">
+          {/* ORDERS */}
 
           <div
             className="
-              -mx-1
-              flex
-              gap-2
-              overflow-x-auto
-              px-1
-              pb-1
-              scrollbar-none
-            "
-          >
-            {DATE_FILTERS.map((filter) => {
-              const isActive = dateFilter === filter.id;
-
-              return (
-                <motion.button
-                  key={filter.id}
-                  whileTap={{
-                    scale: 0.94,
-                  }}
-                  onClick={() => handleFilterChange(filter.id)}
-                  className={`
-                    relative
-                    shrink-0
-                    overflow-hidden
-                    rounded-2xl
-                    border
-                    px-4
-                    py-2.5
-                    text-xs
-                    font-bold
-                    transition-all
-                    duration-200
-                    ${
-                      isActive
-                        ? "border-red-600 bg-red-600 text-white shadow-md shadow-red-200"
-                        : "border-slate-200 bg-white text-slate-600 shadow-sm hover:border-red-200 hover:text-red-600"
-                    }
-                  `}
-                >
-                  {isActive && (
-                    <motion.div
-                      layoutId="activeDateFilter"
-                      className="absolute inset-0 bg-red-600"
-                      transition={{
-                        type: "spring",
-                        stiffness: 400,
-                        damping: 30,
-                      }}
-                    />
-                  )}
-
-                  <span className="relative z-10">{filter.label}</span>
-                </motion.button>
-              );
-            })}
-          </div>
-        </motion.div>
-
-        {/* ==================================================
-            FILTER SUMMARY
-        ================================================== */}
-
-        {!loading && orders.length > 0 && (
-          <motion.div
-            key={dateFilter}
-            initial={{
-              opacity: 0,
-              y: -4,
-            }}
-            animate={{
-              opacity: 1,
-              y: 0,
-            }}
-            className="
-              mb-4
-              flex
-              items-center
-              justify-between
-              rounded-2xl
+              rounded-[22px]
               border
-              border-red-100
-              bg-red-50/70
-              px-3.5
-              py-2.5
+              border-slate-100
+              bg-white
+              px-4
+              py-4
+              shadow-sm
             "
           >
             <div className="flex items-center gap-2">
-              <div className="h-1.5 w-1.5 rounded-full bg-red-500" />
+              <div
+                className="
+                  flex
+                  h-9
+                  w-9
+                  items-center
+                  justify-center
+                  rounded-xl
+                  bg-red-50
+                  text-red-600
+                "
+              >
+                <ShoppingBag className="h-4 w-4" />
+              </div>
 
-              <p className="text-[11px] font-semibold text-red-700">
-                {dateFilter === "all"
-                  ? "सभी ऑर्डर"
-                  : `${activeFilterLabel} के ऑर्डर`}
-              </p>
+              <p className="text-xs font-bold text-slate-400">ऑर्डर</p>
             </div>
 
-            <p className="text-[10px] font-bold text-red-500">
-              {filteredOrders.length} ऑर्डर
+            <p className="mt-3 text-[30px] font-black leading-none text-slate-900">
+              {totalOrders}
             </p>
-          </motion.div>
-        )}
+          </div>
 
-        {/* ==================================================
-            LOADING
-        ================================================== */}
+          {/* PENDING */}
+
+          <div
+            className="
+              rounded-[22px]
+              border
+              border-orange-100
+              bg-orange-50/70
+              px-4
+              py-4
+              shadow-sm
+            "
+          >
+            <div className="flex items-center gap-2">
+              <div
+                className="
+                  flex
+                  h-9
+                  w-9
+                  items-center
+                  justify-center
+                  rounded-xl
+                  bg-orange-100
+                  text-orange-600
+                "
+              >
+                <CircleAlert className="h-4 w-4" />
+              </div>
+
+              <p className="text-xs font-bold text-orange-600">पैसे बाकी</p>
+            </div>
+
+            <p className="mt-3 text-[27px] font-black leading-none text-orange-700">
+              {formatMoney(pendingPayment)}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* ==================================================
+          5. ORDERS
+      ================================================== */}
+
+      <div className="mx-auto max-w-5xl px-4 pt-6">
+        <div className="mb-3 flex items-center justify-between">
+          <div>
+            <h2 className="text-lg font-black text-slate-900">ऑर्डर</h2>
+
+            <p className="mt-0.5 text-xs font-medium text-slate-400">
+              {dateFilter === "all"
+                ? "सभी ऑर्डर"
+                : `${activeFilterLabel} के ऑर्डर`}
+            </p>
+          </div>
+
+          <span className="rounded-full bg-slate-100 px-3 py-1.5 text-[10px] font-black text-slate-500">
+            {filteredOrders.length}
+          </span>
+        </div>
+
+        {/* LOADING */}
 
         {loading ? (
-          <div className="space-y-4">
+          <div className="space-y-3">
             <LoadingCard />
             <LoadingCard />
           </div>
         ) : filteredOrders.length === 0 ? (
-          /* ==================================================
-             EMPTY
-          ================================================== */
-
           <motion.div
-            key={`empty-${dateFilter}`}
-            initial={{
-              opacity: 0,
-              y: 10,
-            }}
-            animate={{
-              opacity: 1,
-              y: 0,
-            }}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
             className="
-              rounded-[28px]
+              rounded-[24px]
               border
               border-slate-100
               bg-white
-              p-8
+              px-5
+              py-12
               text-center
               shadow-sm
             "
@@ -790,78 +719,48 @@ const Orders = () => {
               className="
                 mx-auto
                 flex
-                h-20
-                w-20
+                h-16
+                w-16
                 items-center
                 justify-center
-                rounded-[24px]
+                rounded-2xl
                 bg-red-50
                 text-red-500
               "
             >
-              <ShoppingBag className="h-9 w-9" />
+              <ShoppingBag className="h-7 w-7" />
             </div>
 
-            <h2 className="mt-4 text-xl font-black text-slate-900">
-              {dateFilter === "all"
-                ? "अभी कोई ऑर्डर नहीं"
-                : `${activeFilterLabel} में कोई ऑर्डर नहीं`}
+            <h2 className="mt-4 text-lg font-black text-slate-900">
+              कोई ऑर्डर नहीं
             </h2>
 
-            <p className="mt-1 text-sm text-slate-500">
-              {dateFilter === "all"
-                ? "आपके ऑर्डर यहाँ दिखाई देंगे"
-                : "इस अवधि में आपका कोई ऑर्डर नहीं मिला"}
+            <p className="mt-1 text-sm text-slate-400">
+              इस समयावधि में कोई ऑर्डर नहीं मिला
             </p>
 
-            {dateFilter !== "all" ? (
+            {dateFilter !== "all" && (
               <button
                 onClick={() => setDateFilter("all")}
                 className="
                   mt-5
                   rounded-xl
-                  border
-                  border-red-200
-                  bg-red-50
-                  px-5
-                  py-3
-                  text-sm
-                  font-bold
-                  text-red-600
-                  transition
-                  hover:bg-red-100
-                  active:scale-95
-                "
-              >
-                सभी ऑर्डर देखें
-              </button>
-            ) : (
-              <button
-                onClick={() => navigate("/")}
-                className="
-                  mt-5
-                  rounded-xl
                   bg-red-600
                   px-5
-                  py-3
-                  text-sm
-                  font-bold
+                  py-2.5
+                  text-xs
+                  font-black
                   text-white
                   transition
-                  hover:bg-red-700
                   active:scale-95
                 "
               >
-                खरीदारी करें
+                सभी देखें
               </button>
             )}
           </motion.div>
         ) : (
-          /* ==================================================
-             ORDERS
-          ================================================== */
-
-          <div className="space-y-4">
+          <div className="space-y-3">
             {filteredOrders.map((order, index) => {
               const isExpanded = expandedOrder === order._id;
 
@@ -870,6 +769,10 @@ const Orders = () => {
               const invoice = hasReceipt ? getInvoiceForOrder(order._id) : null;
 
               const isDownloading = downloadingInvoice === invoice?._id;
+
+              const isPaid = order.paymentStatus === "Paid";
+
+              const isCancelled = order.status === "Cancelled";
 
               const status = statusStyle[order.status] || {
                 wrapper: "bg-slate-100 text-slate-700 border-slate-200",
@@ -880,35 +783,33 @@ const Orders = () => {
               return (
                 <motion.div
                   key={order._id}
-                  initial={{
-                    opacity: 0,
-                    y: 10,
-                  }}
-                  animate={{
-                    opacity: 1,
-                    y: 0,
-                  }}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
                   transition={{
-                    duration: 0.25,
-                    delay: Math.min(index * 0.03, 0.15),
+                    duration: 0.2,
+                    delay: Math.min(index * 0.025, 0.12),
                   }}
                   className="
                     overflow-hidden
-                    rounded-[24px]
+                    rounded-[22px]
                     border
                     border-slate-100
                     bg-white
                     shadow-sm
                   "
                 >
-                  {/* RED STRIPE */}
-
-                  <div className="h-1 bg-red-600" />
+                  <div
+                    className={`h-1 ${
+                      isCancelled
+                        ? "bg-slate-300"
+                        : isPaid
+                          ? "bg-green-500"
+                          : "bg-orange-500"
+                    }`}
+                  />
 
                   <div className="p-4">
-                    {/* ==================================================
-                        HEADER
-                    ================================================== */}
+                    {/* HEADER */}
 
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-3">
@@ -928,20 +829,17 @@ const Orders = () => {
                           <CalendarDays className="h-5 w-5" />
                         </div>
 
-                        <div>
+                        <div className="min-w-0">
                           <p className="text-base font-black text-slate-900">
                             {formatDate(order.createdAt)}
                           </p>
 
-                          <p className="mt-0.5 flex items-center gap-1 text-[10px] text-slate-400">
+                          <p className="mt-0.5 flex items-center gap-1 text-[10px] font-medium text-slate-400">
                             <Clock3 className="h-3 w-3" />
-
                             {formatTime(order.createdAt)}
                           </p>
                         </div>
                       </div>
-
-                      {/* STATUS */}
 
                       <span
                         className={`
@@ -971,56 +869,92 @@ const Orders = () => {
                       </span>
                     </div>
 
-                    {/* ==================================================
-                        TOTAL
-                    ================================================== */}
+                    {/* PAYMENT STATUS */}
 
                     <div
-                      className="
-                        mt-4
+                      className={`
+                        mt-3
                         flex
                         items-center
                         justify-between
                         rounded-2xl
-                        bg-slate-50
-                        px-3
+                        px-3.5
                         py-3
-                      "
+                        ${
+                          isCancelled
+                            ? "bg-slate-50"
+                            : isPaid
+                              ? "bg-green-50"
+                              : "bg-orange-50"
+                        }
+                      `}
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2.5">
                         <div
-                          className="
+                          className={`
                             flex
                             h-9
                             w-9
                             items-center
                             justify-center
                             rounded-xl
-                            bg-white
-                            text-red-500
-                            shadow-sm
-                          "
+                            ${
+                              isCancelled
+                                ? "bg-white text-slate-400"
+                                : isPaid
+                                  ? "bg-green-100 text-green-600"
+                                  : "bg-orange-100 text-orange-600"
+                            }
+                          `}
                         >
-                          <WalletCards className="h-4 w-4" />
+                          {isPaid ? (
+                            <CheckCircle2 className="h-4 w-4" />
+                          ) : (
+                            <WalletCards className="h-4 w-4" />
+                          )}
                         </div>
 
                         <div>
-                          <p className="text-[10px] text-slate-400">बिल</p>
+                          <p className="text-[10px] font-medium text-slate-400">
+                            भुगतान
+                          </p>
 
-                          <p className="text-xs font-bold text-slate-700">
-                            {order.items?.length || 0} सामान
+                          <p
+                            className={`
+                              text-sm
+                              font-black
+                              ${
+                                isCancelled
+                                  ? "text-slate-500"
+                                  : isPaid
+                                    ? "text-green-700"
+                                    : "text-orange-700"
+                              }
+                            `}
+                          >
+                            {isCancelled
+                              ? "रद्द"
+                              : isPaid
+                                ? "पैसा जमा"
+                                : "पैसा बाकी"}
                           </p>
                         </div>
                       </div>
 
-                      <p className="text-xl font-black text-slate-900">
-                        {formatMoney(order.totalAmount)}
-                      </p>
+                      {!isCancelled && (
+                        <p
+                          className={`
+                            text-lg
+                            font-black
+                            ${isPaid ? "text-green-700" : "text-orange-700"}
+                          `}
+                        >
+                          {formatMoney(order.totalAmount)}
+                        </p>
+                      )}
                     </div>
 
-                    {/* ==================================================
-                        PRODUCTS
-                    ================================================== */}
+                    {/* PRODUCTS */}
 
                     <div className="mt-3 space-y-2">
                       {(isExpanded
@@ -1037,29 +971,27 @@ const Orders = () => {
                             key={`${order._id}-${itemIndex}`}
                             layout
                             className="
-                                flex
-                                items-center
-                                gap-3
-                                rounded-2xl
-                                border
-                                border-slate-100
-                                bg-white
-                                p-2.5
-                              "
+                              flex
+                              items-center
+                              gap-3
+                              rounded-2xl
+                              border
+                              border-slate-100
+                              bg-white
+                              p-2.5
+                            "
                           >
-                            {/* PRODUCT ICON */}
-
                             <div
                               className="
-                                  flex
-                                  h-11
-                                  w-11
-                                  shrink-0
-                                  items-center
-                                  justify-center
-                                  rounded-xl
-                                  bg-slate-50
-                                "
+                                flex
+                                h-11
+                                w-11
+                                shrink-0
+                                items-center
+                                justify-center
+                                rounded-xl
+                                bg-slate-50
+                              "
                             >
                               {item.image ? (
                                 <img
@@ -1072,8 +1004,6 @@ const Orders = () => {
                                 <Package2 className="h-5 w-5 text-red-400" />
                               )}
                             </div>
-
-                            {/* PRODUCT */}
 
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-1">
@@ -1096,14 +1026,14 @@ const Orders = () => {
                                 {item.measurement && (
                                   <span
                                     className="
-                                        rounded-full
-                                        bg-slate-100
-                                        px-2
-                                        py-0.5
-                                        text-[9px]
-                                        font-semibold
-                                        text-slate-500
-                                      "
+                                      rounded-full
+                                      bg-slate-100
+                                      px-2
+                                      py-0.5
+                                      text-[9px]
+                                      font-semibold
+                                      text-slate-500
+                                    "
                                   >
                                     {item.measurement}
                                   </span>
@@ -1111,21 +1041,19 @@ const Orders = () => {
 
                                 <span
                                   className="
-                                      rounded-full
-                                      bg-red-50
-                                      px-2
-                                      py-0.5
-                                      text-[9px]
-                                      font-bold
-                                      text-red-600
-                                    "
+                                    rounded-full
+                                    bg-red-50
+                                    px-2
+                                    py-0.5
+                                    text-[9px]
+                                    font-bold
+                                    text-red-600
+                                  "
                                 >
                                   × {item.qty || item.quantity || 1}
                                 </span>
                               </div>
                             </div>
-
-                            {/* PRICE */}
 
                             <p className="shrink-0 text-sm font-black text-slate-800">
                               {formatMoney(item.total)}
@@ -1135,9 +1063,7 @@ const Orders = () => {
                       })}
                     </div>
 
-                    {/* ==================================================
-                        MORE ITEMS
-                    ================================================== */}
+                    {/* MORE ITEMS */}
 
                     {!isExpanded && (order.items?.length || 0) > 2 && (
                       <button
@@ -1187,9 +1113,7 @@ const Orders = () => {
                       </button>
                     )}
 
-                    {/* ==================================================
-                        ACTIONS
-                    ================================================== */}
+                    {/* ACTIONS */}
 
                     <div
                       className="
@@ -1202,22 +1126,14 @@ const Orders = () => {
                         pt-3
                       "
                     >
-                      <div>
-                        <p className="text-[9px] text-slate-400">भुगतान</p>
-
-                        <p className="text-xs font-bold text-slate-700">
-                          {order.paymentMethod === "Online" ? "ऑनलाइन" : "कैश"}
-                        </p>
-                      </div>
+                      <p className="text-[10px] font-semibold text-slate-400">
+                        {order.paymentMethod === "Online" ? "ऑनलाइन" : "कैश"}
+                      </p>
 
                       <div className="flex items-center gap-2">
-                        {/* RECEIPT DOWNLOAD */}
-
                         {hasReceipt && invoice && (
                           <motion.button
-                            whileTap={{
-                              scale: 0.95,
-                            }}
+                            whileTap={{ scale: 0.95 }}
                             onClick={() => downloadInvoice(order._id)}
                             disabled={isDownloading}
                             className="
@@ -1231,10 +1147,8 @@ const Orders = () => {
                               text-xs
                               font-bold
                               text-white
-                              shadow-sm
                               transition
                               hover:bg-red-700
-                              disabled:cursor-not-allowed
                               disabled:opacity-60
                             "
                           >
@@ -1244,11 +1158,9 @@ const Orders = () => {
                               <Download className="h-3.5 w-3.5" />
                             )}
 
-                            {isDownloading ? "डाउनलोड..." : "रसीद डाउनलोड"}
+                            {isDownloading ? "डाउनलोड..." : "रसीद"}
                           </motion.button>
                         )}
-
-                        {/* DETAILS */}
 
                         <button
                           onClick={() => toggleOrder(order._id)}
@@ -1279,9 +1191,7 @@ const Orders = () => {
                       </div>
                     </div>
 
-                    {/* ==================================================
-                        DETAILS
-                    ================================================== */}
+                    {/* DETAILS */}
 
                     <AnimatePresence>
                       {isExpanded && (
@@ -1301,8 +1211,6 @@ const Orders = () => {
                           className="overflow-hidden"
                         >
                           <div className="mt-3 grid grid-cols-2 gap-2 border-t border-slate-100 pt-3">
-                            {/* ORDER ID */}
-
                             <div className="rounded-xl bg-slate-50 p-3">
                               <p className="text-[9px] font-semibold text-slate-400">
                                 ऑर्डर आईडी
@@ -1313,8 +1221,6 @@ const Orders = () => {
                               </p>
                             </div>
 
-                            {/* PAYMENT */}
-
                             <div className="rounded-xl bg-slate-50 p-3">
                               <p className="text-[9px] font-semibold text-slate-400">
                                 भुगतान
@@ -1324,8 +1230,6 @@ const Orders = () => {
                                 {order.paymentMethod || "—"}
                               </p>
                             </div>
-
-                            {/* ADDRESS */}
 
                             {order.shippingAddress && (
                               <div className="col-span-2 rounded-xl bg-slate-50 p-3">
@@ -1339,8 +1243,6 @@ const Orders = () => {
                               </div>
                             )}
 
-                            {/* APPROVED */}
-
                             {order.approvedAt && (
                               <div className="rounded-xl bg-red-50 p-3">
                                 <p className="text-[9px] font-semibold text-red-500">
@@ -1352,8 +1254,6 @@ const Orders = () => {
                                 </p>
                               </div>
                             )}
-
-                            {/* DELIVERED */}
 
                             {order.deliveredAt && (
                               <div className="rounded-xl bg-red-50 p-3">
