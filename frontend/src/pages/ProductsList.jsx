@@ -43,7 +43,7 @@ const ProductsList = () => {
   const [addLoading, setAddLoading] = useState(false);
   const cartSound = () => {
     const audio = new Audio("/addtocart.mp3");
-    audio.volume = 0.7;
+    audio.volume = 1;
     audio.play().catch((error) => {
       console.log("Sound could not play:", error);
     });
@@ -161,7 +161,6 @@ const ProductsList = () => {
         toast.error("कृपया पहले लॉगिन करें");
         return;
       }
-      cartSound();
 
       const res = await axios.post(
         `${API_BASE_URL}/api/v1/cart/add-cart`,
@@ -177,6 +176,7 @@ const ProductsList = () => {
           },
         },
       );
+      cartSound();
 
       if (res.data.success) {
         dispatch(setCartData(res.data.cart));
