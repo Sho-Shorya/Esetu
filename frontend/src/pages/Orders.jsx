@@ -9,7 +9,6 @@ import {
   Clock3,
   Download,
   History,
-  IndianRupee,
   Package2,
   ReceiptText,
   RefreshCw,
@@ -55,18 +54,6 @@ const statusStyle = {
     wrapper: "bg-red-50 text-red-700 border-red-100",
     dot: "bg-red-500",
     hindi: "रास्ते में",
-  },
-
-  Cancelled: {
-    wrapper: "bg-slate-100 text-slate-600 border-slate-200",
-    dot: "bg-slate-500",
-    hindi: "रद्द",
-  },
-
-  Declined: {
-    wrapper: "bg-slate-100 text-slate-600 border-slate-200",
-    dot: "bg-slate-500",
-    hindi: "अस्वीकृत",
   },
 };
 
@@ -142,6 +129,10 @@ const Orders = () => {
 
   /* ====================================================
      FETCH
+     
+     IMPORTANT:
+     Cancelled + Declined orders are removed BEFORE
+     entering React state.
   ==================================================== */
 
   const fetchData = async (isRefresh = false) => {
@@ -172,15 +163,42 @@ const Orders = () => {
         axios.get(`${API_BASE_URL}/api/v1/user/invoice/my-invoices`, config),
       ]);
 
+      /* -----------------------------------------------
+         ONLY KEEP VALID ORDERS
+
+         Cancelled ❌
+         Declined  ❌
+
+         Everything else ✅
+      ------------------------------------------------ */
+
       if (ordersResponse.data?.success) {
-        setOrders(ordersResponse.data.orders || []);
+        const apiOrders = ordersResponse.data.orders || [];
+
+        const validOrders = apiOrders.filter(
+          (order) =>
+            order.status !== "Cancelled" && order.status !== "Declined",
+        );
+
+        setOrders(validOrders);
+      } else {
+        setOrders([]);
       }
+
+      /* -----------------------------------------------
+         INVOICES
+      ------------------------------------------------ */
 
       if (invoicesResponse.data?.success) {
         setInvoices(invoicesResponse.data.invoices || []);
+      } else {
+        setInvoices([]);
       }
     } catch (error) {
       console.error("Orders fetch error:", error);
+
+      setOrders([]);
+      setInvoices([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -329,6 +347,7 @@ const Orders = () => {
 
       link.href = url;
       link.download = `e-setu-invoice-${invoice.dateKey || invoice._id}.pdf`;
+
       link.style.display = "none";
 
       document.body.appendChild(link);
@@ -374,21 +393,14 @@ const Orders = () => {
 
   /* ====================================================
      STATS
-     
-     IMPORTANT:
-     No "कुल खर्च"
-     No "total order amount"
-     
-     Only:
-     ऑर्डर
-     पैसे बाकी
+
+     Only valid orders exist inside `orders`.
   ==================================================== */
 
   const totalOrders = filteredOrders.length;
 
   const pendingPayment = useMemo(() => {
     return filteredOrders
-      .filter((order) => order.status !== "Cancelled")
       .filter((order) => order.paymentStatus !== "Paid")
       .reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
   }, [filteredOrders]);
@@ -772,8 +784,6 @@ const Orders = () => {
 
               const isPaid = order.paymentStatus === "Paid";
 
-              const isCancelled = order.status === "Cancelled";
-
               const status = statusStyle[order.status] || {
                 wrapper: "bg-slate-100 text-slate-700 border-slate-200",
                 dot: "bg-slate-500",
@@ -798,13 +808,11 @@ const Orders = () => {
                     shadow-sm
                   "
                 >
+                  {/* TOP STATUS LINE */}
+
                   <div
                     className={`h-1 ${
-                      isCancelled
-                        ? "bg-slate-300"
-                        : isPaid
-                          ? "bg-green-500"
-                          : "bg-orange-500"
+                      isPaid ? "bg-green-500" : "bg-orange-500"
                     }`}
                   />
 
@@ -880,13 +888,7 @@ const Orders = () => {
                         rounded-2xl
                         px-3.5
                         py-3
-                        ${
-                          isCancelled
-                            ? "bg-slate-50"
-                            : isPaid
-                              ? "bg-green-50"
-                              : "bg-orange-50"
-                        }
+                        ${isPaid ? "bg-green-50" : "bg-orange-50"}
                       `}
                     >
                       <div className="flex items-center gap-2.5">
@@ -899,11 +901,9 @@ const Orders = () => {
                             justify-center
                             rounded-xl
                             ${
-                              isCancelled
-                                ? "bg-white text-slate-400"
-                                : isPaid
-                                  ? "bg-green-100 text-green-600"
-                                  : "bg-orange-100 text-orange-600"
+                              isPaid
+                                ? "bg-green-100 text-green-600"
+                                : "bg-orange-100 text-orange-600"
                             }
                           `}
                         >
@@ -923,35 +923,23 @@ const Orders = () => {
                             className={`
                               text-sm
                               font-black
-                              ${
-                                isCancelled
-                                  ? "text-slate-500"
-                                  : isPaid
-                                    ? "text-green-700"
-                                    : "text-orange-700"
-                              }
+                              ${isPaid ? "text-green-700" : "text-orange-700"}
                             `}
                           >
-                            {isCancelled
-                              ? "रद्द"
-                              : isPaid
-                                ? "पैसा जमा"
-                                : "पैसा बाकी"}
+                            {isPaid ? "पैसा जमा" : "पैसा बाकी"}
                           </p>
                         </div>
                       </div>
 
-                      {!isCancelled && (
-                        <p
-                          className={`
-                            text-lg
-                            font-black
-                            ${isPaid ? "text-green-700" : "text-orange-700"}
-                          `}
-                        >
-                          {formatMoney(order.totalAmount)}
-                        </p>
-                      )}
+                      <p
+                        className={`
+                          text-lg
+                          font-black
+                          ${isPaid ? "text-green-700" : "text-orange-700"}
+                        `}
+                      >
+                        {formatMoney(order.totalAmount)}
+                      </p>
                     </div>
 
                     {/* PRODUCTS */}

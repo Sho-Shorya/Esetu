@@ -1,12 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-
 import axios from "axios";
 
 import {
   ArrowDown,
-  ArrowUp,
   Check,
-  ChevronDown,
   IndianRupee,
   Loader2,
   Minus,
@@ -19,7 +16,6 @@ import {
 } from "lucide-react";
 
 import { toast } from "sonner";
-
 import { API_BASE_URL } from "@/lib/constants";
 
 const AdminMoneyControl = () => {
@@ -28,15 +24,12 @@ const AdminMoneyControl = () => {
   ========================================================== */
 
   const [orders, setOrders] = useState([]);
-
   const [loading, setLoading] = useState(true);
 
   const [selectedOrder, setSelectedOrder] = useState(null);
 
   const [editing, setEditing] = useState(false);
-
   const [saving, setSaving] = useState(false);
-
   const [paymentUpdating, setPaymentUpdating] = useState(false);
 
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -104,33 +97,42 @@ const AdminMoneyControl = () => {
   }, [selectedDate]);
 
   /* ==========================================================
+     ONLY APPROVED ORDERS
+     ----------------------------------------------------------
+     Money Control should ONLY contain approved orders.
+     Cancelled, Declined, Pending, Rejected etc. are excluded.
+  ========================================================== */
+
+  const approvedOrders = useMemo(() => {
+    return orders.filter((order) => order.status === "Approved");
+  }, [orders]);
+
+  /* ==========================================================
      TOTAL SALES
   ========================================================== */
 
   const totalSales = useMemo(() => {
-    return orders
-      .filter(
-        (order) => order.status !== "Cancelled" && order.status !== "Declined",
-      )
-      .reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
-  }, [orders]);
+    return approvedOrders.reduce(
+      (sum, order) => sum + Number(order.totalAmount || 0),
+      0,
+    );
+  }, [approvedOrders]);
 
   /* ==========================================================
      PAID
   ========================================================== */
 
   const paidAmount = useMemo(() => {
-    return orders
-      .filter(
-        (order) =>
-          order.status !== "Cancelled" &&
-          order.status !== "Declined" &&
-          order.paymentStatus === "Paid",
-      )
+    return approvedOrders
+      .filter((order) => order.paymentStatus === "Paid")
       .reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
-  }, [orders]);
+  }, [approvedOrders]);
 
-  const pendingAmount = totalSales - paidAmount;
+  /* ==========================================================
+     PENDING
+  ========================================================== */
+
+  const pendingAmount = Math.max(totalSales - paidAmount, 0);
 
   /* ==========================================================
      DATE
@@ -185,7 +187,7 @@ const AdminMoneyControl = () => {
   };
 
   /* ==========================================================
-     UPDATE LOCAL QTY
+     UPDATE LOCAL QUANTITY
   ========================================================== */
 
   const changeQuantity = (itemId, change) => {
@@ -202,12 +204,12 @@ const AdminMoneyControl = () => {
             return item;
           }
 
-          const newQty = Number(item.qty) + change;
+          const newQty = Math.max(0, Number(item.qty || 0) + change);
 
           return {
             ...item,
-            qty: Math.max(0, newQty),
-            total: Math.max(0, newQty) * Number(item.price || 0),
+            qty: newQty,
+            total: newQty * Number(item.price || 0),
           };
         }),
       };
@@ -226,7 +228,6 @@ const AdminMoneyControl = () => {
 
       return {
         ...prev,
-
         items: prev.items.filter((item) => item._id !== itemId),
       };
     });
@@ -300,16 +301,18 @@ const AdminMoneyControl = () => {
       if (response.data?.success) {
         const updatedOrder = response.data.order;
 
-        /* Update list */
-
+        /*
+         * Update original orders.
+         */
         setOrders((prev) =>
           prev.map((order) =>
             order._id === updatedOrder._id ? updatedOrder : order,
           ),
         );
 
-        /* Update bottom sheet */
-
+        /*
+         * Update bottom sheet.
+         */
         setSelectedOrder(updatedOrder);
 
         setEditing(false);
@@ -417,7 +420,7 @@ const AdminMoneyControl = () => {
   ========================================================== */
 
   return (
-    <div className="min-h-screen bg-slate-50 px-3 pb-10 pt-22 sm:px-5">
+    <div className="min-h-screen bg-slate-50 px-3 pb-40 pt-22 sm:px-5">
       <div className="mx-auto w-full max-w-2xl">
         {/* ==================================================
             HEADER
@@ -425,8 +428,6 @@ const AdminMoneyControl = () => {
 
         <div className="mb-6 text-center">
           <div className="relative mx-auto inline-flex items-center justify-center">
-            {/* decorative splash */}
-
             <span className="absolute -left-5 -top-1 h-2 w-2 rounded-full bg-emerald-400" />
 
             <span className="absolute -right-5 top-1 h-1.5 w-1.5 rounded-full bg-emerald-300" />
@@ -497,7 +498,7 @@ const AdminMoneyControl = () => {
             <div>
               <p className="text-[10px] font-bold text-white/60">ऑर्डर</p>
 
-              <p className="mt-1 text-lg font-black">{orders.length}</p>
+              <p className="mt-1 text-lg font-black">{approvedOrders.length}</p>
             </div>
 
             <div>
@@ -527,7 +528,7 @@ const AdminMoneyControl = () => {
             <h2 className="text-lg font-black text-slate-900">ऑर्डर</h2>
 
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">
-              {orders.length}
+              {approvedOrders.length}
             </span>
           </div>
 
@@ -535,27 +536,24 @@ const AdminMoneyControl = () => {
             <div className="flex justify-center py-16">
               <Loader2 className="h-7 w-7 animate-spin text-emerald-500" />
             </div>
-          ) : orders.length === 0 ? (
+          ) : approvedOrders.length === 0 ? (
             <div className="rounded-[24px] border border-slate-200 bg-white px-5 py-12 text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100">
                 <ShoppingBag className="h-6 w-6 text-slate-400" />
               </div>
 
               <p className="mt-4 text-base font-black text-slate-700">
-                कोई ऑर्डर नहीं मिला
+                कोई स्वीकृत ऑर्डर नहीं
               </p>
 
               <p className="mt-1 text-xs font-semibold text-slate-400">
-                इस दिन कोई बिक्री उपलब्ध नहीं है।
+                इस दिन कोई approved order नहीं है।
               </p>
             </div>
           ) : (
             <div className="space-y-3">
-              {orders.map((order) => {
+              {approvedOrders.map((order) => {
                 const isPaid = order.paymentStatus === "Paid";
-
-                const isCancelled =
-                  order.status === "Cancelled" || order.status === "Declined";
 
                 const itemCount =
                   order.items?.reduce(
@@ -567,22 +565,21 @@ const AdminMoneyControl = () => {
                   <button
                     key={order._id}
                     onClick={() => openOrder(order)}
-                    className={`
-                      group w-full
+                    className="
+                      group
+                      w-full
                       rounded-[24px]
                       border
+                      border-slate-200
                       bg-white
                       p-4
                       text-left
                       shadow-[0_4px_18px_rgba(15,23,42,0.04)]
                       transition
                       active:scale-[0.99]
-                      ${
-                        isCancelled
-                          ? "border-red-100 opacity-60"
-                          : "border-slate-200"
-                      }
-                    `}
+                      hover:border-emerald-200
+                      hover:shadow-[0_8px_25px_rgba(16,185,129,0.08)]
+                    "
                   >
                     <div className="flex items-center gap-3">
                       {/* USER */}
@@ -670,7 +667,10 @@ const AdminMoneyControl = () => {
 
           <div
             className="
-              absolute bottom-0 left-0 right-0
+              absolute
+              bottom-0
+              left-0
+              right-0
               mx-auto
               max-h-[92vh]
               w-full
@@ -713,9 +713,11 @@ const AdminMoneyControl = () => {
             {/* CONTENT */}
 
             <div className="max-h-[calc(92vh-170px)] overflow-y-auto px-4 py-4">
-              {/* EDIT MODE */}
-
               {editing ? (
+                /* ==================================================
+                   EDIT MODE
+                ================================================== */
+
                 <div className="space-y-3">
                   {selectedOrder.items?.map((item) => (
                     <div
