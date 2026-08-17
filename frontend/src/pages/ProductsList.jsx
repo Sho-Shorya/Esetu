@@ -41,6 +41,13 @@ const ProductsList = () => {
 
   const productsRef = useRef(null);
   const [addLoading, setAddLoading] = useState(false);
+  const cartSound = () => {
+    const audio = new Audio("/ding.mp3");
+    audio.volume = 0.3;
+    audio.play().catch((error) => {
+      console.log("Sound could not play:", error);
+    });
+  };
   const fuse = useMemo(() => {
     return new Fuse(productData, {
       threshold: 0.35,
@@ -128,6 +135,7 @@ const ProductsList = () => {
   );
   const currentPrice = (selectedVariant?.price || 0) * qty;
   const handleSubmit = async (e) => {
+    cartSound();
     e.preventDefault();
 
     if (!selectedVariantCompany) {

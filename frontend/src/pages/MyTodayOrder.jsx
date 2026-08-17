@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { toast } from "sonner";
 import { FaClock } from "react-icons/fa";
 import { MdDeleteOutline } from "react-icons/md";
+import { Loader2, X } from "lucide-react";
 
 import { API_BASE_URL } from "../lib/constants";
 
@@ -25,13 +26,29 @@ const MyTodayOrder = () => {
 
   const { todayOrders, loading } = useSelector((state) => state.orders);
 
+  // ==========================================================
+  // REMOVE CONFIRMATION
+  // ==========================================================
+
+  /*
+    Instead of only keeping a boolean, we remember exactly
+    which order + item the user wants to remove.
+
+    Example:
+    {
+      orderId: "abc123",
+      itemId: "xyz789"
+    }
+  */
+  const [confirmRemoveItem, setConfirmRemoveItem] = useState(null);
+
   const [removingId, setRemovingId] = useState(null);
 
   const token = localStorage.getItem("token");
 
   /*
-    This prevents the loading spinner from appearing again
-    every time Redux data changes.
+    Prevents the full-screen loading spinner from appearing
+    again whenever Redux data changes.
   */
   const hasFetchedRef = useRef(false);
 
@@ -40,13 +57,17 @@ const MyTodayOrder = () => {
   // ==========================================================
 
   const getTodayOrders = useCallback(async () => {
-    if (!token) return;
+    if (!token) {
+      dispatch(setTodayOrders([]));
+      dispatch(setLoading(false));
+      return;
+    }
 
     /*
-      ONLY show the full-screen loader on the first request.
+      Only show the full-screen loader on the first request.
 
-      If Redux already contains orders, the user keeps seeing
-      them while the API refreshes in the background.
+      If Redux already has orders, keep showing them while
+      the API refreshes in the background.
     */
     const isFirstLoad = !hasFetchedRef.current;
 
@@ -60,10 +81,6 @@ const MyTodayOrder = () => {
           Authorization: `Bearer ${token}`,
         },
 
-        /*
-            Prevent a slow/dead backend from keeping the request
-            alive forever.
-          */
         timeout: 8000,
       });
 
@@ -76,8 +93,9 @@ const MyTodayOrder = () => {
       console.error("Today's orders error:", error);
 
       /*
-        Don't show an error popup during a background refresh.
-        Only show it if this was the initial request.
+        Only show an error on the initial request.
+
+        Background refresh failures should not annoy the user.
       */
       if (isFirstLoad) {
         toast.error(error.response?.data?.message || "Orders load nahi hue.");
@@ -100,11 +118,48 @@ const MyTodayOrder = () => {
   }, [getTodayOrders]);
 
   // ==========================================================
+  // OPEN REMOVE CONFIRMATION
+  // ==========================================================
+
+  const openRemoveConfirmation = useCallback((orderId, itemId) => {
+    /*
+      Store the exact item that the user wants to remove.
+
+      This is the important fix.
+    */
+    setConfirmRemoveItem({
+      orderId,
+      itemId,
+    });
+  }, []);
+
+  // ==========================================================
+  // CLOSE REMOVE CONFIRMATION
+  // ==========================================================
+
+  const closeRemoveConfirmation = useCallback(() => {
+    /*
+      Don't close the modal while the request is processing.
+    */
+    if (removingId) return;
+
+    setConfirmRemoveItem(null);
+  }, [removingId]);
+
+  // ==========================================================
   // OPTIMISTIC REMOVE ITEM
   // ==========================================================
 
   const removeItem = useCallback(
     async (orderId, itemId) => {
+      /*
+        Safety check.
+      */
+      if (!orderId || !itemId) {
+        toast.error("Item information missing.");
+        return;
+      }
+
       /*
         Prevent duplicate requests for the same item.
       */
@@ -116,23 +171,44 @@ const MyTodayOrder = () => {
       // FIND ORDER
       // --------------------------------------------------------
 
-      const order = todayOrders.find((order) => order._id === orderId);
+      const order = todayOrders.find(
+        (currentOrder) => currentOrder._id === orderId,
+      );
 
-      if (!order) return;
+      if (!order) {
+        toast.error("Order नहीं मिला।");
+        setConfirmRemoveItem(null);
+        return;
+      }
 
       // --------------------------------------------------------
       // FIND ITEM
       // --------------------------------------------------------
 
-      const item = order.items.find((item) => item._id === itemId);
+      const item = order.items?.find(
+        (currentItem) => currentItem._id === itemId,
+      );
 
-      if (!item) return;
+      if (!item) {
+        toast.error("Item नहीं मिला।");
+        setConfirmRemoveItem(null);
+        return;
+      }
 
       // --------------------------------------------------------
       // SAVE ORIGINAL ORDER FOR ROLLBACK
       // --------------------------------------------------------
 
-      const originalOrder = order;
+      /*
+        Create a snapshot instead of keeping the same nested
+        object reference.
+
+        This makes rollback safer.
+      */
+      const originalOrder = {
+        ...order,
+        items: [...(order.items || [])],
+      };
 
       // --------------------------------------------------------
       // LOCK BUTTON
@@ -140,11 +216,20 @@ const MyTodayOrder = () => {
 
       setRemovingId(itemId);
 
+      /*
+        Close confirmation modal immediately.
+
+        The item itself will now show "Removing..."
+      */
+      setConfirmRemoveItem(null);
+
       // --------------------------------------------------------
       // REMOVE IMMEDIATELY FROM UI
       // --------------------------------------------------------
 
-      const remainingItems = order.items.filter((item) => item._id !== itemId);
+      const remainingItems = (order.items || []).filter(
+        (currentItem) => currentItem._id !== itemId,
+      );
 
       /*
         If this was the last item, remove the whole order
@@ -159,11 +244,10 @@ const MyTodayOrder = () => {
         dispatch(
           updateOrderItems({
             ...order,
-
             items: remainingItems,
 
             totalAmount: remainingItems.reduce(
-              (sum, item) => sum + Number(item.total || 0),
+              (sum, currentItem) => sum + Number(currentItem.total || 0),
               0,
             ),
           }),
@@ -205,9 +289,15 @@ const MyTodayOrder = () => {
         // SERVER CONFIRMATION
         // ------------------------------------------------------
 
+        /*
+          Backend says the whole order was deleted.
+        */
         if (res.data.deleted) {
           dispatch(removeOrder(orderId));
         } else if (res.data.order) {
+          /*
+          Backend returned the updated order.
+        */
           dispatch(updateOrderItems(res.data.order));
         }
 
@@ -232,17 +322,26 @@ const MyTodayOrder = () => {
   );
 
   // ==========================================================
+  // CONFIRM REMOVE
+  // ==========================================================
+
+  const confirmRemove = useCallback(() => {
+    if (!confirmRemoveItem) return;
+
+    const { orderId, itemId } = confirmRemoveItem;
+
+    removeItem(orderId, itemId);
+  }, [confirmRemoveItem, removeItem]);
+
+  // ==========================================================
   // INITIAL LOADING ONLY
   // ==========================================================
 
   /*
-    IMPORTANT:
-
-    We DO NOT show this spinner during background refresh.
+    Do NOT show this spinner during background refresh.
 
     If Redux already has today's orders, they remain visible.
   */
-
   if (loading && !hasFetchedRef.current && todayOrders.length === 0) {
     return (
       <div className="absolute inset-0 flex items-center justify-center">
@@ -582,7 +681,7 @@ const MyTodayOrder = () => {
                 ========================================== */}
 
                 <div className="divide-y">
-                  {order.items.map((item) => (
+                  {order.items?.map((item) => (
                     <div
                       key={item._id}
                       className="
@@ -680,10 +779,15 @@ const MyTodayOrder = () => {
                             </span>
                           </div>
 
+                          {/* REMOVE */}
+
                           {order.status === "Pending" && (
                             <button
+                              type="button"
                               disabled={removingId === item._id}
-                              onClick={() => removeItem(order._id, item._id)}
+                              onClick={() =>
+                                openRemoveConfirmation(order._id, item._id)
+                              }
                               className="
                                 flex
                                 items-center
@@ -699,11 +803,17 @@ const MyTodayOrder = () => {
                                 disabled:opacity-60
                               "
                             >
-                              <MdDeleteOutline size={20} />
-
-                              {removingId === item._id
-                                ? "Removing..."
-                                : "Remove"}
+                              {removingId === item._id ? (
+                                <>
+                                  <Loader2 size={18} className="animate-spin" />
+                                  Removing...
+                                </>
+                              ) : (
+                                <>
+                                  <MdDeleteOutline size={20} />
+                                  Remove
+                                </>
+                              )}
                             </button>
                           )}
                         </div>
@@ -790,7 +900,10 @@ const MyTodayOrder = () => {
                           font-bold
                         "
                       >
-                        {order.items.reduce((sum, item) => sum + item.qty, 0)}
+                        {(order.items || []).reduce(
+                          (sum, item) => sum + Number(item.qty || 0),
+                          0,
+                        )}
                       </h2>
                     </div>
 
@@ -1039,6 +1152,168 @@ const MyTodayOrder = () => {
           </div>
         )}
       </div>
+
+      {/* ======================================================
+          REMOVE CONFIRMATION MODAL
+      ====================================================== */}
+
+      {confirmRemoveItem && (
+        <div
+          className="
+            fixed
+            inset-0
+            z-[100]
+            flex
+            h-screen
+            items-center
+            justify-center
+            bg-black/60
+            p-5
+            backdrop-blur-sm
+          "
+          onClick={closeRemoveConfirmation}
+        >
+          <div
+            className="
+              w-full
+              max-w-sm
+              rounded-3xl
+              bg-white
+              p-6
+              shadow-2xl
+            "
+            onClick={(event) => event.stopPropagation()}
+          >
+            {/* ICON */}
+
+            <div
+              className="
+                mx-auto
+                flex
+                h-14
+                w-14
+                items-center
+                justify-center
+                rounded-2xl
+                bg-red-100
+                text-red-600
+              "
+            >
+              <MdDeleteOutline size={30} />
+            </div>
+
+            {/* TITLE */}
+
+            <h2
+              className="
+                mt-4
+                text-center
+                text-xl
+                font-bold
+                text-neutral-900
+              "
+            >
+              सामान हटाएँ?
+            </h2>
+
+            {/* DESCRIPTION */}
+
+            <p
+              className="
+                mt-2
+                text-center
+                text-sm
+                leading-6
+                text-neutral-500
+              "
+            >
+              क्या आप इस सामान को अपने आज के ऑर्डर से हटाना चाहते हैं?
+            </p>
+
+            {/* ACTIONS */}
+
+            <div
+              className="
+                mt-6
+                flex
+                gap-3
+              "
+            >
+              {/* CANCEL */}
+
+              <button
+                type="button"
+                disabled={Boolean(removingId)}
+                onClick={closeRemoveConfirmation}
+                className="
+                  flex
+                  h-12
+                  flex-1
+                  items-center
+                  justify-center
+                  gap-2
+                  rounded-xl
+                  border
+                  border-gray-200
+                  bg-white
+                  px-5
+                  text-sm
+                  font-bold
+                  text-gray-700
+                  transition
+                  hover:bg-gray-50
+                  disabled:cursor-not-allowed
+                  disabled:opacity-50
+                "
+              >
+                <X size={17} />
+                नहीं
+              </button>
+
+              {/* CONFIRM */}
+
+              <button
+                type="button"
+                disabled={Boolean(removingId)}
+                onClick={confirmRemove}
+                className="
+                  flex
+                  h-12
+                  flex-1
+                  items-center
+                  justify-center
+                  gap-2
+                  rounded-xl
+                  bg-red-600
+                  px-5
+                  text-sm
+                  font-bold
+                  text-white
+                  shadow-lg
+                  shadow-red-600/20
+                  transition
+                  hover:bg-red-700
+                  active:scale-[0.98]
+                  disabled:cursor-not-allowed
+                  disabled:opacity-60
+                "
+              >
+                {removingId ? (
+                  <>
+                    <Loader2 size={17} className="animate-spin" />
+                    हट रहा...
+                  </>
+                ) : (
+                  <>
+                    <MdDeleteOutline size={19} />
+                    हाँ, हटाएँ
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
