@@ -1,5 +1,9 @@
 import mongoose from "mongoose";
 
+/* ============================================================
+   ORDER ITEM
+============================================================ */
+
 const orderItemSchema = new mongoose.Schema(
   {
     productId: {
@@ -8,7 +12,8 @@ const orderItemSchema = new mongoose.Schema(
       required: true,
     },
 
-    // Product snapshot
+    /* Product snapshot */
+
     name: {
       type: String,
       required: true,
@@ -24,10 +29,12 @@ const orderItemSchema = new mongoose.Schema(
       default: "",
     },
 
-    // Company snapshot
+    /* Company snapshot */
+
     companyId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Company",
+      default: null,
     },
 
     companyName: {
@@ -35,9 +42,12 @@ const orderItemSchema = new mongoose.Schema(
       default: "",
     },
 
+    /* Category snapshot */
+
     categoryId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",
+      default: null,
     },
 
     categoryName: {
@@ -45,7 +55,8 @@ const orderItemSchema = new mongoose.Schema(
       default: "",
     },
 
-    // Variant
+    /* Variant */
+
     measurement: {
       type: String,
       required: true,
@@ -55,20 +66,29 @@ const orderItemSchema = new mongoose.Schema(
       type: Number,
       required: true,
       default: 1,
+      min: 1,
     },
+
     price: {
       type: Number,
       required: true,
+      min: 0,
     },
+
     total: {
       type: Number,
       required: true,
+      min: 0,
     },
   },
   {
     _id: true,
   },
 );
+
+/* ============================================================
+   ORDER
+============================================================ */
 
 const orderSchema = new mongoose.Schema(
   {
@@ -78,7 +98,10 @@ const orderSchema = new mongoose.Schema(
       required: true,
     },
 
-    items: [orderItemSchema],
+    items: {
+      type: [orderItemSchema],
+      default: [],
+    },
 
     totalAmount: {
       type: Number,
@@ -105,28 +128,78 @@ const orderSchema = new mongoose.Schema(
       default: "",
     },
 
+    /* ========================================================
+       PAYMENT
+    ======================================================== */
+
     paymentMethod: {
       type: String,
       enum: ["COD", "Online"],
       default: "COD",
     },
 
-    // Active today's order
+    paymentStatus: {
+      type: String,
+      enum: ["Pending", "Paid"],
+      default: "Pending",
+    },
+
+    paymentPaidAt: {
+      type: Date,
+      default: null,
+    },
+
+    /* ========================================================
+       ORDER EDIT TRACKING
+    ======================================================== */
+
+    modificationCount: {
+      type: Number,
+      default: 0,
+    },
+
+    lastModifiedAt: {
+      type: Date,
+      default: null,
+    },
+
+    /* ========================================================
+       TODAY ORDER
+    ======================================================== */
+
     isTodayOrder: {
       type: Boolean,
       default: true,
     },
 
-    // User can edit before this
     cutoffTime: {
       type: Date,
       required: true,
     },
 
-    approvedAt: Date,
-    deliveredAt: Date,
-    cancelledAt: Date,
-    declinedAt: Date,
+    /* ========================================================
+       STATUS TIMES
+    ======================================================== */
+
+    approvedAt: {
+      type: Date,
+      default: null,
+    },
+
+    deliveredAt: {
+      type: Date,
+      default: null,
+    },
+
+    cancelledAt: {
+      type: Date,
+      default: null,
+    },
+
+    declinedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,

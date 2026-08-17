@@ -9,15 +9,18 @@ import {
   getOrderHistory,
   removeOrderItem,
   updateOrderStatus,
+  updateOrderItems,
+  markOrderPaymentPaid,
+  markOrderPaymentPending,
 } from "../controllers/orderController.js";
 
 import { isAuthenticated, isSupp } from "../middleware/isAuthenticated.js";
 
 const router = express.Router();
 
-/* ============================================
-                USER
-============================================ */
+/* ============================================================
+                        USER
+============================================================ */
 
 router.post("/add-order", isAuthenticated, addOrder);
 
@@ -31,9 +34,9 @@ router.delete(
   removeOrderItem,
 );
 
-/* ============================================
-                ADMIN
-============================================ */
+/* ============================================================
+                        ADMIN
+============================================================ */
 
 router.put(
   "/update-status/:orderId",
@@ -44,7 +47,36 @@ router.put(
 
 router.put("/set-cutoff/:orderId", isAuthenticated, isSupp, setOrderCutoffTime);
 
+/* ============================================================
+                        ALL ORDERS
+============================================================ */
+
 router.get("/all-orders", isAuthenticated, isSupp, getAllOrders);
+
 router.get("/user-orders/:userId", isAuthenticated, isSupp, getOrdersByUser);
+
+/* ============================================================
+                     ADMIN - PAYMENT
+============================================================ */
+
+router.put(
+  "/payment/:orderId/paid",
+  isAuthenticated,
+  isSupp,
+  markOrderPaymentPaid,
+);
+
+router.put(
+  "/payment/:orderId/pending",
+  isAuthenticated,
+  isSupp,
+  markOrderPaymentPending,
+);
+
+/* ============================================================
+                     ADMIN - EDIT ORDER
+============================================================ */
+
+router.put("/update-items/:orderId", isAuthenticated, isSupp, updateOrderItems);
 
 export default router;
