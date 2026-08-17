@@ -42,8 +42,8 @@ const ProductsList = () => {
   const productsRef = useRef(null);
   const [addLoading, setAddLoading] = useState(false);
   const cartSound = () => {
-    const audio = new Audio("/addtocart.mp3");
-    audio.volume = 1;
+    const audio = new Audio("/addtocart3.mp3");
+    audio.volume = 0.1;
     audio.play().catch((error) => {
       console.log("Sound could not play:", error);
     });
@@ -155,6 +155,7 @@ const ProductsList = () => {
     setAddLoading(true);
 
     try {
+      cartSound();
       const token = localStorage.getItem("token");
 
       if (!token) {
@@ -176,7 +177,6 @@ const ProductsList = () => {
           },
         },
       );
-      cartSound();
 
       if (res.data.success) {
         dispatch(setCartData(res.data.cart));
