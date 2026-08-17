@@ -43,10 +43,17 @@ const ProductsList = () => {
   const [addLoading, setAddLoading] = useState(false);
   const cartSound = () => {
     const audio = new Audio("/addtocart6.mp3");
-    audio.volume = 1;
+
+    audio.volume = 0.7;
+
     audio.play().catch((error) => {
       console.log("Sound could not play:", error);
     });
+
+    setTimeout(() => {
+      audio.pause();
+      audio.currentTime = 0;
+    }, 1000);
   };
   const fuse = useMemo(() => {
     return new Fuse(productData, {
