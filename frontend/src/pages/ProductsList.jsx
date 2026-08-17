@@ -42,8 +42,8 @@ const ProductsList = () => {
   const productsRef = useRef(null);
   const [addLoading, setAddLoading] = useState(false);
   const cartSound = () => {
-    const audio = new Audio("/addtocart3.mp3");
-    audio.volume = 0.1;
+    const audio = new Audio("/addtocart2.mp3");
+    audio.volume = 0.5;
     audio.play().catch((error) => {
       console.log("Sound could not play:", error);
     });
@@ -135,6 +135,7 @@ const ProductsList = () => {
   );
   const currentPrice = (selectedVariant?.price || 0) * qty;
   const handleSubmit = async (e) => {
+    cartSound();
     e.preventDefault();
 
     if (!selectedVariantCompany) {
@@ -155,7 +156,6 @@ const ProductsList = () => {
     setAddLoading(true);
 
     try {
-      cartSound();
       const token = localStorage.getItem("token");
 
       if (!token) {
