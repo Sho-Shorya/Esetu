@@ -42,8 +42,8 @@ const ProductsList = () => {
   const productsRef = useRef(null);
   const [addLoading, setAddLoading] = useState(false);
   const cartSound = () => {
-    const audio = new Audio("/ding.mp3");
-    audio.volume = 0.3;
+    const audio = new Audio("/addtocart.mp3");
+    audio.volume = 0.7;
     audio.play().catch((error) => {
       console.log("Sound could not play:", error);
     });
@@ -135,7 +135,6 @@ const ProductsList = () => {
   );
   const currentPrice = (selectedVariant?.price || 0) * qty;
   const handleSubmit = async (e) => {
-    cartSound();
     e.preventDefault();
 
     if (!selectedVariantCompany) {
@@ -162,6 +161,7 @@ const ProductsList = () => {
         toast.error("कृपया पहले लॉगिन करें");
         return;
       }
+      cartSound();
 
       const res = await axios.post(
         `${API_BASE_URL}/api/v1/cart/add-cart`,
