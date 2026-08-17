@@ -42,8 +42,8 @@ const ProductsList = () => {
   const productsRef = useRef(null);
   const [addLoading, setAddLoading] = useState(false);
   const cartSound = () => {
-    const audio = new Audio("/addtocart2.mp3");
-    audio.volume = 0.5;
+    const audio = new Audio("/addtocart5.mp3");
+    audio.volume = 0.8;
     audio.play().catch((error) => {
       console.log("Sound could not play:", error);
     });
@@ -135,7 +135,6 @@ const ProductsList = () => {
   );
   const currentPrice = (selectedVariant?.price || 0) * qty;
   const handleSubmit = async (e) => {
-    cartSound();
     e.preventDefault();
 
     if (!selectedVariantCompany) {
@@ -624,7 +623,10 @@ const ProductsList = () => {
                       scale: 0.98,
                     }}
                     type="submit"
-                    onClick={handleSubmit}
+                    onClick={() => {
+                      handleSubmit();
+                      cartSound();
+                    }}
                     disabled={addLoading}
                     className="flex h-15 w-full items-center justify-center gap-3 rounded-3xl bg-gradient-to-r from-red-600 via-red-500 to-orange-500 text-lg font-bold text-white shadow-xl transition-all disabled:opacity-70"
                   >
