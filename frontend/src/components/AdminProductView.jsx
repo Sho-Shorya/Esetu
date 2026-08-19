@@ -1,7 +1,7 @@
 import { API_BASE_URL } from "@/lib/constants";
 import { setProductData } from "@/redux/ProductSlice";
 import Fuse from "fuse.js";
-import { Edit, MoveLeft, Search, Trash2, X } from "lucide-react";
+import { CheckCircle2, Edit, Package, Search, Trash2, X } from "lucide-react";
 import React, { useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
@@ -19,9 +19,9 @@ const AdminProductView = ({ tailwind, condition }) => {
   const [productToDelete, setProductToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
 
-  // =========================================
+  // =========================================================
   // FUSE SEARCH
-  // =========================================
+  // =========================================================
 
   const fuse = useMemo(() => {
     return new Fuse(productData || [], {
@@ -52,15 +52,8 @@ const AdminProductView = ({ tailwind, condition }) => {
         },
       ],
 
-      // Lower = stricter
       threshold: 0.4,
-
-      // Helps with words such as:
-      // dudh -> doodh
-      // shampoo -> sampoo
-      // baraf -> barf
       ignoreLocation: true,
-
       includeScore: true,
       minMatchCharLength: 2,
     });
@@ -74,9 +67,21 @@ const AdminProductView = ({ tailwind, condition }) => {
     return fuse.search(search.trim()).map((result) => result.item);
   }, [search, fuse, productData]);
 
-  // =========================================
+  // =========================================================
+  // STATS
+  // =========================================================
+
+  const totalProducts = productData?.length || 0;
+
+  const totalVariants =
+    productData?.reduce(
+      (total, product) => total + (product.variants?.length || 0),
+      0,
+    ) || 0;
+
+  // =========================================================
   // DELETE PRODUCT
-  // =========================================
+  // =========================================================
 
   const handleDeleteProduct = async () => {
     if (!productToDelete?._id) return;
@@ -115,242 +120,572 @@ const AdminProductView = ({ tailwind, condition }) => {
     }
   };
 
-  // =========================================
+  // =========================================================
   // CLEAR SEARCH
-  // =========================================
+  // =========================================================
 
   const clearSearch = () => {
     setSearch("");
   };
 
-  // =========================================
+  // =========================================================
   // UI
-  // =========================================
+  // =========================================================
 
   return (
-    <div className="relative">
-      {/* ================================= */}
-      {/* HEADER */}
-      {/* ================================= */}
+    <div className="w-full pb-10">
+      {/* =====================================================
+          TOP CONTROL BAR
+      ====================================================== */}
 
-      {tailwind === "mt-18" && (
-        <div className="relative flex items-center justify-center mb-4">
-          <MoveLeft
-            onClick={() => navigate("/admin-dashboard")}
-            className="absolute left-3 cursor-pointer"
-          />
+      <div className="sticky top-0 z-30 -mx-1 bg-gray-50/95 px-1 pb-4 pt-2 backdrop-blur-md">
+        <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            {/* SEARCH */}
 
-          <h1 className="text-xl font-bold">प्रोडक्ट्स</h1>
+            <div className="relative flex-1">
+              <Search
+                size={19}
+                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
+              />
+
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="प्रोडक्ट, कंपनी या साइज खोजें..."
+                className="
+                  h-12
+                  w-full
+                  rounded-xl
+                  border
+                  border-gray-200
+                  bg-gray-50
+                  pl-11
+                  pr-11
+                  text-[15px]
+                  font-medium
+                  text-gray-800
+                  outline-none
+                  transition
+                  placeholder:text-gray-400
+                  focus:border-emerald-400
+                  focus:bg-white
+                  focus:ring-4
+                  focus:ring-emerald-50
+                "
+              />
+
+              {search && (
+                <button
+                  type="button"
+                  onClick={clearSearch}
+                  className="
+                    absolute
+                    right-3
+                    top-1/2
+                    flex
+                    h-8
+                    w-8
+                    -translate-y-1/2
+                    items-center
+                    justify-center
+                    rounded-lg
+                    text-gray-400
+                    transition
+                    hover:bg-gray-200
+                    hover:text-gray-700
+                  "
+                >
+                  <X size={17} />
+                </button>
+              )}
+            </div>
+
+            {/* PRODUCT COUNT */}
+
+            <div className="flex items-center gap-2">
+              <div className="flex h-12 items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4">
+                <Package size={17} className="text-emerald-600" />
+
+                <div className="leading-none">
+                  <p className="text-[11px] font-medium text-gray-400">
+                    प्रोडक्ट
+                  </p>
+
+                  <p className="mt-1 text-sm font-bold text-gray-800">
+                    {search.trim()
+                      ? `${filteredProducts.length} / ${totalProducts}`
+                      : totalProducts}
+                  </p>
+                </div>
+              </div>
+
+              <div className="hidden h-12 items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 sm:flex">
+                <CheckCircle2 size={17} className="text-blue-600" />
+
+                <div className="leading-none">
+                  <p className="text-[11px] font-medium text-gray-400">
+                    वेरिएंट
+                  </p>
+
+                  <p className="mt-1 text-sm font-bold text-gray-800">
+                    {totalVariants}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* SEARCH RESULT MESSAGE */}
+
+          {search.trim() && (
+            <div className="mt-3 flex items-center justify-between px-1">
+              <p className="text-xs font-medium text-gray-500">
+                <span className="font-bold text-gray-800">
+                  {filteredProducts.length}
+                </span>{" "}
+                प्रोडक्ट मिले
+              </p>
+
+              <button
+                onClick={clearSearch}
+                className="text-xs font-semibold text-emerald-600 hover:text-emerald-700"
+              >
+                सर्च हटाएं
+              </button>
+            </div>
+          )}
         </div>
-      )}
-
-      {/* ================================= */}
-      {/* FUSE SEARCH */}
-      {/* ================================= */}
-
-      <div className="relative mb-4">
-        <Search
-          className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
-          size={20}
-        />
-
-        <input
-          type="text"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="प्रोडक्ट खोजें..."
-          className="w-full bg-white border border-gray-200 rounded-xl py-3 pl-12 pr-12 outline-none text-base focus:border-emerald-500"
-        />
-
-        {search && (
-          <button
-            type="button"
-            onClick={clearSearch}
-            className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
-          >
-            <X size={20} />
-          </button>
-        )}
       </div>
 
-      {/* ================================= */}
-      {/* SEARCH RESULT COUNT */}
-      {/* ================================= */}
+      {/* =====================================================
+          PRODUCT AREA
+      ====================================================== */}
 
-      {search.trim() && (
-        <div className="mb-3 px-1 text-sm text-gray-500">
-          {filteredProducts.length} प्रोडक्ट मिले
-        </div>
-      )}
+      <div className="mt-2">
+        {/* ===================================================
+            EMPTY STATE
+        ==================================================== */}
 
-      {/* ================================= */}
-      {/* PRODUCTS */}
-      {/* ================================= */}
+        {filteredProducts.length === 0 && (
+          <div className="flex min-h-[320px] flex-col items-center justify-center rounded-3xl border border-dashed border-gray-300 bg-white px-6 text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100">
+              <Search size={28} className="text-gray-400" />
+            </div>
 
-      <div className="min-h-screen w-full bg-gray-100 shadow-xl rounded-4xl mt-2">
-        <div className="mt-8 overflow-x-auto">
-          <div className="space-y-2">
-            {/* NO RESULT */}
+            <h2 className="mt-5 text-lg font-bold text-gray-800">
+              कोई प्रोडक्ट नहीं मिला
+            </h2>
 
-            {filteredProducts.length === 0 && (
-              <div className="bg-white rounded-2xl p-10 text-center">
-                <Search size={40} className="mx-auto text-gray-300 mb-3" />
+            <p className="mt-1 max-w-sm text-sm text-gray-400">
+              दूसरा नाम, कंपनी, कैटेगरी या साइज खोजकर देखें।
+            </p>
 
-                <h2 className="font-bold text-gray-700">
-                  कोई प्रोडक्ट नहीं मिला
-                </h2>
-
-                <p className="text-sm text-gray-400 mt-1">
-                  दूसरा नाम या शब्द खोजकर देखें
-                </p>
-              </div>
+            {search && (
+              <button
+                onClick={clearSearch}
+                className="
+                  mt-5
+                  rounded-xl
+                  bg-gray-900
+                  px-5
+                  py-2.5
+                  text-sm
+                  font-semibold
+                  text-white
+                  transition
+                  hover:bg-gray-800
+                "
+              >
+                सभी प्रोडक्ट देखें
+              </button>
             )}
+          </div>
+        )}
 
-            {/* PRODUCT LIST */}
+        {/* ===================================================
+            PRODUCT LIST
+        ==================================================== */}
 
-            {filteredProducts.map((product) => (
+        <div className="space-y-3">
+          {filteredProducts.map((product) => {
+            const variants = product.variants || [];
+
+            return (
               <div
                 key={product._id}
-                className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden"
+                className="
+                  overflow-hidden
+                  rounded-2xl
+                  border
+                  border-gray-200
+                  bg-white
+                  shadow-sm
+                  transition
+                  hover:border-gray-300
+                  hover:shadow-md
+                "
               >
-                {/* ========================= */}
-                {/* PRODUCT HEADER */}
-                {/* ========================= */}
+                {/* =================================================
+                    PRODUCT MAIN ROW
+                ================================================== */}
 
-                <div className="relative flex gap-4 p-4">
-                  <img
-                    src={product.image}
-                    alt={product.name}
-                    className="w-20 h-20 rounded-xl object-cover border"
-                  />
+                <div className="p-3 sm:p-4">
+                  <div className="flex gap-3 sm:gap-4">
+                    {/* IMAGE */}
 
-                  <div className="flex-1 min-w-0">
-                    <h2 className="text-lg font-bold text-gray-800">
-                      {product.name} / {product.hinglishName}
-                    </h2>
+                    <div className="relative shrink-0">
+                      <img
+                        src={product.image}
+                        alt={product.name}
+                        className="
+                          h-[72px]
+                          w-[72px]
+                          rounded-xl
+                          border
+                          border-gray-200
+                          bg-gray-50
+                          object-cover
+                          sm:h-20
+                          sm:w-20
+                        "
+                      />
 
-                    {product.category?.name && (
-                      <div className="mt-2 inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-sm">
-                        {product.category.name}
+                      {/* VARIANT COUNT */}
+
+                      <div
+                        className="
+                          absolute
+                          -bottom-2
+                          -right-2
+                          flex
+                          h-7
+                          min-w-7
+                          items-center
+                          justify-center
+                          rounded-full
+                          border-2
+                          border-white
+                          bg-gray-900
+                          px-1.5
+                          text-[10px]
+                          font-bold
+                          text-white
+                        "
+                      >
+                        {variants.length}
                       </div>
-                    )}
-                  </div>
+                    </div>
 
-                  {/* EDIT + DELETE */}
+                    {/* PRODUCT INFO */}
 
-                  <div className="flex flex-col gap-2">
-                    {/* EDIT */}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-start gap-2">
+                        <h2 className="truncate text-base font-bold text-gray-900 sm:text-lg">
+                          {product.name}
+                        </h2>
 
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/edit-product/${product._id}`)}
-                      className="p-3 rounded-full bg-emerald-600 text-white hover:bg-emerald-700"
-                    >
-                      <Edit size={18} />
-                    </button>
+                        {product.hinglishName && (
+                          <span className="hidden text-sm font-medium text-gray-400 sm:block">
+                            / {product.hinglishName}
+                          </span>
+                        )}
+                      </div>
 
-                    {/* DELETE */}
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {product.category?.name && (
+                          <span className="rounded-lg bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+                            {product.category.name}
+                          </span>
+                        )}
 
-                    <button
-                      type="button"
-                      onClick={() => setProductToDelete(product)}
-                      className="p-3 rounded-full bg-red-500 text-white hover:bg-red-700"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                        <span className="rounded-lg bg-gray-100 px-2.5 py-1 text-[11px] font-semibold text-gray-600">
+                          {variants.length}{" "}
+                          {variants.length === 1 ? "वेरिएंट" : "वेरिएंट्स"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* ACTIONS */}
+
+                    <div className="flex shrink-0 items-start gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/edit-product/${product._id}`)}
+                        title="प्रोडक्ट एडिट करें"
+                        className="
+                          flex
+                          h-10
+                          w-10
+                          items-center
+                          justify-center
+                          rounded-xl
+                          border
+                          border-gray-200
+                          bg-white
+                          text-gray-600
+                          transition
+                          hover:border-emerald-200
+                          hover:bg-emerald-50
+                          hover:text-emerald-600
+                        "
+                      >
+                        <Edit size={17} />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setProductToDelete(product)}
+                        title="प्रोडक्ट डिलीट करें"
+                        className="
+                          flex
+                          h-10
+                          w-10
+                          items-center
+                          justify-center
+                          rounded-xl
+                          border
+                          border-gray-200
+                          bg-white
+                          text-gray-500
+                          transition
+                          hover:border-red-200
+                          hover:bg-red-50
+                          hover:text-red-600
+                        "
+                      >
+                        <Trash2 size={17} />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                {/* ========================= */}
-                {/* VARIANTS */}
-                {/* ========================= */}
+                {/* =================================================
+                    VARIANTS
+                ================================================== */}
 
-                <div className="px-4 pb-4">
-                  <h3 className="font-semibold mb-3">
-                    उपलब्ध वेरिएंट ({product.variants?.length || 0})
-                  </h3>
+                {variants.length > 0 && (
+                  <div className="border-t border-gray-100 bg-gray-50/70 px-3 py-3 sm:px-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-bold uppercase tracking-wide text-gray-400">
+                        उपलब्ध वेरिएंट
+                      </p>
 
-                  <div className="space-y-3 max-h-52 overflow-y-auto pr-1">
-                    {product.variants?.map((variant, index) => (
-                      <div
-                        key={index}
-                        className="border rounded-xl p-3 flex justify-between items-center bg-gray-50"
-                      >
-                        <div className="flex gap-3 items-center">
-                          {variant.company?.logo && (
+                      <p className="text-[11px] font-semibold text-gray-400">
+                        {variants.length} विकल्प
+                      </p>
+                    </div>
+
+                    <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                      {variants.map((variant, index) => (
+                        <div
+                          key={index}
+                          className="
+                            flex
+                            min-w-[190px]
+                            shrink-0
+                            items-center
+                            gap-2.5
+                            rounded-xl
+                            border
+                            border-gray-200
+                            bg-white
+                            px-2.5
+                            py-2
+                            shadow-sm
+                          "
+                        >
+                          {/* COMPANY LOGO */}
+
+                          {variant.company?.logo ? (
                             <img
                               src={variant.company.logo}
-                              alt={variant.company.name}
-                              className="w-12 h-12 rounded-lg border object-cover"
+                              alt={variant.company.name || "Company"}
+                              className="
+                                h-9
+                                w-9
+                                shrink-0
+                                rounded-lg
+                                border
+                                border-gray-100
+                                bg-white
+                                object-contain
+                              "
                             />
+                          ) : (
+                            <div
+                              className="
+                                flex
+                                h-9
+                                w-9
+                                shrink-0
+                                items-center
+                                justify-center
+                                rounded-lg
+                                bg-gray-100
+                                text-xs
+                                font-bold
+                                text-gray-400
+                              "
+                            >
+                              {variant.company?.name
+                                ?.charAt(0)
+                                ?.toUpperCase() || "?"}
+                            </div>
                           )}
 
-                          <div>
-                            <h4 className="font-semibold">
-                              {variant.company?.name}
-                            </h4>
+                          {/* COMPANY + MEASUREMENT */}
 
-                            <div className="flex gap-2 mt-1 flex-wrap">
-                              <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-lg text-xs">
-                                📦 {variant.measurement}
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-bold text-gray-800">
+                              {variant.company?.name || "Company"}
+                            </p>
+
+                            <div className="mt-1 flex items-center gap-1.5">
+                              <span className="rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">
+                                {variant.measurement}
                               </span>
 
-                              <span className="bg-green-100 text-green-700 px-2 py-1 rounded-lg text-xs">
-                                ₹ {variant.price}
+                              <span className="text-xs font-bold text-gray-900">
+                                ₹{variant.price}
                               </span>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {/* NO VARIANTS */}
+
+                {variants.length === 0 && (
+                  <div className="border-t border-gray-100 bg-amber-50 px-4 py-2.5">
+                    <p className="text-xs font-semibold text-amber-700">
+                      ⚠️ इस प्रोडक्ट में अभी कोई वेरिएंट नहीं है।
+                    </p>
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
       </div>
 
-      {/* ================================= */}
-      {/* DELETE CONFIRMATION */}
-      {/* ================================= */}
+      {/* =====================================================
+          DELETE CONFIRMATION MODAL
+      ====================================================== */}
 
       {productToDelete && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 px-4">
-          <div className="w-full max-w-sm rounded-2xl bg-emerald-50 p-6 shadow-2xl">
-            <h2 className="text-center text-xl font-bold text-gray-900">
-              प्रोडक्ट हटाएं?
-            </h2>
+        <div
+          className="
+            fixed
+            inset-0
+            z-[60]
+            flex
+            items-center
+            justify-center
+            bg-black/60
+            px-4
+            backdrop-blur-sm
+          "
+          onClick={() => !deleting && setProductToDelete(null)}
+        >
+          <div
+            className="
+              w-full
+              max-w-sm
+              overflow-hidden
+              rounded-3xl
+              border
+              border-gray-200
+              bg-white
+              shadow-2xl
+            "
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* MODAL HEADER */}
 
-            <p className="mt-3 text-center font-semibold text-gray-800">
-              {productToDelete.name}
-            </p>
+            <div className="px-6 pb-2 pt-6 text-center">
+              <div
+                className="
+                  mx-auto
+                  flex
+                  h-14
+                  w-14
+                  items-center
+                  justify-center
+                  rounded-2xl
+                  bg-red-50
+                  text-red-600
+                "
+              >
+                <Trash2 size={24} />
+              </div>
 
-            <p className="mt-2 text-center text-gray-500">
-              क्या आप सच में इस प्रोडक्ट को डिलीट करना चाहते हैं?
-            </p>
+              <h2 className="mt-4 text-xl font-bold text-gray-900">
+                प्रोडक्ट हटाएं?
+              </h2>
 
-            <div className="mt-6 flex justify-center gap-4">
-              {/* NO */}
+              <p className="mt-2 text-sm leading-5 text-gray-500">
+                यह प्रोडक्ट आपकी प्रोडक्ट लिस्ट से हटा दिया जाएगा।
+              </p>
+            </div>
 
+            {/* PRODUCT */}
+
+            <div className="mx-5 mt-4 flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50 p-3">
+              <img
+                src={productToDelete.image}
+                alt={productToDelete.name}
+                className="h-12 w-12 rounded-xl border border-gray-200 object-cover"
+              />
+
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold text-gray-900">
+                  {productToDelete.name}
+                </p>
+
+                {productToDelete.hinglishName && (
+                  <p className="truncate text-xs text-gray-400">
+                    {productToDelete.hinglishName}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* ACTIONS */}
+
+            <div className="flex gap-2 p-5">
               <Button
                 variant="outline"
                 disabled={deleting}
                 onClick={() => setProductToDelete(null)}
-                className="flex-1"
+                className="
+                  h-11
+                  flex-1
+                  rounded-xl
+                  border-gray-200
+                  font-semibold
+                "
               >
                 नहीं
               </Button>
 
-              {/* YES */}
-
               <Button
                 disabled={deleting}
-                className="flex-1 flex items-center justify-center gap-1 bg-red-600 hover:bg-red-700"
                 onClick={handleDeleteProduct}
+                className="
+                  h-11
+                  flex-1
+                  rounded-xl
+                  bg-red-600
+                  font-semibold
+                  text-white
+                  hover:bg-red-700
+                "
               >
-                <Trash2 className="h-4 w-4 text-white" />
-
                 {deleting ? "डिलीट हो रहा है..." : "हाँ, हटाएं"}
               </Button>
             </div>

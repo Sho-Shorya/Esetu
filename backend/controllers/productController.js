@@ -2,21 +2,102 @@ import Product from "../models/productModel.js";
 import cloudinary from "../utils/cloudinary.js";
 import getDataUri from "../utils/dataUri.js";
 import { uploadOnCloudinary } from "../utils/uploadOnCloudinary.js";
-
 export const addProduct = async (req, res) => {
   try {
+    // =====================================================
+    // GET BASIC PRODUCT DATA
+    // =====================================================
+
     const { name, hinglishName, category } = req.body;
 
-    let { variants } = req.body;
+    let { variants, keywords } = req.body;
 
-    if (!name || !hinglishName || !category || !variants) {
+    // =====================================================
+    // BASIC VALIDATION
+    // =====================================================
+
+    if (!name?.trim()) {
       return res.status(400).json({
         success: false,
-        message: "सभी जानकारी भरें",
+        message: "प्रोडक्ट का नाम भरें",
       });
     }
 
-    variants = JSON.parse(variants);
+    if (!hinglishName?.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "हिंग्लिश नाम भरें",
+      });
+    }
+
+    if (!category) {
+      return res.status(400).json({
+        success: false,
+        message: "कैटेगरी चुनें",
+      });
+    }
+
+    if (!variants) {
+      return res.status(400).json({
+        success: false,
+        message: "कम से कम एक वेरिएंट जोड़ें",
+      });
+    }
+
+    // =====================================================
+    // PARSE VARIANTS
+    // =====================================================
+
+    try {
+      variants = typeof variants === "string" ? JSON.parse(variants) : variants;
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: "Variants data गलत है",
+      });
+    }
+
+    // =====================================================
+    // VALIDATE VARIANTS
+    // =====================================================
+
+    if (!Array.isArray(variants) || variants.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "कम से कम एक वेरिएंट जोड़ें",
+      });
+    }
+
+    // =====================================================
+    // PARSE KEYWORDS
+    // =====================================================
+
+    try {
+      keywords = typeof keywords === "string" ? JSON.parse(keywords) : keywords;
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        message: "Keywords data गलत है",
+      });
+    }
+
+    // =====================================================
+    // CLEAN KEYWORDS
+    // =====================================================
+
+    if (!Array.isArray(keywords)) {
+      keywords = [];
+    }
+
+    keywords = [
+      ...new Set(
+        keywords.map((keyword) => String(keyword).trim()).filter(Boolean),
+      ),
+    ];
+
+    // =====================================================
+    // UPLOAD PRODUCT IMAGE
+    // =====================================================
 
     let image = "";
 
@@ -26,13 +107,22 @@ export const addProduct = async (req, res) => {
       image = uploaded?.secure_url || "";
     }
 
+    // =====================================================
+    // CREATE PRODUCT
+    // =====================================================
+
     const newProduct = await Product.create({
-      name,
-      hinglishName,
+      name: name.trim(),
+      hinglishName: hinglishName.trim(),
       category,
       image,
       variants,
+      keyword: keywords,
     });
+
+    // =====================================================
+    // SUCCESS RESPONSE
+    // =====================================================
 
     return res.status(201).json({
       success: true,
@@ -40,11 +130,11 @@ export const addProduct = async (req, res) => {
       product: newProduct,
     });
   } catch (error) {
-    console.log(error);
+    console.error("Add Product Error:", error);
 
     return res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.message || "कुछ गलत हो गया",
     });
   }
 };

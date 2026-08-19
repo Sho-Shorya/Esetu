@@ -14,6 +14,7 @@ import {
   CircleUser,
   Check,
   X,
+  ChevronLeft,
 } from "lucide-react";
 
 const AdminUsers = () => {
@@ -47,6 +48,13 @@ const AdminUsers = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-emerald-50 via-white to-white px-4 py-20 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl rounded-3xl bg-white p-6 shadow-lg border border-emerald-100">
+        <div
+          onClick={() => navigate("/admin-dashboard")}
+          className="px-2 py-2 w-[80px] flex mb-2 border-t-1 border-r-1 rounded-full border-emerald-400 items-center gap-1"
+        >
+          <ChevronLeft className="h-4 w-4 " />
+          पीछे
+        </div>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">खरीदार प्रबंधन</h1>
