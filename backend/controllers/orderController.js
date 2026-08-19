@@ -733,15 +733,22 @@ export const removeOrderItem = async (req, res) => {
 export const updateOrderStatus = async (req, res) => {
   try {
     const { orderId } = req.params;
-
     const { status } = req.body;
 
-    if (!["Approved", "Declined"].includes(status)) {
+    // ==========================================================
+    // ALLOWED STATUSES
+    // ==========================================================
+
+    if (!["Pending", "Approved", "Declined"].includes(status)) {
       return res.status(400).json({
         success: false,
-        message: "Only Approved or Declined status is allowed.",
+        message: "Invalid order status.",
       });
     }
+
+    // ==========================================================
+    // FIND ORDER
+    // ==========================================================
 
     const order = await Order.findById(orderId);
 
@@ -752,33 +759,108 @@ export const updateOrderStatus = async (req, res) => {
       });
     }
 
-    if (order.status !== "Pending") {
+    const currentStatus = order.status;
+
+    // ==========================================================
+    // ALLOWED TRANSITIONS
+    //
+    // Pending  → Approved
+    // Pending  → Declined
+    //
+    // Approved → Pending   (mistake correction)
+    // Declined → Pending   (mistake correction)
+    //
+    // Everything else is blocked.
+    // ==========================================================
+
+    const allowedTransitions = {
+      Pending: ["Approved", "Declined"],
+      Approved: ["Pending"],
+      Declined: ["Pending"],
+    };
+
+    if (!allowedTransitions[currentStatus]?.includes(status)) {
       return res.status(400).json({
         success: false,
-        message: "Only pending orders can be updated.",
+        message: `Order cannot be changed from ${currentStatus} to ${status}.`,
       });
     }
 
-    order.status = status;
+    // ==========================================================
+    // PENDING
+    // ==========================================================
+
+    if (status === "Pending") {
+      order.status = "Pending";
+
+      // The order becomes an active today's order again.
+      order.isTodayOrder = true;
+
+      // Remove previous decision timestamps.
+      order.approvedAt = null;
+      order.declinedAt = null;
+    }
+
+    // ==========================================================
+    // APPROVED
+    // ==========================================================
 
     if (status === "Approved") {
+      order.status = "Approved";
+
       order.approvedAt = new Date();
+
+      // Approved order remains today's order.
+      order.isTodayOrder = true;
+
+      // Make sure declined timestamp is removed.
+      order.declinedAt = null;
     }
+
+    // ==========================================================
+    // DECLINED
+    // ==========================================================
 
     if (status === "Declined") {
+      order.status = "Declined";
+
       order.declinedAt = new Date();
 
+      // Declined orders are no longer today's active orders.
       order.isTodayOrder = false;
+
+      // Make sure approved timestamp is removed.
+      order.approvedAt = null;
     }
+
+    // ==========================================================
+    // SAVE
+    // ==========================================================
 
     await order.save();
 
+    // ==========================================================
+    // POPULATE UPDATED ORDER
+    // ==========================================================
+
     const updatedOrder = await getPopulatedOrder(order._id);
+
+    // ==========================================================
+    // USER
+    // ==========================================================
 
     const user = await User.findById(order.userId);
 
+    // ==========================================================
+    // NOTIFICATIONS
+    //
+    // Only notify when actually Approved / Declined.
+    // Returning to Pending should NOT send a customer
+    // notification.
+    // ==========================================================
+
     if (user?.oneSignalSubscriptionId) {
-      if (status === "Approved") {
+      if (status === "Approved" && currentStatus === "Pending") {
         await sendNotification({
           subscriptionId: user.oneSignalSubscriptionId,
 
@@ -788,7 +870,7 @@ export const updateOrderStatus = async (req, res) => {
         });
       }
 
-      if (status === "Declined") {
+      if (status === "Declined" && currentStatus === "Pending") {
         await sendNotification({
           subscriptionId: user.oneSignalSubscriptionId,
 
@@ -799,9 +881,29 @@ export const updateOrderStatus = async (req, res) => {
       }
     }
 
+    // ==========================================================
+    // RESPONSE MESSAGE
+    // ==========================================================
+
+    let message = "";
+
+    if (currentStatus === "Pending" && status === "Approved") {
+      message = "Order approved successfully.";
+    } else if (currentStatus === "Pending" && status === "Declined") {
+      message = "Order declined successfully.";
+    } else if (currentStatus === "Approved" && status === "Pending") {
+      message = "Order वापस Pending कर दिया गया।";
+    } else if (currentStatus === "Declined" && status === "Pending") {
+      message = "Order वापस Pending कर दिया गया।";
+    }
+
+    // ==========================================================
+    // RESPONSE
+    // ==========================================================
+
     return res.status(200).json({
       success: true,
-      message: `Order ${status.toLowerCase()} successfully.`,
+      message,
       order: updatedOrder,
     });
   } catch (error) {

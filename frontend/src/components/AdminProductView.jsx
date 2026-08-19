@@ -1,7 +1,16 @@
 import { API_BASE_URL } from "@/lib/constants";
 import { setProductData } from "@/redux/ProductSlice";
 import Fuse from "fuse.js";
-import { CheckCircle2, Edit, Package, Search, Trash2, X } from "lucide-react";
+import {
+  CheckCircle2,
+  Edit,
+  Mic,
+  MicOff,
+  Package,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 import React, { useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
@@ -18,6 +27,12 @@ const AdminProductView = ({ tailwind, condition }) => {
   const [search, setSearch] = useState("");
   const [productToDelete, setProductToDelete] = useState(null);
   const [deleting, setDeleting] = useState(false);
+
+  // =========================================================
+  // VOICE SEARCH STATE
+  // =========================================================
+
+  const [isListening, setIsListening] = useState(false);
 
   // =========================================================
   // FUSE SEARCH
@@ -78,6 +93,96 @@ const AdminProductView = ({ tailwind, condition }) => {
       (total, product) => total + (product.variants?.length || 0),
       0,
     ) || 0;
+
+  // =========================================================
+  // VOICE SEARCH
+  // =========================================================
+
+  const handleVoiceSearch = () => {
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    // Browser doesn't support speech recognition
+    if (!SpeechRecognition) {
+      toast.error("आपके ब्राउज़र में Voice Search सपोर्ट नहीं है");
+      return;
+    }
+
+    // Prevent starting multiple recognition sessions
+    if (isListening) {
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+
+    // Hindi speech recognition.
+    // This also works reasonably well for Hinglish.
+    recognition.lang = "hi-IN";
+
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    // =====================================================
+    // START
+    // =====================================================
+
+    recognition.onstart = () => {
+      setIsListening(true);
+
+      toast.info("बोलिए, सामान खोजें...");
+    };
+
+    // =====================================================
+    // RESULT
+    // =====================================================
+
+    recognition.onresult = (event) => {
+      const transcript = event.results?.[0]?.[0]?.transcript?.trim() || "";
+
+      if (transcript) {
+        setSearch(transcript);
+      }
+    };
+
+    // =====================================================
+    // ERROR
+    // =====================================================
+
+    recognition.onerror = (event) => {
+      console.error("Voice search error:", event.error);
+
+      if (event.error === "not-allowed") {
+        toast.error("माइक्रोफोन की अनुमति दें और फिर दोबारा कोशिश करें");
+      } else if (event.error === "no-speech") {
+        toast.error("कुछ सुनाई नहीं दिया, फिर से बोलें");
+      } else if (event.error === "audio-capture") {
+        toast.error("माइक्रोफोन उपलब्ध नहीं है");
+      } else {
+        toast.error("Voice Search में कुछ समस्या हुई");
+      }
+
+      setIsListening(false);
+    };
+
+    // =====================================================
+    // END
+    // =====================================================
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    try {
+      recognition.start();
+    } catch (error) {
+      console.error("Could not start voice search:", error);
+
+      setIsListening(false);
+
+      toast.error("Voice Search शुरू नहीं हो पाया");
+    }
+  };
 
   // =========================================================
   // DELETE PRODUCT
@@ -141,7 +246,9 @@ const AdminProductView = ({ tailwind, condition }) => {
       <div className="sticky top-0 z-30 -mx-1 bg-gray-50/95 px-1 pb-4 pt-2 backdrop-blur-md">
         <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            {/* SEARCH */}
+            {/* =================================================
+                SEARCH
+            ================================================== */}
 
             <div className="relative flex-1">
               <Search
@@ -162,7 +269,7 @@ const AdminProductView = ({ tailwind, condition }) => {
                   border-gray-200
                   bg-gray-50
                   pl-11
-                  pr-11
+                  pr-24
                   text-[15px]
                   font-medium
                   text-gray-800
@@ -176,33 +283,101 @@ const AdminProductView = ({ tailwind, condition }) => {
                 "
               />
 
-              {search && (
+              {/* =================================================
+                  RIGHT SEARCH CONTROLS
+              ================================================== */}
+
+              <div
+                className="
+                  absolute
+                  right-2
+                  top-1/2
+                  flex
+                  -translate-y-1/2
+                  items-center
+                  gap-1
+                "
+              >
+                {/* CLEAR SEARCH */}
+
+                {search && (
+                  <button
+                    type="button"
+                    onClick={clearSearch}
+                    title="सर्च हटाएं"
+                    className="
+                      flex
+                      h-8
+                      w-8
+                      items-center
+                      justify-center
+                      rounded-lg
+                      text-gray-400
+                      transition
+                      hover:bg-gray-200
+                      hover:text-gray-700
+                    "
+                  >
+                    <X size={17} />
+                  </button>
+                )}
+
+                {/* =================================================
+                    VOICE SEARCH
+                ================================================== */}
+
                 <button
                   type="button"
-                  onClick={clearSearch}
-                  className="
-                    absolute
-                    right-3
-                    top-1/2
+                  onClick={handleVoiceSearch}
+                  title={isListening ? "सुन रहा हूँ..." : "बोलकर खोजें"}
+                  aria-label={
+                    isListening
+                      ? "Voice search listening"
+                      : "Start voice search"
+                  }
+                  className={`
+                    relative
                     flex
-                    h-8
-                    w-8
-                    -translate-y-1/2
+                    h-9
+                    w-9
                     items-center
                     justify-center
-                    rounded-lg
-                    text-gray-400
-                    transition
-                    hover:bg-gray-200
-                    hover:text-gray-700
-                  "
+                    rounded-xl
+                    transition-all
+                    ${
+                      isListening
+                        ? "bg-red-100 text-red-600 ring-4 ring-red-50"
+                        : "text-gray-500 hover:bg-emerald-50 hover:text-emerald-600"
+                    }
+                  `}
                 >
-                  <X size={17} />
+                  {isListening ? (
+                    <>
+                      {/* Listening pulse */}
+
+                      <span
+                        className="
+                          absolute
+                          inset-0
+                          animate-ping
+                          rounded-xl
+                          bg-red-200
+                          opacity-40
+                        "
+                      />
+
+                      <MicOff size={18} className="relative z-10" />
+                    </>
+                  ) : (
+                    <Mic size={18} />
+                  )}
                 </button>
-              )}
+              </div>
             </div>
 
-            {/* PRODUCT COUNT */}
+            {/* =================================================
+                PRODUCT COUNT
+            ================================================== */}
 
             <div className="flex items-center gap-2">
               <div className="flex h-12 items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4">
@@ -221,6 +396,10 @@ const AdminProductView = ({ tailwind, condition }) => {
                 </div>
               </div>
 
+              {/* =================================================
+                  VARIANT COUNT
+              ================================================== */}
+
               <div className="hidden h-12 items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 sm:flex">
                 <CheckCircle2 size={17} className="text-blue-600" />
 
@@ -237,7 +416,9 @@ const AdminProductView = ({ tailwind, condition }) => {
             </div>
           </div>
 
-          {/* SEARCH RESULT MESSAGE */}
+          {/* =====================================================
+              SEARCH RESULT MESSAGE
+          ====================================================== */}
 
           {search.trim() && (
             <div className="mt-3 flex items-center justify-between px-1">
@@ -249,6 +430,7 @@ const AdminProductView = ({ tailwind, condition }) => {
               </p>
 
               <button
+                type="button"
                 onClick={clearSearch}
                 className="text-xs font-semibold text-emerald-600 hover:text-emerald-700"
               >
@@ -284,6 +466,7 @@ const AdminProductView = ({ tailwind, condition }) => {
 
             {search && (
               <button
+                type="button"
                 onClick={clearSearch}
                 className="
                   mt-5

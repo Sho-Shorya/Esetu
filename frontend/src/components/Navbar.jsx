@@ -831,12 +831,13 @@ const Navbar = () => {
 
           {/* Mobile Search */}
 
-          <form
-            onSubmit={(e) => {
-              onSearchSubmit(e);
-              setSlideBar(false);
-            }}
-            className="
+          {!supplierData && (
+            <form
+              onSubmit={(e) => {
+                onSearchSubmit(e);
+                setSlideBar(false);
+              }}
+              className="
               mt-7
               flex
               h-11
@@ -846,15 +847,15 @@ const Navbar = () => {
               border-neutral-200
               bg-neutral-50
             "
-          >
-            <Search className="ml-3 h-4 w-4 text-neutral-400" />
+            >
+              <Search className="ml-3 h-4 w-4 text-neutral-400" />
 
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search products..."
-              className="
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search products..."
+                className="
                 min-w-0
                 flex-1
                 bg-transparent
@@ -862,14 +863,15 @@ const Navbar = () => {
                 text-sm
                 outline-none
               "
-            />
-          </form>
+              />
+            </form>
+          )}
 
           {/* Links */}
 
           <div className="mt-7 flex flex-col gap-1">
             <Link
-              to={supplierData ? "/product-view" : "/products"}
+              to={supplierData ? "/product-page" : "/products"}
               onClick={() => setSlideBar(false)}
               className="
                 flex

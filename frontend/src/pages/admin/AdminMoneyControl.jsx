@@ -6,9 +6,12 @@ import {
   Check,
   IndianRupee,
   Loader2,
+  Mic,
+  MicOff,
   Minus,
   Plus,
   ReceiptText,
+  Search,
   ShoppingBag,
   Trash2,
   UserRound,
@@ -31,6 +34,9 @@ const AdminMoneyControl = () => {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [paymentUpdating, setPaymentUpdating] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isListening, setIsListening] = useState(false);
 
   const [selectedDate, setSelectedDate] = useState(() => {
     const now = new Date();
@@ -73,7 +79,6 @@ const AdminMoneyControl = () => {
           params: {
             date: selectedDate,
           },
-
           headers: {
             Authorization: `Bearer ${token}`,
           },
@@ -98,14 +103,121 @@ const AdminMoneyControl = () => {
 
   /* ==========================================================
      ONLY APPROVED ORDERS
-     ----------------------------------------------------------
-     Money Control should ONLY contain approved orders.
-     Cancelled, Declined, Pending, Rejected etc. are excluded.
   ========================================================== */
 
   const approvedOrders = useMemo(() => {
     return orders.filter((order) => order.status === "Approved");
   }, [orders]);
+
+  /* ==========================================================
+     CUSTOMER NAME
+  ========================================================== */
+
+  const getCustomerName = (order) => {
+    const user = order?.userId;
+
+    if (!user) {
+      return "नाम उपलब्ध नहीं";
+    }
+
+    const name = [user.firstName, user.lastName]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    return name || "नाम उपलब्ध नहीं";
+  };
+
+  /* ==========================================================
+     SEARCHED ORDERS
+  ========================================================== */
+
+  const filteredOrders = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+
+    if (!query) {
+      return approvedOrders;
+    }
+
+    return approvedOrders.filter((order) => {
+      const user = order?.userId;
+
+      const name = getCustomerName(order).toLowerCase();
+
+      const firstName = String(user?.firstName || "").toLowerCase();
+
+      const lastName = String(user?.lastName || "").toLowerCase();
+
+      const phone = String(
+        user?.phone || user?.mobile || user?.phoneNumber || "",
+      ).toLowerCase();
+
+      return (
+        name.includes(query) ||
+        firstName.includes(query) ||
+        lastName.includes(query) ||
+        phone.includes(query)
+      );
+    });
+  }, [approvedOrders, searchQuery]);
+
+  /* ==========================================================
+     VOICE SEARCH
+  ========================================================== */
+
+  const startVoiceSearch = () => {
+    const SpeechRecognition =
+      window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      toast.error("इस browser में voice search उपलब्ध नहीं है।");
+      return;
+    }
+
+    if (isListening) {
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+
+    recognition.lang = "hi-IN";
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      setIsListening(true);
+    };
+
+    recognition.onresult = (event) => {
+      const transcript = event.results?.[0]?.[0]?.transcript || "";
+
+      setSearchQuery(transcript.trim());
+    };
+
+    recognition.onerror = (event) => {
+      console.error("Voice search error:", event.error);
+
+      if (event.error === "not-allowed") {
+        toast.error("Microphone की permission दें।");
+      } else if (event.error !== "aborted") {
+        toast.error("आवाज़ समझ नहीं आई।");
+      }
+
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+    };
+
+    try {
+      recognition.start();
+    } catch (error) {
+      console.error("Voice recognition start error:", error);
+      setIsListening(false);
+    }
+  };
 
   /* ==========================================================
      TOTAL SALES
@@ -146,25 +258,6 @@ const AdminMoneyControl = () => {
       year: "numeric",
     },
   );
-
-  /* ==========================================================
-     CUSTOMER NAME
-  ========================================================== */
-
-  const getCustomerName = (order) => {
-    const user = order?.userId;
-
-    if (!user) {
-      return "नाम उपलब्ध नहीं";
-    }
-
-    const name = [user.firstName, user.lastName]
-      .filter(Boolean)
-      .join(" ")
-      .trim();
-
-    return name || "नाम उपलब्ध नहीं";
-  };
 
   /* ==========================================================
      OPEN ORDER
@@ -257,7 +350,6 @@ const AdminMoneyControl = () => {
 
     if (!selectedOrder.items || selectedOrder.items.length === 0) {
       toast.error("ऑर्डर में कम से कम एक सामान होना चाहिए।");
-
       return;
     }
 
@@ -266,55 +358,35 @@ const AdminMoneyControl = () => {
 
       const items = selectedOrder.items.map((item) => ({
         originalItemId: item._id,
-
         productId: item.productId,
-
         name: item.name,
-
         hinglishName: item.hinglishName || "",
-
         image: item.image || "",
-
         companyId: item.companyId || null,
-
         companyName: item.companyName || "",
-
         categoryId: item.categoryId || null,
-
         categoryName: item.categoryName || "",
-
         measurement: item.measurement,
-
         qty: Number(item.qty),
-
         price: Number(item.price),
       }));
 
       const response = await axios.put(
         `${API_BASE_URL}/api/v1/order/update-items/${selectedOrder._id}`,
-        {
-          items,
-        },
+        { items },
         axiosConfig,
       );
 
       if (response.data?.success) {
         const updatedOrder = response.data.order;
 
-        /*
-         * Update original orders.
-         */
         setOrders((prev) =>
           prev.map((order) =>
             order._id === updatedOrder._id ? updatedOrder : order,
           ),
         );
 
-        /*
-         * Update bottom sheet.
-         */
         setSelectedOrder(updatedOrder);
-
         setEditing(false);
 
         toast.success("ऑर्डर और बिल अपडेट हो गया।");
@@ -333,7 +405,7 @@ const AdminMoneyControl = () => {
   ========================================================== */
 
   const markPaid = async () => {
-    if (!selectedOrder) return;
+    if (!selectedOrder || paymentUpdating) return;
 
     try {
       setPaymentUpdating(true);
@@ -371,7 +443,7 @@ const AdminMoneyControl = () => {
   ========================================================== */
 
   const markPending = async () => {
-    if (!selectedOrder) return;
+    if (!selectedOrder || paymentUpdating) return;
 
     try {
       setPaymentUpdating(true);
@@ -420,7 +492,7 @@ const AdminMoneyControl = () => {
   ========================================================== */
 
   return (
-    <div className="min-h-screen bg-slate-50 px-3 pb-40 pt-22 sm:px-5">
+    <div className="min-h-screen bg-slate-50 px-3 pb-40 pt-23 sm:px-5">
       <div className="mx-auto w-full max-w-2xl">
         {/* ==================================================
             HEADER
@@ -438,7 +510,7 @@ const AdminMoneyControl = () => {
 
             <span className="absolute -top-3 left-1/2 h-1.5 w-1.5 rounded-full bg-slate-300" />
 
-            <h1 className="relative text-[26px] font-black tracking-tight text-slate-900">
+            <h1 className="relative text-[30px] font-black tracking-tight text-slate-900">
               हिसाब
             </h1>
           </div>
@@ -528,31 +600,81 @@ const AdminMoneyControl = () => {
             <h2 className="text-lg font-black text-slate-900">ऑर्डर</h2>
 
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-black text-slate-500">
-              {approvedOrders.length}
+              {filteredOrders.length}
             </span>
+          </div>
+
+          {/* ==================================================
+            SEARCH
+        ================================================== */}
+
+          <div className="mb-4">
+            <div className="flex h-12 items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 shadow-sm">
+              <Search className="h-5 w-5 shrink-0 text-slate-400" />
+
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="ग्राहक खोजें"
+                className="min-w-0 flex-1 bg-transparent text-sm font-semibold text-slate-800 outline-none placeholder:text-slate-400"
+              />
+
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100"
+                  aria-label="Clear search"
+                >
+                  <X className="h-4 w-4 text-slate-500" />
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={startVoiceSearch}
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition ${
+                  isListening
+                    ? "bg-red-50 text-red-600"
+                    : "bg-slate-100 text-slate-600"
+                }`}
+                aria-label="Voice search"
+              >
+                {isListening ? (
+                  <MicOff className="h-4 w-4" />
+                ) : (
+                  <Mic className="h-4 w-4" />
+                )}
+              </button>
+            </div>
           </div>
 
           {loading ? (
             <div className="flex justify-center py-16">
               <Loader2 className="h-7 w-7 animate-spin text-emerald-500" />
             </div>
-          ) : approvedOrders.length === 0 ? (
+          ) : filteredOrders.length === 0 ? (
             <div className="rounded-[24px] border border-slate-200 bg-white px-5 py-12 text-center">
               <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100">
                 <ShoppingBag className="h-6 w-6 text-slate-400" />
               </div>
 
               <p className="mt-4 text-base font-black text-slate-700">
-                कोई स्वीकृत ऑर्डर नहीं
+                {searchQuery
+                  ? "कोई ग्राहक नहीं मिला"
+                  : "कोई स्वीकृत ऑर्डर नहीं"}
               </p>
 
               <p className="mt-1 text-xs font-semibold text-slate-400">
-                इस दिन कोई approved order नहीं है।
+                {searchQuery
+                  ? "दूसरा नाम खोजें।"
+                  : "इस दिन कोई approved order नहीं है।"}
               </p>
             </div>
           ) : (
             <div className="space-y-3">
-              {approvedOrders.map((order) => {
+              {filteredOrders.map((order) => {
                 const isPaid = order.paymentStatus === "Paid";
 
                 const itemCount =
@@ -582,12 +704,14 @@ const AdminMoneyControl = () => {
                     "
                   >
                     <div className="flex items-center gap-3">
-                      {/* USER */}
-
                       <div
                         className={`
-                          flex h-12 w-12 shrink-0
-                          items-center justify-center
+                          flex
+                          h-12
+                          w-12
+                          shrink-0
+                          items-center
+                          justify-center
                           rounded-2xl
                           ${
                             isPaid
@@ -598,8 +722,6 @@ const AdminMoneyControl = () => {
                       >
                         <UserRound className="h-5 w-5" />
                       </div>
-
-                      {/* NAME */}
 
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-base font-black text-slate-900">
@@ -619,8 +741,6 @@ const AdminMoneyControl = () => {
                         </div>
                       </div>
 
-                      {/* PRICE */}
-
                       <div className="shrink-0 text-right">
                         <p className="text-lg font-black text-slate-900">
                           ₹
@@ -631,7 +751,8 @@ const AdminMoneyControl = () => {
 
                         <span
                           className={`
-                            mt-1 inline-block
+                            mt-1
+                            inline-block
                             text-[10px]
                             font-black
                             ${isPaid ? "text-emerald-600" : "text-orange-600"}
@@ -660,6 +781,7 @@ const AdminMoneyControl = () => {
           <button
             aria-label="Close"
             onClick={closeOrder}
+            disabled={saving || paymentUpdating}
             className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
           />
 
@@ -672,9 +794,12 @@ const AdminMoneyControl = () => {
               left-0
               right-0
               mx-auto
+              flex
+              h-[92vh]
               max-h-[92vh]
               w-full
               max-w-2xl
+              flex-col
               overflow-hidden
               rounded-t-[30px]
               bg-white
@@ -683,13 +808,13 @@ const AdminMoneyControl = () => {
           >
             {/* HANDLE */}
 
-            <div className="flex justify-center pt-3">
+            <div className="flex shrink-0 justify-center pt-3">
               <div className="h-1.5 w-12 rounded-full bg-slate-200" />
             </div>
 
             {/* HEADER */}
 
-            <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-4">
               <div className="min-w-0">
                 <p className="truncate text-xl font-black text-slate-900">
                   {getCustomerName(selectedOrder)}
@@ -704,20 +829,36 @@ const AdminMoneyControl = () => {
 
               <button
                 onClick={closeOrder}
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100"
+                disabled={saving || paymentUpdating}
+                className="
+                  flex
+                  h-10
+                  w-10
+                  shrink-0
+                  items-center
+                  justify-center
+                  rounded-xl
+                  bg-slate-100
+                  disabled:opacity-50
+                "
               >
                 <X className="h-5 w-5 text-slate-600" />
               </button>
             </div>
 
-            {/* CONTENT */}
+            {/* SCROLLABLE CONTENT */}
 
-            <div className="max-h-[calc(92vh-170px)] overflow-y-auto px-4 py-4">
+            <div
+              className="
+                min-h-0
+                flex-1
+                overflow-y-auto
+                overscroll-contain
+                px-4
+                py-4
+              "
+            >
               {editing ? (
-                /* ==================================================
-                   EDIT MODE
-                ================================================== */
-
                 <div className="space-y-3">
                   {selectedOrder.items?.map((item) => (
                     <div
@@ -725,8 +866,6 @@ const AdminMoneyControl = () => {
                       className="rounded-[22px] border border-slate-200 bg-white p-3"
                     >
                       <div className="flex items-center gap-3">
-                        {/* IMAGE */}
-
                         <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-slate-100">
                           {item.image ? (
                             <img
@@ -738,8 +877,6 @@ const AdminMoneyControl = () => {
                             <ShoppingBag className="h-5 w-5 text-slate-400" />
                           )}
                         </div>
-
-                        {/* INFO */}
 
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-base font-black text-slate-900">
@@ -758,10 +895,9 @@ const AdminMoneyControl = () => {
                           </p>
                         </div>
 
-                        {/* QTY */}
-
                         <div className="flex shrink-0 items-center gap-1 rounded-xl bg-slate-100 p-1">
                           <button
+                            type="button"
                             onClick={() => changeQuantity(item._id, -1)}
                             className="flex h-8 w-8 items-center justify-center rounded-lg bg-white shadow-sm"
                           >
@@ -773,6 +909,7 @@ const AdminMoneyControl = () => {
                           </span>
 
                           <button
+                            type="button"
                             onClick={() => changeQuantity(item._id, 1)}
                             className="flex h-8 w-8 items-center justify-center rounded-lg bg-white shadow-sm"
                           >
@@ -780,9 +917,8 @@ const AdminMoneyControl = () => {
                           </button>
                         </div>
 
-                        {/* REMOVE */}
-
                         <button
+                          type="button"
                           onClick={() => removeItem(item._id)}
                           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-500"
                         >
@@ -792,8 +928,6 @@ const AdminMoneyControl = () => {
                     </div>
                   ))}
 
-                  {/* EDIT TOTAL */}
-
                   <div className="mt-4 rounded-[22px] bg-slate-900 p-4 text-white">
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-bold text-white/60">
@@ -802,16 +936,13 @@ const AdminMoneyControl = () => {
 
                       <span className="flex items-center text-2xl font-black">
                         <IndianRupee className="h-5 w-5" />
+
                         {editingTotal.toLocaleString("en-IN")}
                       </span>
                     </div>
                   </div>
                 </div>
               ) : (
-                /* ==================================================
-                   VIEW MODE
-                ================================================== */
-
                 <div className="space-y-3">
                   {selectedOrder.items?.map((item) => (
                     <div
@@ -846,13 +977,11 @@ const AdminMoneyControl = () => {
                         </p>
                       </div>
 
-                      <p className="text-base font-black text-slate-900">
+                      <p className="shrink-0 text-base font-black text-slate-900">
                         ₹{Number(item.total || 0).toLocaleString("en-IN")}
                       </p>
                     </div>
                   ))}
-
-                  {/* TOTAL */}
 
                   <div className="mt-4 flex items-center justify-between rounded-[22px] bg-slate-900 px-5 py-4 text-white">
                     <span className="text-sm font-bold text-white/60">
@@ -871,25 +1000,59 @@ const AdminMoneyControl = () => {
               )}
             </div>
 
-            {/* ==================================================
-                BOTTOM ACTIONS
-            ================================================== */}
+            {/* BOTTOM ACTIONS */}
 
-            <div className="border-t border-slate-100 bg-white p-4">
+            <div
+              className="
+                shrink-0
+                border-t
+                border-slate-100
+                bg-white
+                px-4
+                pb-[max(1rem,env(safe-area-inset-bottom))]
+                pt-3
+              "
+            >
               {editing ? (
                 <div className="flex gap-2">
                   <button
+                    type="button"
                     onClick={() => setEditing(false)}
                     disabled={saving}
-                    className="h-12 flex-1 rounded-2xl bg-slate-100 text-sm font-black text-slate-700"
+                    className="
+                      h-12
+                      flex-1
+                      rounded-2xl
+                      bg-slate-100
+                      text-sm
+                      font-black
+                      text-slate-700
+                      disabled:opacity-50
+                    "
                   >
                     रद्द करें
                   </button>
 
                   <button
+                    type="button"
                     onClick={saveOrderChanges}
                     disabled={saving}
-                    className="flex h-12 flex-[1.5] items-center justify-center gap-2 rounded-2xl bg-emerald-500 text-sm font-black text-white shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+                    className="
+                      flex
+                      h-12
+                      flex-[1.5]
+                      items-center
+                      justify-center
+                      gap-2
+                      rounded-2xl
+                      bg-emerald-500
+                      text-sm
+                      font-black
+                      text-white
+                      shadow-lg
+                      shadow-emerald-500/20
+                      disabled:opacity-50
+                    "
                   >
                     {saving ? (
                       <>
@@ -906,25 +1069,53 @@ const AdminMoneyControl = () => {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {/* EDIT */}
-
                   <button
+                    type="button"
                     onClick={() => setEditing(true)}
-                    className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-slate-900 text-sm font-black text-white"
+                    disabled={paymentUpdating}
+                    className="
+                      flex
+                      h-12
+                      w-full
+                      items-center
+                      justify-center
+                      gap-2
+                      rounded-2xl
+                      bg-slate-900
+                      text-sm
+                      font-black
+                      text-white
+                      disabled:opacity-50
+                    "
                   >
                     ऑर्डर में बदलाव करें
                   </button>
 
-                  {/* PAYMENT */}
-
                   {selectedOrder.paymentStatus === "Paid" ? (
                     <button
+                      type="button"
                       onClick={markPending}
                       disabled={paymentUpdating}
-                      className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-orange-50 text-sm font-black text-orange-700 disabled:opacity-50"
+                      className="
+                        flex
+                        h-11
+                        w-full
+                        items-center
+                        justify-center
+                        gap-2
+                        rounded-2xl
+                        bg-orange-50
+                        text-sm
+                        font-black
+                        text-orange-700
+                        disabled:opacity-50
+                      "
                     >
                       {paymentUpdating ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          अपडेट हो रहा...
+                        </>
                       ) : (
                         <>
                           <ArrowDown className="h-4 w-4" />
@@ -934,12 +1125,29 @@ const AdminMoneyControl = () => {
                     </button>
                   ) : (
                     <button
+                      type="button"
                       onClick={markPaid}
                       disabled={paymentUpdating}
-                      className="flex h-11 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-50 text-sm font-black text-emerald-700 disabled:opacity-50"
+                      className="
+                        flex
+                        h-11
+                        w-full
+                        items-center
+                        justify-center
+                        gap-2
+                        rounded-2xl
+                        bg-emerald-50
+                        text-sm
+                        font-black
+                        text-emerald-700
+                        disabled:opacity-50
+                      "
                     >
                       {paymentUpdating ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          अपडेट हो रहा...
+                        </>
                       ) : (
                         <>
                           <Check className="h-4 w-4" />
