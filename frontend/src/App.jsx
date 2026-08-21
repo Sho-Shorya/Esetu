@@ -34,6 +34,10 @@ import EditProduct from "./components/EditProduct";
 import LiveTracking from "./components/LiveTracking";
 import OrderSuccess from "./pages/OrderSuccess";
 import InvoiceHistory from "./components/InvoiceHistory";
+import TermsAndConditions from "./pages/TermsAndConditions";
+import RefundCancellation from "./pages/RefundPolicy";
+import ReturnPolicy from "./pages/ReturnPolicy";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
 function App() {
   const token = localStorage.getItem("token");
 
@@ -339,6 +343,9 @@ function App() {
           </>
         }
       />
+      <Route path="/T&C" element={<TermsAndConditions />} />
+      <Route path="/refund-policy" element={<RefundCancellation />} />
+      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
     </Routes>
   );
 }

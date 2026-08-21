@@ -72,14 +72,14 @@ const Footer = () => {
               <Link to="/products" className="hover:text-red-500">
                 🛒 सभी उत्पाद
               </Link>
-
+              {/* 
               <Link to="/categories" className="hover:text-red-500">
                 📦 श्रेणियाँ
               </Link>
 
               <Link to="/offers" className="hover:text-red-500">
                 🎁 ऑफ़र
-              </Link>
+              </Link> */}
 
               <Link to="/cart" className="hover:text-red-500">
                 🛍️ कार्ट
@@ -119,7 +119,7 @@ const Footer = () => {
 
         {/* Bottom */}
 
-        <div className="border-t border-gray-800 mt-10 pt-5 flex flex-col md:flex-row justify-between items-center gap-3 pb-25">
+        <div className="border-t border-gray-800 mt-10 pt-5 flex flex-col md:flex-row justify-between items-center gap-3 pb-35">
           <p className="text-sm text-gray-500 text-center">
             © {new Date().getFullYear()}{" "}
             <span className="text-red-600 font-semibold">ई-सेतु</span> • सभी
