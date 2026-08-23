@@ -12,13 +12,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { setSupplierData, setUserData } from "@/redux/userSlice";
 import axios from "axios";
-import { Eye, EyeOff, Loader2, LogIn } from "lucide-react";
+import {
+  ArrowBigLeft,
+  ChevronLeft,
+  Eye,
+  EyeOff,
+  Loader2,
+  LogIn,
+} from "lucide-react";
 
 import React, { useState } from "react";
 import { useDispatch } from "react-redux";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { API_BASE_URL } from "@/lib/constants";
+import { BiLeftArrow } from "react-icons/bi";
 
 const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
@@ -63,10 +71,9 @@ const Login = () => {
     <div className="flex justify-center items-center min-h-screen bg-gray-100">
       <Card className="w-full max-w-sm relative">
         <CardHeader>
-          <img
-            src="arrow-left.png"
+          <ChevronLeft
             onClick={() => navigate("/")}
-            className=" absolute top-7 -left-13 h-[18px] cursor-pointer "
+            className="hidden md:flex absolute top-8 -left-13 h-[18px] cursor-pointer "
           />
           <CardTitle className={"text-2xl"}>Login as Shopkeeper</CardTitle>
           <CardDescription>Enter given details below.</CardDescription>
@@ -147,7 +154,7 @@ const Login = () => {
 
       <div
         onClick={() => navigate("/admin-login")}
-        className=" flex items-cneter gap-[10px] bg-emerald-500 py-2 px-3 rounded-full text-white font-bold absolute bottom-10 right-5"
+        className=" flex items-cneter gap-[25px] select-none cursor-pointer bg-emerald-500 py-2 px-3 rounded-full text-white font-bold absolute bottom-10 right-5"
       >
         <LogIn />
         Login as supplier

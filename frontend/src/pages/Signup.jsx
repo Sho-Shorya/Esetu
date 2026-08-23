@@ -11,7 +11,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import axios from "axios";
-import { Eye, EyeOff, Loader2, LogIn } from "lucide-react";
+import { ChevronLeft, Eye, EyeOff, Loader2, LogIn } from "lucide-react";
 
 import React, { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
@@ -26,7 +26,6 @@ const Signup = () => {
     firstName: "",
     lastName: "",
     phoneNumber: "",
-    shopKey: "",
     password: "",
   });
   const navigate = useNavigate();
@@ -60,9 +59,9 @@ const Signup = () => {
   return (
     <div className="flex justify-center items-center min-h-screen bg-gray-100">
       <Card className="w-full max-w-sm relative">
-        <BiLeftArrow
+        <ChevronLeft
           onClick={() => navigate("/")}
-          className=" absolute top-7 -left-13 h-[18px] cursor-pointer "
+          className="hidden md:flex absolute top-7 -left-13 h-[18px] cursor-pointer "
         />
         <CardHeader>
           <CardTitle className={"text-2xl"}>
@@ -107,18 +106,6 @@ const Signup = () => {
                 placeholder="98128XXXXX"
                 required
                 value={formData.phoneNumber}
-                onChange={handleChange}
-              />
-            </div>
-            <div className="grid  text-red-600 gap-2">
-              <Label htmlFor="place">Shopkeeper Secret Key*</Label>
-              <Input
-                id="shopKey"
-                type="text"
-                name="shopKey"
-                placeholder="Enter Shopkepper Secret Key here"
-                required
-                value={formData.shopKey}
                 onChange={handleChange}
               />
             </div>
@@ -183,7 +170,7 @@ const Signup = () => {
       </Card>
       <div
         onClick={() => navigate("/admin-signup")}
-        className=" flex items-cneter gap-[10px] bg-emerald-500 py-2 px-3 rounded-full text-white font-bold absolute bottom-10 right-5"
+        className=" flex items-cneter gap-[25px] select-none  cursor-pointer bg-emerald-500 py-2 px-3 rounded-full text-white font-bold absolute bottom-10 right-5"
       >
         <LogIn />
         Signup as supplier

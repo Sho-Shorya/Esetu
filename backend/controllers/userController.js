@@ -11,8 +11,8 @@ dotenv.config();
 
 export const register = async (req, res) => {
   try {
-    const { firstName, lastName, phoneNumber, shopKey, password } = req.body;
-    if (!firstName || !lastName || !phoneNumber || !shopKey || !password) {
+    const { firstName, lastName, phoneNumber, password } = req.body;
+    if (!firstName || !lastName || !phoneNumber || !password) {
       return res.status(400).json({
         success: false,
         message: "सभी फ़ील्ड आवश्यक हैं!",
@@ -23,12 +23,6 @@ export const register = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: "यह यूज़र मौजूद है!, कृपया लॉगिन करें!",
-      });
-    }
-    if (shopKey !== process.env.ShopKey) {
-      return res.status(400).json({
-        success: false,
-        message: "सीक्रेट की गलत है।",
       });
     }
 
@@ -42,14 +36,6 @@ export const register = async (req, res) => {
     });
 
     await newUser.save();
-
-    // await sendNotification({
-    //   subscriptionId: newUser.oneSignalSubscriptionId,
-    //   title: "🙏 E-SETU आपका स्वागत करता है।",
-    //   message:
-    //     "यहाँ आप आसानी से ऑर्डर कर सकते हैं और अपने ऑर्डर को मैनेज कर सकते हैं।",
-    // });
-
     return res.status(201).json({
       success: true,
       message: "यूज़र रजिस्ट्रेशन पूरा हो गया है, कृपया लॉग इन करें।",

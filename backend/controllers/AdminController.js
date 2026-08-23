@@ -9,18 +9,11 @@ import { sendNotification } from "../services/oneSignalService.js";
 
 export const adminRegister = async (req, res) => {
   try {
-    const { firstName, lastName, phoneNumber, supplierKey, password } =
-      req.body;
-    if (!firstName || !lastName || !phoneNumber || !supplierKey || !password) {
+    const { firstName, lastName, phoneNumber, password } = req.body;
+    if (!firstName || !lastName || !phoneNumber || !password) {
       return res.status(400).json({
         success: false,
         message: "All fields are required",
-      });
-    }
-    if (supplierKey !== process.env.SUPPLIER_SECRET_KEY) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid Secret Key!",
       });
     }
     const user = await User.findOne({ phoneNumber });
@@ -43,7 +36,7 @@ export const adminRegister = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: "User registered successfully",
+      message: "Supplier registered successfully",
       user: newUser,
     });
   } catch (error) {

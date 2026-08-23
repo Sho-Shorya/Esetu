@@ -11,7 +11,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import axios from "axios";
-import { Eye, EyeOff, Loader2, LogIn, Power, PowerSquare } from "lucide-react";
+import {
+  ChevronLeft,
+  Eye,
+  EyeOff,
+  Loader2,
+  LogIn,
+  Power,
+  PowerSquare,
+} from "lucide-react";
 
 import React, { useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
@@ -29,7 +37,6 @@ const AdminSignup = () => {
     lastName: "",
     phoneNumber: "",
     password: "",
-    supplierKey: "",
   });
   const navigate = useNavigate();
 
@@ -63,10 +70,9 @@ const AdminSignup = () => {
   return (
     <div className="flex justify-center items-center min-h-screen bg-emerald-100">
       <Card className="w-full max-w-sm relative">
-        <img
-          src="arrow-left.png"
+        <ChevronLeft
           onClick={() => navigate("/")}
-          className=" absolute top-7 -left-13 h-[18px] cursor-pointer "
+          className="hidden md:flex absolute top-7 -left-13 h-[18px] cursor-pointer "
         />
         <CardHeader>
           <CardTitle className={"text-2xl"}>
@@ -144,19 +150,6 @@ const AdminSignup = () => {
                   />
                 )}
               </div>
-              <div className="grid gap-2 text-green-800">
-                <Label htmlFor="place">Supplier Secret Key*</Label>
-                <Input
-                  className="text-[black]"
-                  id="supplierKey"
-                  type="text"
-                  name="supplierKey"
-                  placeholder="Enter Secret key given by admin"
-                  required
-                  value={formData.supplierKey}
-                  onChange={handleChange}
-                />
-              </div>
             </div>
           </div>
         </CardContent>
@@ -188,7 +181,7 @@ const AdminSignup = () => {
       </Card>
       <div
         onClick={() => navigate("/signup")}
-        className=" flex items-center gap-[10px] bg-red-500 py-2 px-3 rounded-full text-white font-bold absolute bottom-10 right-5"
+        className=" flex items-center  cursor-pointer gap-[25px] select-none bg-red-500 py-2 px-3 rounded-full text-white font-bold absolute bottom-10 right-5"
       >
         <LogIn /> Signup as Shopkepper
       </div>

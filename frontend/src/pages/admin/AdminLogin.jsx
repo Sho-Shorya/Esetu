@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { setSupplierData, setUserData } from "@/redux/userSlice";
 import axios from "axios";
-import { Eye, EyeOff, Loader2, LogIn } from "lucide-react";
+import { ChevronLeft, Eye, EyeOff, Loader2, LogIn } from "lucide-react";
 
 import React, { useState } from "react";
 import { useDispatch } from "react-redux";
@@ -63,10 +63,9 @@ const AdminLogin = () => {
     <div className="flex justify-center items-center min-h-screen bg-emerald-100">
       <Card className="w-full max-w-sm relative">
         <CardHeader>
-          <img
-            src="arrow-left.png"
-            onClick={() => navigate("/admin-dashboard")}
-            className=" absolute top-7 -left-13 h-[18px] cursor-pointer "
+          <ChevronLeft
+            onClick={() => navigate("/")}
+            className="hidden md:flex absolute top-8 -left-13 h-[18px] cursor-pointer "
           />
           <CardTitle className={"text-2xl"}>
             Login to Supplier account
@@ -148,7 +147,7 @@ const AdminLogin = () => {
       </Card>
       <div
         onClick={() => navigate("/login")}
-        className="flex items-center gap-[10px] bg-red-500 py-2 px-3 rounded-full text-white font-bold absolute bottom-10 right-5"
+        className="flex items-center gap-[25px] select-none  cursor-pointer  bg-red-500 py-2 px-3 rounded-full text-white font-bold absolute bottom-10 right-5"
       >
         <LogIn />
         Login as Shopkepper
