@@ -17,6 +17,12 @@ DATE HELPERS
 ====================================================
 */
 
+/*
+Get today's date according to India time.
+
+Returns:
+YYYY-MM-DD
+*/
 const getTodayDate = () => {
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: INDIA_TIMEZONE,
@@ -28,6 +34,9 @@ const getTodayDate = () => {
   return formatter.format(new Date());
 };
 
+/*
+Get today's start and end according to IST.
+*/
 const getTodayRange = () => {
   const today = getTodayDate();
 
@@ -41,12 +50,36 @@ const getTodayRange = () => {
   };
 };
 
+/*
+Calculate remaining minutes until cutoff.
+
+Math.ceil() is intentional.
+
+Example:
+
+10:00:01 → 59.98 minutes → 60
+10:30:01 → 29.98 minutes → 30
+10:50:01 → 9.98 minutes → 10
+
+This prevents the reminder from becoming 59/29/9
+because of a few milliseconds of execution delay.
+*/
 const getRemainingMinutes = (cutoffTime) => {
   const now = new Date();
 
-  return Math.floor((cutoffTime.getTime() - now.getTime()) / 60000);
+  return Math.ceil((cutoffTime.getTime() - now.getTime()) / 60000);
 };
 
+/*
+====================================================
+REMINDER LOG HELPERS
+====================================================
+*/
+
+/*
+Check whether this reminder has already been sent
+to this user today.
+*/
 const alreadySent = async (userId, reminderType, date) => {
   const exists = await ReminderLog.findOne({
     userId,
@@ -57,6 +90,14 @@ const alreadySent = async (userId, reminderType, date) => {
   return !!exists;
 };
 
+/*
+Save reminder log.
+
+Duplicate reminder errors are ignored because
+the unique MongoDB index protects us from duplicates.
+
+Other database errors are logged.
+*/
 const saveReminder = async (userId, reminderType, date) => {
   try {
     await ReminderLog.create({
@@ -64,17 +105,31 @@ const saveReminder = async (userId, reminderType, date) => {
       reminderType,
       date,
     });
-  } catch (err) {
-    // Duplicate reminder ignored
+  } catch (error) {
+    /*
+    MongoDB duplicate key error.
+
+    This is expected if two cron executions
+    happen at almost the same time.
+    */
+    if (error.code === 11000) {
+      return;
+    }
+
+    console.error("❌ ReminderLog save error:", error);
   }
 };
 
 /*
 ====================================================
-SEND DAILY RECEIPT NOTIFICATION
+DAILY RECEIPT NOTIFICATION
 ====================================================
 */
 
+/*
+Send notification after daily invoices have
+successfully been generated.
+*/
 const sendDailyReceiptNotification = async () => {
   try {
     const today = getTodayDate();
@@ -83,11 +138,13 @@ const sendDailyReceiptNotification = async () => {
 
     /*
     --------------------------------------------------
-    FIND USERS WHO HAVE ONESIGNAL
+    FIND USERS WITH ONESIGNAL
     --------------------------------------------------
     */
 
     const users = await User.find({
+      role: "user",
+
       oneSignalSubscriptionId: {
         $exists: true,
         $ne: "",
@@ -106,15 +163,12 @@ const sendDailyReceiptNotification = async () => {
     */
 
     for (const user of users) {
-      /*
-      Prevent duplicate notification.
-
-      The same ReminderLog system is being reused,
-      but with a different reminderType.
-      */
-
       const reminderType = "daily-receipt";
 
+      /*
+      Prevent duplicate receipt notification
+      on the same day.
+      */
       const sent = await alreadySent(user._id, reminderType, today);
 
       if (sent) {
@@ -135,34 +189,30 @@ const sendDailyReceiptNotification = async () => {
 
       console.log(`📨 Sending receipt notification -> ${user.firstName}`);
 
-      await sendNotification({
-        subscriptionId: user.oneSignalSubscriptionId,
+      try {
+        await sendNotification({
+          subscriptionId: user.oneSignalSubscriptionId,
 
-        title: "📜 आज की रसीद तैयार है",
+          title: "📜 आज की रसीद तैयार है",
 
-        message: "रसीद देखने और डाउनलोड करने के लिए यहाँ टैप करें।",
+          message: "रसीद देखने और डाउनलोड करने के लिए यहाँ टैप करें।",
+
+          url: "https://esetu.vercel.app/invoice-history",
+        });
 
         /*
-        IMPORTANT:
-        Your OneSignal service needs to pass this
-        URL into the notification payload.
-
-        If your current sendNotification function
-        doesn't support `url` yet, we'll update it.
+        Only save the log after notification
+        successfully sends.
         */
+        await saveReminder(user._id, reminderType, today);
 
-        url: "https://esetu.vercel.app/invoice-history",
-      });
-
-      /*
-      ------------------------------------------------
-      SAVE NOTIFICATION LOG
-      ------------------------------------------------
-      */
-
-      await saveReminder(user._id, reminderType, today);
-
-      sentCount++;
+        sentCount++;
+      } catch (notificationError) {
+        console.error(
+          `❌ Receipt notification failed -> ${user.firstName}`,
+          notificationError,
+        );
+      }
     }
 
     console.log(
@@ -196,8 +246,18 @@ export const startReminderCron = () => {
 
   /*
   ==================================================
-  EXISTING REMINDER CRON
+  ORDER REMINDER CRON
   ==================================================
+
+  Runs every minute.
+
+  Checks whether we are exactly around:
+
+  60 minutes
+  30 minutes
+  10 minutes
+
+  before today's order cutoff.
   */
 
   cron.schedule(
@@ -205,27 +265,60 @@ export const startReminderCron = () => {
 
     async () => {
       try {
+        /*
+        ------------------------------------------------
+        GET ORDER CUTOFF SETTING
+        ------------------------------------------------
+        */
+
         const setting = await AppSetting.findOne({
           key: "dailyOrderCutoff",
         });
 
-        if (!setting) return;
+        if (!setting) {
+          console.log("⚠️ dailyOrderCutoff setting not found");
 
-        const [hour, minute] = setting.value.split(":").map(Number);
+          return;
+        }
 
-        const cutoff = new Date();
+        /*
+        ------------------------------------------------
+        PARSE CUTOFF TIME
+        ------------------------------------------------
+        */
 
-        cutoff.setHours(hour, minute, 0, 0);
+        const cutoffTime = setting.value;
+
+        /*
+        IMPORTANT:
+
+        We explicitly create the cutoff in IST.
+
+        This prevents Railway/server UTC timezone
+        from causing incorrect reminder times.
+        */
+
+        const today = getTodayDate();
+
+        const cutoff = new Date(`${today}T${cutoffTime}:00+05:30`);
+
+        /*
+        ------------------------------------------------
+        CALCULATE REMAINING MINUTES
+        ------------------------------------------------
+        */
 
         const remainingMinutes = getRemainingMinutes(cutoff);
 
         /*
-         * Only run exactly at:
-         *
-         * 60
-         * 30
-         * 10
-         */
+        ------------------------------------------------
+        ONLY RUN AT:
+        ------------------------------------------------
+
+        60 minutes
+        30 minutes
+        10 minutes
+        */
 
         if (![60, 30, 10].includes(remainingMinutes)) {
           return;
@@ -233,9 +326,19 @@ export const startReminderCron = () => {
 
         console.log(`🔔 Sending ${remainingMinutes} minute reminder...`);
 
-        const today = getTodayDate();
+        /*
+        ------------------------------------------------
+        TODAY RANGE
+        ------------------------------------------------
+        */
 
         const { start, end } = getTodayRange();
+
+        /*
+        ------------------------------------------------
+        FIND USERS
+        ------------------------------------------------
+        */
 
         const users = await User.find({
           role: "user",
@@ -248,59 +351,109 @@ export const startReminderCron = () => {
 
         console.log(`👥 Users Found : ${users.length}`);
 
+        /*
+        ------------------------------------------------
+        PROCESS USERS
+        ------------------------------------------------
+        */
+
         for (const user of users) {
-          const hasOrderToday = await Order.exists({
-            userId: user._id,
+          try {
+            /*
+            --------------------------------------------
+            CHECK WHETHER USER ALREADY ORDERED TODAY
+            --------------------------------------------
+            */
 
-            isTodayOrder: true,
+            const hasOrderToday = await Order.exists({
+              userId: user._id,
 
-            createdAt: {
-              $gte: start,
-              $lte: end,
-            },
-          });
+              isTodayOrder: true,
 
-          /*
-          ============================================
-          USERS WHO HAVEN'T ORDERED TODAY
-          ============================================
-          */
+              createdAt: {
+                $gte: start,
+                $lte: end,
+              },
+            });
 
-          if (!hasOrderToday) {
-            let reminderType = "";
-            let title = "";
-            let message = "";
+            /*
+            ============================================
+            USER HAS NOT ORDERED TODAY
+            ============================================
+            */
 
-            if (remainingMinutes === 60) {
-              reminderType = "1hour-no-order";
+            if (!hasOrderToday) {
+              let reminderType = "";
+              let title = "";
+              let message = "";
 
-              title = "⏰ सिर्फ 1 घंटा बाकी!";
+              /*
+              ------------------------------------------
+              60 MINUTES
+              ------------------------------------------
+              */
 
-              message =
-                "आज के ऑर्डर का कट-ऑफ समय सिर्फ 1 घंटे में है। समय रहते अपना ऑर्डर पूरा करें।";
-            }
+              if (remainingMinutes === 60) {
+                reminderType = "1hour-no-order";
 
-            if (remainingMinutes === 30) {
-              reminderType = "30min-no-order";
+                title = "⏰ सिर्फ 1 घंटा बाकी!";
 
-              title = "⚠️ सिर्फ 30 मिनट बाकी!";
+                message =
+                  "आज के ऑर्डर का कट-ऑफ समय सिर्फ 1 घंटे में है। समय रहते अपना ऑर्डर पूरा करें।";
+              }
 
-              message =
-                "जल्दी करें! आज के ऑर्डर का कट-ऑफ समय 30 मिनट में समाप्त हो जाएगा।";
-            }
+              /*
+              ------------------------------------------
+              30 MINUTES
+              ------------------------------------------
+              */
 
-            if (remainingMinutes === 10) {
-              reminderType = "10min-no-order";
+              if (remainingMinutes === 30) {
+                reminderType = "30min-no-order";
 
-              title = "🚨 अंतिम 10 मिनट!";
+                title = "⚠️ सिर्फ 30 मिनट बाकी!";
 
-              message =
-                "केवल 10 मिनट शेष हैं। अभी ऑर्डर करें ताकि आज की डिलीवरी में आपका ऑर्डर शामिल हो सके।";
-            }
+                message =
+                  "जल्दी करें! आज के ऑर्डर का कट-ऑफ समय 30 मिनट में समाप्त हो जाएगा।";
+              }
 
-            const sent = await alreadySent(user._id, reminderType, today);
+              /*
+              ------------------------------------------
+              10 MINUTES
+              ------------------------------------------
+              */
 
-            if (!sent) {
+              if (remainingMinutes === 10) {
+                reminderType = "10min-no-order";
+
+                title = "🚨 अंतिम 10 मिनट!";
+
+                message =
+                  "केवल 10 मिनट शेष हैं। अभी ऑर्डर करें ताकि आज की डिलीवरी में आपका ऑर्डर शामिल हो सके।";
+              }
+
+              /*
+              ------------------------------------------
+              CHECK DUPLICATE
+              ------------------------------------------
+              */
+
+              const sent = await alreadySent(user._id, reminderType, today);
+
+              if (sent) {
+                console.log(
+                  `⏭️ Already sent ${reminderType} -> ${user.firstName}`,
+                );
+
+                continue;
+              }
+
+              /*
+              ------------------------------------------
+              SEND NOTIFICATION
+              ------------------------------------------
+              */
+
               console.log(`📨 Sending ${reminderType} -> ${user.firstName}`);
 
               await sendNotification({
@@ -311,24 +464,53 @@ export const startReminderCron = () => {
                 message,
               });
 
+              /*
+              ------------------------------------------
+              SAVE LOG
+              ------------------------------------------
+              */
+
               await saveReminder(user._id, reminderType, today);
+
+              continue;
             }
 
-            continue;
-          }
+            /*
+            ============================================
+            USER HAS ALREADY ORDERED TODAY
+            ============================================
 
-          /*
-          ============================================
-          USERS WHO ALREADY ORDERED
-          ============================================
-          */
+            At 10 minutes before cutoff, allow the
+            user to remember that they can still edit
+            their order.
+            ============================================
+            */
 
-          if (remainingMinutes === 10) {
-            const reminderType = "10min-edit-order";
+            if (remainingMinutes === 10) {
+              const reminderType = "10min-edit-order";
 
-            const sent = await alreadySent(user._id, reminderType, today);
+              /*
+              ------------------------------------------
+              CHECK DUPLICATE
+              ------------------------------------------
+              */
 
-            if (!sent) {
+              const sent = await alreadySent(user._id, reminderType, today);
+
+              if (sent) {
+                console.log(
+                  `⏭️ Edit reminder already sent -> ${user.firstName}`,
+                );
+
+                continue;
+              }
+
+              /*
+              ------------------------------------------
+              SEND EDIT REMINDER
+              ------------------------------------------
+              */
+
               console.log(`📝 Edit Reminder -> ${user.firstName}`);
 
               await sendNotification({
@@ -340,14 +522,30 @@ export const startReminderCron = () => {
                   "यदि आपको अपने ऑर्डर में कोई बदलाव करना है, तो अभी कर लें। कट-ऑफ समय में केवल 10 मिनट शेष हैं।",
               });
 
+              /*
+              ------------------------------------------
+              SAVE LOG
+              ------------------------------------------
+              */
+
               await saveReminder(user._id, reminderType, today);
             }
+          } catch (userError) {
+            /*
+            One user's notification/database error
+            should NOT stop notifications for everyone.
+            */
+
+            console.error(
+              `❌ Reminder failed for ${user.firstName}:`,
+              userError,
+            );
           }
         }
 
         console.log(`✅ ${remainingMinutes} minute reminder completed`);
       } catch (error) {
-        console.error("Reminder Cron Error:", error);
+        console.error("❌ Reminder Cron Error:", error);
       }
     },
 
@@ -360,6 +558,10 @@ export const startReminderCron = () => {
   ==================================================
   10 PM DAILY INVOICE CRON
   ==================================================
+
+  Runs every day at:
+
+  10:00 PM IST
   */
 
   cron.schedule(
@@ -371,9 +573,11 @@ export const startReminderCron = () => {
       try {
         /*
         ------------------------------------------------
-        1. GENERATE RECEIPTS
+        1. GENERATE DAILY INVOICES
         ------------------------------------------------
         */
+
+        console.log("🧾 Generating daily invoices...");
 
         const result = await generateDailyInvoices();
 
@@ -381,7 +585,8 @@ export const startReminderCron = () => {
 
         /*
         ------------------------------------------------
-        2. ONLY AFTER SUCCESS → SEND NOTIFICATION
+        2. ONLY AFTER SUCCESS
+        SEND RECEIPT NOTIFICATION
         ------------------------------------------------
         */
 
@@ -395,8 +600,9 @@ export const startReminderCron = () => {
       } catch (error) {
         /*
         IMPORTANT:
+
         If invoice generation fails,
-        NO notification is sent.
+        receipt notifications are NOT sent.
         */
 
         console.error("❌ Daily Invoice Cron Error:", error);
@@ -408,5 +614,17 @@ export const startReminderCron = () => {
     },
   );
 
-  console.log("⏰ Daily invoice scheduled for 10:00 PM IST");
+  /*
+  ==================================================
+  CRON STARTUP LOGS
+  ==================================================
+  */
+
+  console.log("⏰ Order reminder cron: Every minute");
+
+  console.log("⏰ Order reminders: 60 / 30 / 10 minutes before cutoff");
+
+  console.log("🧾 Daily invoice cron: 10:00 PM IST");
+
+  console.log("📜 Daily receipt notification: After invoice generation");
 };

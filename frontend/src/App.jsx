@@ -38,6 +38,7 @@ import TermsAndConditions from "./pages/TermsAndConditions";
 import RefundCancellation from "./pages/RefundPolicy";
 import ReturnPolicy from "./pages/ReturnPolicy";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
+import PaymentStatus from "./components/PaymentStatus";
 function App() {
   const token = localStorage.getItem("token");
 
@@ -343,6 +344,7 @@ function App() {
           </>
         }
       />
+      <Route path="/payment/status" element={<PaymentStatus />} />
       <Route path="/T&C" element={<TermsAndConditions />} />
       <Route path="/refund-policy" element={<RefundCancellation />} />
       <Route path="/privacy-policy" element={<PrivacyPolicy />} />

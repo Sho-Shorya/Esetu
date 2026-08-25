@@ -156,10 +156,14 @@ export const syncTodayOrderFlags = async () => {
 /* ============================================================
    ADD ORDER
 ============================================================ */
-
 export const addOrder = async (req, res) => {
   try {
+    // ---------------------------------------
+    // 1. Get authenticated user ID
+    // ---------------------------------------
     const userId = req.userId;
+
+    const { paymentMethod } = req.body;
 
     if (!userId) {
       return res.status(401).json({
@@ -168,6 +172,22 @@ export const addOrder = async (req, res) => {
       });
     }
 
+    // ---------------------------------------
+    // 2. COD ONLY
+    // ---------------------------------------
+    const normalizedPaymentMethod = String(paymentMethod || "").toUpperCase();
+
+    if (normalizedPaymentMethod !== "COD") {
+      return res.status(400).json({
+        success: false,
+        message:
+          "Online payment orders must be created after successful payment.",
+      });
+    }
+
+    // ---------------------------------------
+    // 3. Get cart + user
+    // ---------------------------------------
     const [cart, user] = await Promise.all([
       Cart.findOne({ userId })
         .populate({
@@ -188,13 +208,19 @@ export const addOrder = async (req, res) => {
       ),
     ]);
 
-    if (!cart || cart.items.length === 0) {
+    // ---------------------------------------
+    // 4. Validate cart
+    // ---------------------------------------
+    if (!cart || !Array.isArray(cart.items) || cart.items.length === 0) {
       return res.status(400).json({
         success: false,
         message: "Cart is empty.",
       });
     }
 
+    // ---------------------------------------
+    // 5. Validate user
+    // ---------------------------------------
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -202,27 +228,42 @@ export const addOrder = async (req, res) => {
       });
     }
 
+    // ---------------------------------------
+    // 6. Check ordering window
+    // ---------------------------------------
     const withinWindow = await isWithinOrderingWindow();
 
     if (!withinWindow) {
       return res.status(400).json({
         success: false,
-        message: "ऑर्डर कटऑफ समय से पहले ही रखें।",
+        message: "माफ़ कीजिए, ऑर्डर का समय खत्म हो गया है।",
       });
     }
 
+    // ---------------------------------------
+    // 7. Today's date range
+    // ---------------------------------------
     const { start, end } = getTodayDateRange();
 
+    // ---------------------------------------
+    // 8. Find today's pending order
+    // ---------------------------------------
     let order = await Order.findOne({
       userId,
+
       status: "Pending",
+
       isTodayOrder: true,
+
       createdAt: {
         $gte: start,
         $lte: end,
       },
     });
 
+    // ---------------------------------------
+    // 9. Check cutoff
+    // ---------------------------------------
     if (order && isCutoffPassed(order.cutoffTime)) {
       return res.status(400).json({
         success: false,
@@ -230,35 +271,78 @@ export const addOrder = async (req, res) => {
       });
     }
 
-    const orderItems = cart.items.map((cartItem) => ({
-      productId: cartItem.productId._id,
+    // ---------------------------------------
+    // 10. Convert cart → order items
+    // ---------------------------------------
+    const orderItems = cart.items.map((cartItem) => {
+      const product = cartItem.productId;
+      const company = cartItem.company;
 
-      name: cartItem.productId.name,
+      const qty = Number(cartItem.qty || 0);
 
-      hinglishName: cartItem.productId.hinglishName || "",
+      let price = Number(cartItem.price);
 
-      image: cartItem.productId.media?.[0] || "",
+      if (!Number.isFinite(price)) {
+        price = qty > 0 ? Number(cartItem.total || 0) / qty : 0;
+      }
 
-      companyId: cartItem.company?._id || null,
+      let total = Number(cartItem.total);
 
-      companyName: cartItem.company?.name || "",
+      if (!Number.isFinite(total)) {
+        total = price * qty;
+      }
 
-      categoryId:
-        cartItem.productId.category?._id || cartItem.productId.category || null,
+      return {
+        productId: product?._id || null,
 
-      categoryName: cartItem.productId.category?.name || "",
+        name: product?.name || "",
 
-      measurement: cartItem.measurement,
+        hinglishName: product?.hinglishName || "",
 
-      qty: Number(cartItem.qty || 0),
+        image: product?.media?.[0] || "",
 
-      price: Number(
-        cartItem.price ?? (cartItem.qty ? cartItem.total / cartItem.qty : 0),
-      ),
+        companyId: company?._id || null,
 
-      total: Number(cartItem.total || 0),
-    }));
+        companyName: company?.name || "",
 
+        categoryId: product?.category?._id || product?.category || null,
+
+        categoryName: product?.category?.name || "",
+
+        measurement: cartItem.measurement || "",
+
+        qty: Number.isFinite(qty) ? qty : 0,
+
+        price: Number.isFinite(price) ? price : 0,
+
+        total: Number.isFinite(total) ? total : 0,
+      };
+    });
+
+    // ---------------------------------------
+    // 11. Validate items
+    // ---------------------------------------
+    const invalidItem = orderItems.find(
+      (item) =>
+        !item.productId ||
+        !Number.isFinite(item.qty) ||
+        item.qty <= 0 ||
+        !Number.isFinite(item.price) ||
+        item.price < 0 ||
+        !Number.isFinite(item.total) ||
+        item.total < 0,
+    );
+
+    if (invalidItem) {
+      return res.status(400).json({
+        success: false,
+        message: "Some cart items contain invalid data.",
+      });
+    }
+
+    // ---------------------------------------
+    // 12. Existing today's order
+    // ---------------------------------------
     if (order) {
       for (const newItem of orderItems) {
         const existingItem = order.items.find(
@@ -269,8 +353,15 @@ export const addOrder = async (req, res) => {
         );
 
         if (existingItem) {
-          existingItem.qty += newItem.qty;
-          existingItem.total += newItem.total;
+          existingItem.qty =
+            Number(existingItem.qty || 0) + Number(newItem.qty || 0);
+
+          existingItem.total =
+            Number(existingItem.total || 0) + Number(newItem.total || 0);
+
+          if (existingItem.qty > 0) {
+            existingItem.price = existingItem.total / existingItem.qty;
+          }
         } else {
           order.items.push(newItem);
         }
@@ -278,18 +369,27 @@ export const addOrder = async (req, res) => {
 
       order.totalAmount = calculateOrderTotal(order.items);
 
+      order.paymentMethod = "COD";
+
+      order.paymentStatus = "Pending";
+
       await order.save();
     } else {
+      // ---------------------------------------
+      // 13. Create new COD order
+      // ---------------------------------------
       const cutoffTime = await getTodayCutoff();
+
+      const totalAmount = calculateOrderTotal(orderItems);
 
       order = await Order.create({
         userId,
 
         items: orderItems,
 
-        totalAmount: Number(cart.totalPrice || 0),
+        totalAmount,
 
-        originalTotalAmount: Number(cart.totalPrice || 0),
+        originalTotalAmount: totalAmount,
 
         shippingAddress: user.address || "",
 
@@ -297,27 +397,44 @@ export const addOrder = async (req, res) => {
 
         paymentStatus: "Pending",
 
+        status: "Pending",
+
+        isTodayOrder: true,
+
         cutoffTime,
       });
     }
 
+    // ---------------------------------------
+    // 14. Clear cart
+    // ---------------------------------------
     cart.items = [];
+
     cart.totalPrice = 0;
 
     await cart.save();
 
-    res.status(200).json({
-      success: true,
-      message: "ऑर्डर हो गया। ✅",
-      order,
-    });
-
+    // ---------------------------------------
+    // 15. Send notification
+    // ---------------------------------------
     setImmediate(() => {
       sendOrderNotifications({
         user,
+        order,
       }).catch((error) => {
         console.error("Order notification error:", error);
       });
+    });
+
+    // ---------------------------------------
+    // 16. Response
+    // ---------------------------------------
+    return res.status(200).json({
+      success: true,
+
+      message: "ऑर्डर हो गया। ✅",
+
+      order,
     });
   } catch (error) {
     console.error("Add Order Error:", error);
@@ -328,7 +445,10 @@ export const addOrder = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: error.message,
+
+      message: "Something went wrong while placing the order.",
+
+      error: error.message,
     });
   }
 };
