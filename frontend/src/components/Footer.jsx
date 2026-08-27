@@ -67,7 +67,7 @@ const Footer = () => {
                 <User className="text-red-600 mt-1" size={18} />
                 <div>
                   <p className="font-medium text-white">Owner/Creater</p>
-                  <p className="text-gray-400 text-[16px]">Shorya Chhabra</p>
+                  <p className="text-gray-400 text-[16px]">Shorya</p>
                 </div>
               </div>
               <div className="flex gap-3">
