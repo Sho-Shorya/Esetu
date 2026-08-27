@@ -6,7 +6,7 @@ import {
   FaWhatsapp,
   FaYoutube,
 } from "react-icons/fa";
-import { MapPin, Phone, Clock, User } from "lucide-react";
+import { MapPin, Phone, Clock, User, Mail } from "lucide-react";
 
 const Footer = () => {
   return (
@@ -85,6 +85,18 @@ const Footer = () => {
                 <div>
                   <p className="font-medium text-white">फ़ोन</p>
                   <p className="text-gray-400 text-[16px]">+91 8397067785</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <Mail className="text-red-600 mt-1" size={18} />
+                <div>
+                  <p className="font-medium text-white">Gmail</p>
+                  <p className="text-gray-400 text-[16px]">
+                    shoryaconnects308@gmail.com
+                  </p>
+                  <p className="text-gray-400 text-[16px]">
+                    shoryachhabra308@gmail.com
+                  </p>
                 </div>
               </div>
             </div>
