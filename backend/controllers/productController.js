@@ -193,7 +193,7 @@ export const deleteProduct = async (req, res) => {
 export const updateProduct = async (req, res) => {
   try {
     const { productId } = req.params;
-    const { name, hinglishName, category, keyword } = req.body;
+    const { name, hinglishName, category, keyword, description } = req.body;
 
     let { variants } = req.body;
 
@@ -220,6 +220,7 @@ export const updateProduct = async (req, res) => {
 
     product.name = name || product.name;
     product.hinglishName = hinglishName || product.hinglishName;
+    product.description = description || product.description;
     product.category = category || product.category;
     if (keyword) {
       product.keyword = JSON.parse(keyword);

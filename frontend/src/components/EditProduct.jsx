@@ -5,13 +5,10 @@ import { API_BASE_URL } from "@/lib/constants";
 import {
   ArrowLeft,
   Edit,
-  Edit2,
-  Edit2Icon,
   ImagePlus,
   Loader2,
   LucideEdit,
   Plus,
-  PlusCircle,
   Save,
   Trash2,
   X,
@@ -21,7 +18,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { setProductData } from "@/redux/ProductSlice";
 
 // ======================================================
-// CHANGE THESE 2 ROUTES TO YOUR ACTUAL API ROUTES
+// API ROUTES
 // ======================================================
 
 const CATEGORY_API = `${API_BASE_URL}/api/v1/category/get-cat`;
@@ -61,6 +58,7 @@ const EditProduct = () => {
     keyword: [],
     description: "",
   });
+
   const [newKeyword, setNewKeyword] = useState("");
 
   // ----------------------------------------------------
@@ -96,6 +94,24 @@ const EditProduct = () => {
   });
 
   // ======================================================
+  // DESCRIPTION NORMALIZER
+  // ======================================================
+
+  const getDescription = (productData) => {
+    if (!productData) return "";
+
+    const description =
+      productData.description ??
+      productData.desc ??
+      productData.productDescription ??
+      "";
+
+    return typeof description === "string"
+      ? description
+      : String(description || "");
+  };
+
+  // ======================================================
   // FETCH PRODUCT
   // ======================================================
 
@@ -119,19 +135,35 @@ const EditProduct = () => {
         },
       });
 
-      const fetchedProduct = res.data.product;
+      const fetchedProduct = res.data?.product;
 
       if (!fetchedProduct) {
         throw new Error("Product not found");
       }
 
+      // ==================================================
+      // IMPORTANT:
+      // Properly get description from API response
+      // ==================================================
+
+      const fetchedDescription = getDescription(fetchedProduct);
+
+      console.log("EDIT PRODUCT DESCRIPTION:", fetchedDescription);
+
       setProduct({
         name: fetchedProduct.name || "",
+
         hinglishName: fetchedProduct.hinglishName || "",
+
         category: fetchedProduct.category?._id || fetchedProduct.category || "",
+
         image: fetchedProduct.image || "",
-        keyword: fetchedProduct.keyword || [],
-        description: fetchedProduct.description || [],
+
+        keyword: Array.isArray(fetchedProduct.keyword)
+          ? fetchedProduct.keyword
+          : [],
+
+        description: fetchedDescription,
       });
 
       setPreview(fetchedProduct.image || "");
@@ -140,12 +172,14 @@ const EditProduct = () => {
         (fetchedProduct.variants || []).map((variant) => ({
           ...variant,
 
-          // Keep company ID if populated
           company: variant.company?._id || variant.company || "",
 
           measurement: variant.measurement || "",
+
           price: variant.price ?? "",
+
           stock: variant.stock ?? 0,
+
           available:
             typeof variant.available === "boolean" ? variant.available : true,
         })),
@@ -179,11 +213,6 @@ const EditProduct = () => {
         },
       });
 
-      // Supports:
-      // { categories: [] }
-      // { data: [] }
-      // [] directly
-
       const data = res.data?.categories || res.data?.data || res.data || [];
 
       setCategories(Array.isArray(data) ? data : []);
@@ -213,11 +242,6 @@ const EditProduct = () => {
           Authorization: `Bearer ${localStorage.getItem("token")}`,
         },
       });
-
-      // Supports:
-      // { companies: [] }
-      // { data: [] }
-      // [] directly
 
       const data = res.data?.companies || res.data?.data || res.data || [];
 
@@ -332,8 +356,9 @@ const EditProduct = () => {
       ...prev,
       {
         company: newVariant.company,
-        measurement: newVariant.measurement,
+        measurement: newVariant.measurement.trim(),
         price: Number(newVariant.price),
+        stock: newVariant.stock === "" ? 0 : Number(newVariant.stock),
         available: newVariant.available,
       },
     ]);
@@ -342,6 +367,7 @@ const EditProduct = () => {
       company: "",
       measurement: "",
       price: "",
+      stock: "",
       available: true,
     });
 
@@ -355,12 +381,27 @@ const EditProduct = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!product.name.trim()) {
+    const productName =
+      typeof product.name === "string" ? product.name.trim() : "";
+
+    const hinglishName =
+      typeof product.hinglishName === "string"
+        ? product.hinglishName.trim()
+        : "";
+
+    const description =
+      typeof product.description === "string" ? product.description.trim() : "";
+
+    // ==================================================
+    // BASIC VALIDATION
+    // ==================================================
+
+    if (!productName) {
       toast.error("Product name is required");
       return;
     }
 
-    if (!product.hinglishName.trim()) {
+    if (!hinglishName) {
       toast.error("Hinglish name is required");
       return;
     }
@@ -369,7 +410,8 @@ const EditProduct = () => {
       toast.error("Please select a category");
       return;
     }
-    if (!product.description) {
+
+    if (!description) {
       toast.error("Please add a description");
       return;
     }
@@ -379,7 +421,10 @@ const EditProduct = () => {
       return;
     }
 
-    // Validate variants
+    // ==================================================
+    // VALIDATE VARIANTS
+    // ==================================================
+
     for (let i = 0; i < variants.length; i++) {
       const variant = variants[i];
 
@@ -393,40 +438,65 @@ const EditProduct = () => {
         return;
       }
 
-      if (variant.price === "" || Number(variant.price) < 0) {
+      if (
+        variant.price === "" ||
+        variant.price === null ||
+        variant.price === undefined ||
+        Number.isNaN(Number(variant.price)) ||
+        Number(variant.price) < 0
+      ) {
         toast.error(`Please enter valid price for variant ${i + 1}`);
         return;
       }
 
-      if (variant.stock === "" || Number(variant.stock) < 0) {
+      if (
+        variant.stock === "" ||
+        variant.stock === null ||
+        variant.stock === undefined ||
+        Number.isNaN(Number(variant.stock)) ||
+        Number(variant.stock) < 0
+      ) {
         toast.error(`Please enter valid stock for variant ${i + 1}`);
         return;
       }
     }
+
+    // ==================================================
+    // SAVE
+    // ==================================================
 
     try {
       setSaving(true);
 
       const formData = new FormData();
 
-      formData.append("name", product.name.trim());
+      formData.append("name", productName);
 
-      formData.append("hinglishName", product.hinglishName.trim());
-      formData.append("description", product.description.trim());
+      formData.append("hinglishName", hinglishName);
+
+      // ==================================================
+      // IMPORTANT DESCRIPTION
+      // ==================================================
+
+      formData.append("description", description);
 
       formData.append("category", product.category);
+
       formData.append("keyword", JSON.stringify(product.keyword || []));
-      // Send variants
+
+      // ==================================================
+      // VARIANTS
+      // ==================================================
+
       formData.append(
         "variants",
         JSON.stringify(
           variants.map((variant) => ({
-            // Keep existing _id if available
             ...(variant._id ? { _id: variant._id } : {}),
 
             company: variant.company?._id || variant.company,
 
-            measurement: variant.measurement,
+            measurement: variant.measurement.trim(),
 
             price: Number(variant.price),
 
@@ -437,10 +507,23 @@ const EditProduct = () => {
         ),
       );
 
-      // Only send image if user selected a new one
+      // ==================================================
+      // IMAGE
+      // ==================================================
+
       if (image) {
         formData.append("media", image);
       }
+
+      // ==================================================
+      // DEBUG
+      // ==================================================
+
+      console.log("Saving description:", description);
+
+      // ==================================================
+      // API
+      // ==================================================
 
       const res = await axios.put(
         `${API_BASE_URL}/api/v1/product/edit-product/${id}`,
@@ -452,9 +535,14 @@ const EditProduct = () => {
         },
       );
 
+      // ==================================================
+      // SUCCESS
+      // ==================================================
+
       if (res.data?.success) {
         const updatedProduct = res.data.product;
 
+        // Update Redux
         dispatch(
           setProductData(
             productData.map((item) =>
@@ -462,7 +550,10 @@ const EditProduct = () => {
             ),
           ),
         );
-        toast.success("प्रोडक्ट अपडेट हो गया।", { duration: 2000 });
+
+        toast.success("प्रोडक्ट अपडेट हो गया।", {
+          duration: 2000,
+        });
 
         navigate("/product-page");
       } else {
@@ -476,6 +567,10 @@ const EditProduct = () => {
       setSaving(false);
     }
   };
+
+  // ======================================================
+  // LOADING
+  // ======================================================
 
   if (loading) {
     return (
@@ -621,13 +716,15 @@ const EditProduct = () => {
                   className="w-full p-3 rounded-xl border-2 border-gray-200 focus:border-emerald-500 outline-none"
                 />
               </div>
+
+              {/* Description */}
+
               <div>
                 <label className="block font-semibold text-gray-700 mb-2">
                   Description
                 </label>
 
                 <textarea
-                  type="text"
                   value={product.description}
                   onChange={(e) => updateProduct("description", e.target.value)}
                   placeholder="description"
@@ -663,6 +760,9 @@ const EditProduct = () => {
                   ))}
                 </select>
               </div>
+
+              {/* Keywords */}
+
               <div>
                 <label className="block font-semibold text-gray-700 mb-2">
                   Keywords
@@ -755,7 +855,7 @@ const EditProduct = () => {
           ================================================== */}
 
           <section>
-            <div className="flex items-center justify-between  mb-4">
+            <div className="flex items-center justify-between mb-4">
               <div>
                 <h2 className="text-lg font-bold text-gray-800 mt-5">
                   प्रोडक्ट के वैरिएंट्स
@@ -777,8 +877,6 @@ const EditProduct = () => {
                   key={variant._id || `new-${index}`}
                   className="border-2 border-gray-200 rounded-2xl p-5 bg-gray-50"
                 >
-                  {/* Variant heading */}
-
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="font-bold text-gray-800">
                       वैरिएंट् {index + 1}
