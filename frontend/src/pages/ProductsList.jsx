@@ -333,6 +333,11 @@ const ProductsList = () => {
                   <p className="mt-1 line-clamp-1 text-xs text-gray-500">
                     {item.hinglishName}
                   </p>
+                  <div className="mt-4 w-full overflow-hidden">
+                    <span className="block truncate px-1 text-[11px] font-medium text-gray-600">
+                      {item.description}
+                    </span>
+                  </div>
 
                   {/* Companies */}
                   <div className="flex gap-[8px]">
@@ -433,12 +438,6 @@ const ProductsList = () => {
                     <p className="mt-1 text-sm text-gray-500">
                       {selectedProduct.hinglishName}
                     </p>
-
-                    <div className="mt-4 flex items-center gap-2">
-                      <span className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-600">
-                        {selectedProduct.variants.length} विकल्प
-                      </span>
-                    </div>
                   </div>
 
                   <button
@@ -447,6 +446,11 @@ const ProductsList = () => {
                   >
                     <X size={20} />
                   </button>
+                </div>
+                <div className="mt-4 flex items-center gap-2">
+                  <span className="rounded-full  px-5 py-1 text-[11px] font-xl text-gray-600">
+                    Product Description : {selectedProduct.description}
+                  </span>
                 </div>
                 {/* Company Selection */}
                 <div className="mt-8">

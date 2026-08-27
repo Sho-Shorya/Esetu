@@ -59,6 +59,7 @@ const EditProduct = () => {
     category: "",
     image: "",
     keyword: [],
+    description: "",
   });
   const [newKeyword, setNewKeyword] = useState("");
 
@@ -130,6 +131,7 @@ const EditProduct = () => {
         category: fetchedProduct.category?._id || fetchedProduct.category || "",
         image: fetchedProduct.image || "",
         keyword: fetchedProduct.keyword || [],
+        description: fetchedProduct.description || [],
       });
 
       setPreview(fetchedProduct.image || "");
@@ -367,6 +369,10 @@ const EditProduct = () => {
       toast.error("Please select a category");
       return;
     }
+    if (!product.description) {
+      toast.error("Please add a description");
+      return;
+    }
 
     if (variants.length === 0) {
       toast.error("Product must have at least one variant");
@@ -406,6 +412,7 @@ const EditProduct = () => {
       formData.append("name", product.name.trim());
 
       formData.append("hinglishName", product.hinglishName.trim());
+      formData.append("description", product.description.trim());
 
       formData.append("category", product.category);
       formData.append("keyword", JSON.stringify(product.keyword || []));
@@ -611,6 +618,21 @@ const EditProduct = () => {
                     updateProduct("hinglishName", e.target.value)
                   }
                   placeholder="Dudh"
+                  className="w-full p-3 rounded-xl border-2 border-gray-200 focus:border-emerald-500 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block font-semibold text-gray-700 mb-2">
+                  Description
+                </label>
+
+                <textarea
+                  type="text"
+                  value={product.description}
+                  onChange={(e) => updateProduct("description", e.target.value)}
+                  placeholder="description"
+                  rows="4"
+                  cols="50"
                   className="w-full p-3 rounded-xl border-2 border-gray-200 focus:border-emerald-500 outline-none"
                 />
               </div>

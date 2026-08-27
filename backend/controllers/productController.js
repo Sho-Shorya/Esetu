@@ -8,7 +8,7 @@ export const addProduct = async (req, res) => {
     // GET BASIC PRODUCT DATA
     // =====================================================
 
-    const { name, hinglishName, category } = req.body;
+    const { name, hinglishName, category, description } = req.body;
 
     let { variants, keywords } = req.body;
 
@@ -118,6 +118,7 @@ export const addProduct = async (req, res) => {
       image,
       variants,
       keyword: keywords,
+      description,
     });
 
     // =====================================================

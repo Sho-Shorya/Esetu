@@ -49,6 +49,7 @@ const AddProduct = () => {
     media: null,
     variants: [],
     keywords: [],
+    description: "",
   });
 
   // =====================================================
@@ -634,6 +635,10 @@ const AddProduct = () => {
       toast.error("हिंग्लिश नाम भरें");
       return;
     }
+    if (!product.description.trim()) {
+      toast.error("description required!");
+      return;
+    }
 
     if (!product.category) {
       toast.error("कैटेगरी चुनें");
@@ -657,6 +662,7 @@ const AddProduct = () => {
       formData.append("name", product.name.trim());
 
       formData.append("hinglishName", product.hinglishName.trim());
+      formData.append("description", product.description.trim());
 
       formData.append("category", product.category);
 
@@ -744,6 +750,7 @@ const AddProduct = () => {
         media: null,
         variants: [],
         keywords: [],
+        description: "",
       });
 
       setVariant({
@@ -899,6 +906,22 @@ const AddProduct = () => {
               value={product.hinglishName}
               onChange={handleProductChange}
               placeholder="Jaise: Amul Doodh"
+              className="w-full p-3 mt-2 border-2 border-emerald-200 rounded-xl outline-none focus:border-emerald-500"
+            />
+          </div>
+          <div>
+            <label className="font-semibold text-gray-700">
+              Product description
+            </label>
+
+            <textarea
+              type="textarea"
+              name="description"
+              value={product.description}
+              onChange={handleProductChange}
+              rows="4"
+              cols="50"
+              placeholder=""
               className="w-full p-3 mt-2 border-2 border-emerald-200 rounded-xl outline-none focus:border-emerald-500"
             />
           </div>

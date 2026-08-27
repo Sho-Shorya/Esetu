@@ -6,7 +6,7 @@ import {
   FaWhatsapp,
   FaYoutube,
 } from "react-icons/fa";
-import { MapPin, Phone, Clock } from "lucide-react";
+import { MapPin, Phone, Clock, User } from "lucide-react";
 
 const Footer = () => {
   return (
@@ -52,10 +52,42 @@ const Footer = () => {
               <a
                 href="#"
                 className="h-10 w-10 rounded-full bg-red-600 flex items-center justify-center hover:bg-white hover:text-red-600 transition"
-              >
+                >
                 <FaYoutube />
-              </a>
-            </div> */}
+                </a>
+                </div> */}
+          </div>
+          <div>
+            <h3 className="text-white text-xl font-semibold border-l-4 border-red-600 pl-3 mb-5">
+              संपर्क करें
+            </h3>
+
+            <div className="space-y-5 text-sm">
+              <div className="flex gap-3">
+                <User className="text-red-600 mt-1" size={18} />
+                <div>
+                  <p className="font-medium text-white">Owner/Creater</p>
+                  <p className="text-gray-400 text-[16px]">Shorya Chhabra</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <MapPin className="text-red-600 mt-1" size={18} />
+                <div>
+                  <p className="font-medium text-white">पता</p>
+                  <p className="text-gray-400 text-[16px]">
+                    611/13, जगदीश कॉलोनी, हांसी, हरियाणा
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <Phone className="text-red-600 mt-1" size={18} />
+                <div>
+                  <p className="font-medium text-white">फ़ोन</p>
+                  <p className="text-gray-400 text-[16px]">+91 8397067785</p>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Middle */}
@@ -92,29 +124,6 @@ const Footer = () => {
           </div>
 
           {/* Right */}
-          <div>
-            <h3 className="text-white text-xl font-semibold border-l-4 border-red-600 pl-3 mb-5">
-              संपर्क करें
-            </h3>
-
-            <div className="space-y-5 text-sm">
-              <div className="flex gap-3">
-                <MapPin className="text-red-600 mt-1" size={18} />
-                <div>
-                  <p className="font-medium text-white">पता</p>
-                  <p className="text-gray-400">हांसी, हरियाणा</p>
-                </div>
-              </div>
-
-              <div className="flex gap-3">
-                <Phone className="text-red-600 mt-1" size={18} />
-                <div>
-                  <p className="font-medium text-white">फ़ोन</p>
-                  <p className="text-gray-400">+91 9812832417</p>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
 
         {/* Bottom */}
