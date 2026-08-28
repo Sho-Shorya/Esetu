@@ -29,11 +29,6 @@ process.env.TZ = process.env.TZ || "Asia/Kolkata";
 app.use(cors());
 app.use(express.json());
 
-app.use((req, res, next) => {
-  syncTodayOrderFlags().catch(console.error);
-  next();
-});
-
 app.get("/", (req, res) => {
   res.json({
     success: true,

@@ -183,7 +183,12 @@ const Cart = () => {
   const totalPrice = Number(cartData?.totalPrice || 0);
 
   const onlineDiscount = useMemo(() => {
-    return Number(((totalPrice * 2) / 100).toFixed(2));
+    const num = totalPrice;
+
+    if (num < 200) return 5;
+    if (num < 900) return 10;
+    if (num < 2000) return 20;
+    return 30;
   }, [totalPrice]);
 
   const onlineFinalAmount = useMemo(() => {

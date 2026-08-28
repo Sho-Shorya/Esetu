@@ -18,7 +18,24 @@ import { createPaidOrderFromCart } from "../services/paymentOrderService.js";
    CONSTANTS
 ============================================================ */
 
-const ONLINE_DISCOUNT_PERCENT = 2;
+/*
+ * Fixed online payment discount tiers:
+ *   Below ₹200   → ₹5 discount
+ *   Below ₹900   → ₹10 discount
+ *   Below ₹2000  → ₹20 discount
+ *   ₹2000 & above → ₹30 discount
+ */
+const getOnlineDiscount = (amount) => {
+  const num = Number(amount);
+
+  if (!Number.isFinite(num) || num <= 0) return 0;
+
+  if (num < 200) return 5;
+  if (num < 900) return 10;
+  if (num < 2000) return 20;
+
+  return 30;
+};
 
 /* ============================================================
    HELPERS
@@ -48,13 +65,13 @@ const markPaymentFailure = async (merchantOrderId, status, failReason) => {
 };
 
 /*
- * Calculate the online payment amount.
+ * Calculate the online payment amount with fixed discount tiers.
  *
  * Example:
  *
- * Cart = ₹1000
- * Discount = ₹20
- * Pay = ₹980
+ * Cart = ₹950  → Discount = ₹20  → Pay = ₹930
+ * Cart = ₹1500 → Discount = ₹20  → Pay = ₹1480
+ * Cart = ₹2500 → Discount = ₹30  → Pay = ₹2470
  */
 const calculateOnlineAmount = (amount) => {
   const originalAmount = Number(amount);
@@ -63,9 +80,7 @@ const calculateOnlineAmount = (amount) => {
     throw new Error("Invalid payment amount.");
   }
 
-  const discountAmount = Number(
-    ((originalAmount * ONLINE_DISCOUNT_PERCENT) / 100).toFixed(2),
-  );
+  const discountAmount = getOnlineDiscount(originalAmount);
 
   const finalAmount = Number((originalAmount - discountAmount).toFixed(2));
 
@@ -120,7 +135,7 @@ const calculateCartAmount = (cart) => {
  *   ↓
  * Backend calculates cart total
  *   ↓
- * 2% discount
+ * Fixed discount (₹5/₹10/₹20/₹30)
  *   ↓
  * PhonePe payment created
  *   ↓
@@ -201,7 +216,7 @@ export const createPayment = async (req, res) => {
     const originalAmount = calculateCartAmount(cart);
 
     /* ========================================================
-       7. APPLY 2% ONLINE DISCOUNT
+       7. APPLY FIXED ONLINE DISCOUNT
     ======================================================== */
 
     const { discountAmount, finalAmount } =
@@ -416,6 +431,31 @@ export const checkPaymentStatus = async (req, res) => {
     ======================================================== */
 
     if (paymentStatus === "SUCCESS") {
+      /*
+       * Persist the confirmed success to the Payment lifecycle
+       * record. This way, even if the frontend never calls
+       * complete-payment (e.g. user closes the browser), the
+       * record is not left stuck in PENDING forever.
+       */
+      try {
+        await Payment.updateOne(
+          { merchantOrderId: transactionId },
+          {
+            $set: {
+              status: "SUCCESS",
+              phonePeTransactionId: paymentTransactionId || null,
+              phonePeResponse: phonePeData,
+            },
+          },
+          { upsert: true },
+        );
+      } catch (paymentRecordError) {
+        console.error(
+          "checkPaymentStatus: persist success error:",
+          paymentRecordError,
+        );
+      }
+
       return res.status(200).json({
         success: true,
 
@@ -668,7 +708,30 @@ export const completeOnlinePayment = async (req, res) => {
     });
 
     /* ========================================================
-       8. RESPONSE
+       10. SAVE PHONEPE RAW RESPONSE
+    ======================================================== */
+
+    try {
+      await Payment.updateOne(
+        { merchantOrderId: transactionId },
+        {
+          $set: {
+            status: "SUCCESS",
+            phonePeTransactionId: paymentTransactionId || null,
+            phonePeResponse: phonePeData,
+          },
+        },
+        { upsert: true },
+      );
+    } catch (paymentRecordError) {
+      console.error(
+        "completeOnlinePayment: persist response error:",
+        paymentRecordError,
+      );
+    }
+
+    /* ========================================================
+       11. RESPONSE
     ======================================================== */
 
     return res.status(200).json({
@@ -705,6 +768,119 @@ export const completeOnlinePayment = async (req, res) => {
         error?.response?.data?.message ||
         error?.message ||
         "Unable to complete online payment.",
+    });
+  }
+};
+
+/* ============================================================
+   PHONEPE WEBHOOK (server-to-server confirmation)
+============================================================ */
+
+/*
+ * POST /api/v1/payment/webhook
+ *
+ * PhonePe sends a server-to-server callback when a payment's
+ * state changes. This is more reliable than relying on the
+ * frontend redirect/polling only (e.g. user closes the browser
+ * before the redirect completes).
+ *
+ * The endpoint is idempotent: createPaidOrderFromCart() handles
+ * duplicate/concurrent callbacks safely. It does NOT require user
+ * authentication because PhonePe calls it directly.
+ */
+export const paymentWebhook = async (req, res) => {
+  try {
+    const body = req.body || {};
+
+    const data = body?.data || body;
+
+    const merchantOrderId =
+      data?.merchantOrderId ||
+      data?.merchantTransactionId ||
+      data?.orderId ||
+      data?.transactionId ||
+      body?.merchantOrderId ||
+      body?.transactionId ||
+      null;
+
+    if (!merchantOrderId) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing transaction ID.",
+      });
+    }
+
+    const paymentStatus = normalizePhonePeStatus(data);
+
+    await Payment.updateOne(
+      { merchantOrderId },
+      {
+        $set: {
+          phonePeResponse: data,
+          phonePeTransactionId: extractPhonePeTransactionId(data) || null,
+        },
+      },
+      { upsert: true },
+    );
+
+    if (paymentStatus === "SUCCESS") {
+      const record = await Payment.findOne({ merchantOrderId });
+
+      if (!record) {
+        return res.status(400).json({
+          success: false,
+          message: "Payment record not found.",
+        });
+      }
+
+      try {
+        await createPaidOrderFromCart({
+          userId: record.userId,
+          transactionId: merchantOrderId,
+          paymentTransactionId:
+            extractPhonePeTransactionId(data) || null,
+        });
+      } catch (orderError) {
+        if (
+          String(orderError?.message || "")
+            .toLowerCase()
+            .includes("cart is empty")
+        ) {
+          /*
+           * The user may have already placed the order and
+           * cleared the cart, so we can safely ignore this.
+           */
+          console.error(
+            `Webhook: cart already processed for ${merchantOrderId}`,
+          );
+        } else {
+          throw orderError;
+        }
+      }
+    } else if (paymentStatus === "FAILED" || paymentStatus === "EXPIRED") {
+      await markPaymentFailure(
+        merchantOrderId,
+        paymentStatus,
+        paymentStatus === "FAILED"
+          ? "Payment failed."
+          : "Payment session expired.",
+      );
+    }
+
+    return res.status(200).json({ success: true });
+  } catch (error) {
+    console.error(
+      "Payment webhook error:",
+      error?.response?.data || error?.message || error,
+    );
+
+    if (res.headersSent) {
+      return;
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: "Webhook processing failed.",
     });
   }
 };

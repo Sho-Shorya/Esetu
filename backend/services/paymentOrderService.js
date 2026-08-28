@@ -4,10 +4,22 @@ import { Order } from "../models/orderModel.js";
 import Payment from "../models/paymentModel.js";
 
 /* ============================================================
-   ONLINE PAYMENT DISCOUNT
+   ONLINE PAYMENT DISCOUNT (fixed tiers)
+   Below ₹200 → ₹5 | Below ₹900 → ₹10 |
+   Below ₹2000 → ₹20 | ₹2000 & above → ₹30
 ============================================================ */
 
-const ONLINE_DISCOUNT_PERCENT = 2;
+const getOnlineDiscount = (amount) => {
+  const num = Number(amount);
+
+  if (!Number.isFinite(num) || num <= 0) return 0;
+
+  if (num < 200) return 5;
+  if (num < 900) return 10;
+  if (num < 2000) return 20;
+
+  return 30;
+};
 
 /* ============================================================
    GET TODAY RANGE - INDIA
@@ -343,12 +355,10 @@ export const createPaidOrderFromCart = async ({
     }
 
     /* ========================================================
-       11. 2% ONLINE DISCOUNT
+       11. FIXED ONLINE DISCOUNT
     ======================================================== */
 
-    const discountAmount = Number(
-      ((cartOriginalTotal * ONLINE_DISCOUNT_PERCENT) / 100).toFixed(2),
-    );
+    const discountAmount = getOnlineDiscount(cartOriginalTotal);
 
     const paidAmount = Number((cartOriginalTotal - discountAmount).toFixed(2));
 
@@ -388,9 +398,7 @@ export const createPaidOrderFromCart = async ({
         calculateOrderTotal(order.items).toFixed(2),
       );
 
-      const updatedDiscount = Number(
-        ((updatedOriginalTotal * ONLINE_DISCOUNT_PERCENT) / 100).toFixed(2),
-      );
+      const updatedDiscount = getOnlineDiscount(updatedOriginalTotal);
 
       const updatedPaidAmount = Number(
         (updatedOriginalTotal - updatedDiscount).toFixed(2),
@@ -522,7 +530,6 @@ const markPaymentProcessed = async (order, paymentTransactionId) => {
           amount: Number(order.totalAmount || 0),
           originalAmount: Number(order.originalTotalAmount || 0),
           discount: Number(order.discountAmount || 0),
-          phonePeResponse: null,
           failureReason: null,
         },
       },

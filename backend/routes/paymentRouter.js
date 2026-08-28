@@ -4,6 +4,7 @@ import {
   createPayment,
   checkPaymentStatus,
   completeOnlinePayment,
+  paymentWebhook,
 } from "../controllers/paymentController.js";
 
 import { isAuthenticated } from "../middleware/isAuthenticated.js";
@@ -24,7 +25,7 @@ const paymentRouter = express.Router();
  * 1. Authenticates user
  * 2. Reads user's cart
  * 3. Calculates cart total
- * 4. Applies 2% online discount
+ * 4. Applies fixed online discount (₹5/₹10/₹20/₹30)
  * 5. Creates PhonePe payment
  * 6. Returns PhonePe redirect URL
  *
@@ -74,5 +75,22 @@ paymentRouter.post("/check-status", isAuthenticated, checkPaymentStatus);
  */
 
 paymentRouter.post("/complete-payment", isAuthenticated, completeOnlinePayment);
+
+/* ============================================================
+   PHONEPE WEBHOOK
+============================================================ */
+
+/*
+ * POST /api/v1/payment/webhook
+ *
+ * PhonePe server-to-server callback for payment state changes.
+ *
+ * IMPORTANT: NOT user authenticated. PhonePe calls it directly.
+ * Configure the PhonePe webhook URL to:
+ *
+ *   https://your-backend.railway.app/api/v1/payment/webhook
+ */
+
+paymentRouter.post("/webhook", paymentWebhook);
 
 export default paymentRouter;

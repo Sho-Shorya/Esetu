@@ -1,7 +1,5 @@
 import { Cart } from "../models/cartModel.js";
 import Product from "../models/productModel.js";
-import { User } from "../models/userModel.js";
-import { Order } from "../models/orderModel.js";
 // removed sendOrderEmail import to avoid sending emails during checkout
 
 export const getCart = async (req, res) => {
@@ -233,51 +231,9 @@ export const UpdateQuantity = async (req, res) => {
 };
 export const checkoutCart = async (req, res) => {
   try {
-    const userId = req.userId;
-
-    const cart = await Cart.findOne({ userId }).populate("items.productId");
-    if (!cart || !cart.items.length) {
-      return res.status(400).json({ success: false, message: "Cart is empty" });
-    }
-
-    const user = await User.findById(userId);
-    if (!user) {
-      return res
-        .status(404)
-        .json({ success: false, message: "User not found" });
-    }
-
-    const orderItems = cart.items.map((item) => ({
-      productId: item.productId?._id,
-      name: item.productId?.productName || "Product",
-      quantity: item.quantity,
-      price: item.price,
-      total: (item.price || 0) * (item.quantity || 0),
-    }));
-
-    const orderTotal = cart.items.reduce(
-      (sum, item) => sum + (item.price || 0) * (item.quantity || 0),
-      0,
-    );
-
-    const order = await Order.create({
-      userId,
-      items: orderItems,
-      totalAmount: orderTotal,
-      status: "Processing",
-      shippingAddress: user.address || "",
-      paymentMethod: "COD",
-    });
-
-    cart.items = [];
-    cart.totalPrice = 0;
-    await cart.save();
-
-    return res.status(200).json({
-      success: true,
-      message: "Order placed successfully. Thank you!",
-      cart: { items: [] },
-      order,
+    return res.status(403).json({
+      success: false,
+      message: "Online checkout is required. Use the payment flow instead.",
     });
   } catch (error) {
     return res.status(500).json({

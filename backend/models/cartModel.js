@@ -20,6 +20,7 @@ const cartItemSchema = new mongoose.Schema(
       type: Number,
       default: 1,
     },
+    price: Number,
     total: Number,
   },
   { _id: false },
