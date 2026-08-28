@@ -301,13 +301,18 @@ export const getPhonePePaymentStatus = async (merchantOrderId) => {
 export const normalizePhonePeStatus = (response) => {
   if (!response) return "PENDING";
 
+  const nested = response?.data?.response;
+
   const status =
     response?.state ||
     response?.status ||
     response?.data?.state ||
     response?.data?.status ||
     response?.orderState ||
-    response?.data?.orderState;
+    response?.data?.orderState ||
+    nested?.state ||
+    nested?.status ||
+    nested?.orderState;
 
   if (!status) return "PENDING";
 
@@ -330,13 +335,18 @@ export const normalizePhonePeStatus = (response) => {
 */
 
 export const extractPhonePeTransactionId = (response) => {
+  const nested = response?.data?.response;
+
   return (
     response?.transactionId ||
     response?.providerReferenceId ||
     response?.data?.transactionId ||
     response?.data?.providerReferenceId ||
+    nested?.transactionId ||
+    nested?.providerReferenceId ||
     response?.paymentDetails?.[0]?.transactionId ||
     response?.data?.paymentDetails?.[0]?.transactionId ||
+    nested?.paymentDetails?.[0]?.transactionId ||
     null
   );
 };
