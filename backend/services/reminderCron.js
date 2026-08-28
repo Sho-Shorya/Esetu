@@ -7,8 +7,6 @@ import ReminderLog from "../models/reminderLogModel.js";
 
 import { sendNotification } from "./oneSignalService.js";
 
-import { generateDailyInvoices } from "../services/dailyInvoiceService.js";
-
 const INDIA_TIMEZONE = "Asia/Kolkata";
 
 /*
@@ -120,126 +118,9 @@ const saveReminder = async (userId, reminderType, date) => {
   }
 };
 
-/*
-====================================================
-DAILY RECEIPT NOTIFICATION
-====================================================
-*/
-
-/*
-Send notification after daily invoices have
-successfully been generated.
-*/
-const sendDailyReceiptNotification = async () => {
-  try {
-    const today = getTodayDate();
-
-    console.log("📢 Preparing daily receipt notifications...");
-
-    /*
-    --------------------------------------------------
-    FIND USERS WITH ONESIGNAL
-    --------------------------------------------------
-    */
-
-    const users = await User.find({
-      role: "user",
-
-      oneSignalSubscriptionId: {
-        $exists: true,
-        $ne: "",
-      },
-    });
-
-    console.log(`👥 Users with OneSignal: ${users.length}`);
-
-    let sentCount = 0;
-    let skippedCount = 0;
-
-    /*
-    --------------------------------------------------
-    SEND NOTIFICATION
-    --------------------------------------------------
-    */
-
-    for (const user of users) {
-      const reminderType = "daily-receipt";
-
-      /*
-      Prevent duplicate receipt notification
-      on the same day.
-      */
-      const sent = await alreadySent(user._id, reminderType, today);
-
-      if (sent) {
-        console.log(
-          `⏭️ Receipt notification already sent -> ${user.firstName}`,
-        );
-
-        skippedCount++;
-
-        continue;
-      }
-
-      /*
-      ------------------------------------------------
-      SEND ONESIGNAL NOTIFICATION
-      ------------------------------------------------
-      */
-
-      console.log(`📨 Sending receipt notification -> ${user.firstName}`);
-
-      try {
-        await sendNotification({
-          subscriptionId: user.oneSignalSubscriptionId,
-
-          title: "📜 आज की रसीद तैयार है",
-
-          message: "रसीद देखने और डाउनलोड करने के लिए यहाँ टैप करें।",
-
-          url: "https://esetu.vercel.app/invoice-history",
-        });
-
-        /*
-        Only save the log after notification
-        successfully sends.
-        */
-        await saveReminder(user._id, reminderType, today);
-
-        sentCount++;
-      } catch (notificationError) {
-        console.error(
-          `❌ Receipt notification failed -> ${user.firstName}`,
-          notificationError,
-        );
-      }
-    }
-
-    console.log(
-      `✅ Daily receipt notifications completed | Sent: ${sentCount} | Skipped: ${skippedCount}`,
-    );
-
-    return {
-      success: true,
-      sentCount,
-      skippedCount,
-    };
-  } catch (error) {
-    console.error("❌ Daily Receipt Notification Error:", error);
-
-    return {
-      success: false,
-      sentCount: 0,
-      skippedCount: 0,
-    };
-  }
-};
-
-/*
-====================================================
-START CRONS
-====================================================
-*/
+/* ============================================================
+   START CRONS
+============================================================ */
 
 export const startReminderCron = () => {
   console.log("🟢 e-Setu Cron System Started");
@@ -556,66 +437,6 @@ export const startReminderCron = () => {
 
   /*
   ==================================================
-  10 PM DAILY INVOICE CRON
-  ==================================================
-
-  Runs every day at:
-
-  10:00 PM IST
-  */
-
-  cron.schedule(
-    "0 22 * * *",
-
-    async () => {
-      console.log("🧾 10 PM Daily Invoice Cron Started");
-
-      try {
-        /*
-        ------------------------------------------------
-        1. GENERATE DAILY INVOICES
-        ------------------------------------------------
-        */
-
-        console.log("🧾 Generating daily invoices...");
-
-        const result = await generateDailyInvoices();
-
-        console.log("📊 Daily Invoice Result:", result);
-
-        /*
-        ------------------------------------------------
-        2. ONLY AFTER SUCCESS
-        SEND RECEIPT NOTIFICATION
-        ------------------------------------------------
-        */
-
-        console.log("📢 Daily receipts generated successfully.");
-
-        const notificationResult = await sendDailyReceiptNotification();
-
-        console.log("📨 Receipt Notification Result:", notificationResult);
-
-        console.log("✅ 10 PM Invoice + Notification process completed");
-      } catch (error) {
-        /*
-        IMPORTANT:
-
-        If invoice generation fails,
-        receipt notifications are NOT sent.
-        */
-
-        console.error("❌ Daily Invoice Cron Error:", error);
-      }
-    },
-
-    {
-      timezone: INDIA_TIMEZONE,
-    },
-  );
-
-  /*
-  ==================================================
   CRON STARTUP LOGS
   ==================================================
   */
@@ -623,8 +444,4 @@ export const startReminderCron = () => {
   console.log("⏰ Order reminder cron: Every minute");
 
   console.log("⏰ Order reminders: 60 / 30 / 10 minutes before cutoff");
-
-  console.log("🧾 Daily invoice cron: 10:00 PM IST");
-
-  console.log("📜 Daily receipt notification: After invoice generation");
 };

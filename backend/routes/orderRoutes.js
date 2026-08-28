@@ -13,6 +13,9 @@ import {
   markOrderPaymentPaid,
   markOrderPaymentPending,
   getDailyApprovedItems,
+  generateOrderReceipt,
+  getOrderReceipt,
+  downloadOrderReceiptPdf,
 } from "../controllers/orderController.js";
 
 import { isAuthenticated, isSupp } from "../middleware/isAuthenticated.js";
@@ -78,6 +81,20 @@ router.put(
   isAuthenticated,
   isSupp,
   markOrderPaymentPending,
+);
+
+/* ============================================================
+                     RECEIPTS
+============================================================ */
+
+router.post("/receipt/generate", isAuthenticated, isSupp, generateOrderReceipt);
+
+router.get("/receipt/:orderId", isAuthenticated, getOrderReceipt);
+
+router.get(
+  "/receipt/:orderId/pdf",
+  isAuthenticated,
+  downloadOrderReceiptPdf,
 );
 
 /* ============================================================

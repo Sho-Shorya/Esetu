@@ -2,7 +2,9 @@ import { Order } from "../models/orderModel.js";
 import { Cart } from "../models/cartModel.js";
 import { User } from "../models/userModel.js";
 import AppSetting from "../models/appSettingModel.js";
+import { OrderReceipt } from "../models/orderReceiptModel.js";
 import { sendNotification } from "../services/oneSignalService.js";
+import { generateOrderReceiptPDF } from "../services/orderReceiptPdfService.js";
 
 const DEFAULT_ORDER_CUTOFF = "12:00";
 
@@ -1336,6 +1338,250 @@ export const markOrderPaymentPending = async (req, res) => {
     });
   }
 };
+
+/* ============================================================
+   GENERATE ORDER RECEIPT
+   ADMIN / SUPPLIER
+============================================================ */
+
+export const generateOrderReceipt = async (req, res) => {
+  try {
+    const { orderId } = req.body;
+
+    if (!orderId) {
+      return res.status(400).json({
+        success: false,
+        message: "Order ID is required.",
+      });
+    }
+
+    const order = await Order.findById(orderId);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found.",
+      });
+    }
+
+    if (["Cancelled", "Declined"].includes(order.status)) {
+      return res.status(400).json({
+        success: false,
+        message: "Cancelled/declined order के लिए रसीद नहीं बनाई जा सकती।",
+      });
+    }
+
+    if (!order.userId) {
+      return res.status(400).json({
+        success: false,
+        message: "इस ऑर्डर से कोई उपयोगकर्ता जुड़ा नहीं है।",
+      });
+    }
+
+    /* ========================================================
+       GENERATE RECEIPT NUMBER
+    ======================================================== */
+
+    const datePart = new Date()
+      .toISOString()
+      .slice(0, 10)
+      .replace(/-/g, "");
+
+    const receiptNumber = `RC-${datePart}-${String(order._id)
+      .slice(-6)
+      .toUpperCase()}`;
+
+    /* ========================================================
+       UPSERT ORDER RECEIPT
+    ======================================================== */
+
+    const existing = await OrderReceipt.findOne({ orderId: order._id });
+
+    const receiptData = {
+      orderId: order._id,
+      userId: order.userId,
+      receiptNumber,
+      totalAmount: Number(order.totalAmount || 0),
+      discountAmount: Number(order.discountAmount || 0),
+    };
+
+    let receipt;
+
+    if (existing) {
+      Object.assign(existing, receiptData);
+      receipt = await existing.save();
+    } else {
+      receipt = await OrderReceipt.create(receiptData);
+    }
+
+    /* ========================================================
+       NOTIFY USER VIA ONESIGNAL
+    ======================================================== */
+
+    let notified = false;
+
+    const user = await User.findById(order.userId);
+
+    if (user && user.oneSignalSubscriptionId) {
+      try {
+        await sendNotification({
+          subscriptionId: user.oneSignalSubscriptionId,
+          title: "🧾 आपकी रसीद तैयार है",
+          message:
+            "अपने ऑर्डर की रसीद देखने और डाउनलोड करने के लिए यहाँ टैप करें।",
+          url: `https://esetu.vercel.app/orders?receipt=${order._id}`,
+        });
+
+        receipt.notifiedAt = new Date();
+        receipt.status = "Notified";
+        await receipt.save();
+
+        notified = true;
+      } catch (notificationError) {
+        console.error("Receipt notification failed:", notificationError);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "रसीद बना दी गई है।",
+      notified,
+      receipt,
+    });
+  } catch (error) {
+    console.error("Generate Order Receipt Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+/* ============================================================
+   GET ORDER RECEIPT (ON-SCREEN VIEW)
+   USER
+============================================================ */
+
+export const getOrderReceipt = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    const userId = req.userId;
+
+    const order = await Order.findById(orderId);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found.",
+      });
+    }
+
+    if (String(order.userId) !== String(userId)) {
+      return res.status(403).json({
+        success: false,
+        message: "आप इस रसीद को देखने के लिए अधिकृत नहीं हैं।",
+      });
+    }
+
+    const receipt = await OrderReceipt.findOne({ orderId: order._id });
+
+    if (!receipt) {
+      return res.status(404).json({
+        success: false,
+        message: "इस ऑर्डर के लिए अभी रसीद नहीं बनी है।",
+      });
+    }
+
+    const populatedOrder = await Order.findById(order._id)
+      .populate(
+        "userId",
+        "firstName lastName phoneNumber address place zipCode",
+      )
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      receipt: {
+        receiptNumber: receipt.receiptNumber,
+        generatedAt: receipt.generatedAt,
+        notifiedAt: receipt.notifiedAt,
+        status: receipt.status,
+        totalAmount: receipt.totalAmount,
+        discountAmount: receipt.discountAmount,
+      },
+      order: {
+        ...populatedOrder,
+        _id: populatedOrder._id,
+      },
+    });
+  } catch (error) {
+    console.error("Get Order Receipt Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+/* ============================================================
+   DOWNLOAD ORDER RECEIPT PDF
+   USER
+============================================================ */
+
+export const downloadOrderReceiptPdf = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    const userId = req.userId;
+
+    const order = await Order.findById(orderId);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found.",
+      });
+    }
+
+    if (String(order.userId) !== String(userId)) {
+      return res.status(403).json({
+        success: false,
+        message: "आप इस रसीद को डाउनलोड करने के लिए अधिकृत नहीं हैं।",
+      });
+    }
+
+    const receipt = await OrderReceipt.findOne({ orderId: order._id });
+
+    if (!receipt) {
+      return res.status(404).json({
+        success: false,
+        message: "इस ऑर्डर के लिए अभी रसीद नहीं बनी है।",
+      });
+    }
+
+    const pdfBuffer = await generateOrderReceiptPDF(order._id);
+
+    res.setHeader("Content-Type", "application/pdf");
+
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${receipt.receiptNumber}.pdf"`,
+    );
+
+    return res.send(pdfBuffer);
+  } catch (error) {
+    console.error("Download Order Receipt Pdf Error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
 /* ============================================================
    UPDATE ORDER ITEMS
    ADMIN / SUPPLIER

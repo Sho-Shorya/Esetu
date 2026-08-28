@@ -365,17 +365,28 @@ const AdminTodayOrders = () => {
 
                         {/* STATUS */}
 
-                        <div
-                          className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-bold shadow-sm ${
-                            statusStyles[order.status] ||
-                            "bg-gray-100 text-gray-700"
-                          }`}
-                        >
-                          {order.status === "Pending" && (
-                            <span className="h-3 w-3 animate-ping rounded-full bg-red-600" />
-                          )}
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-bold shadow-sm ${
+                              statusStyles[order.status] ||
+                              "bg-gray-100 text-gray-700"
+                            }`}
+                          >
+                            {order.status === "Pending" && (
+                              <span className="h-3 w-3 animate-ping rounded-full bg-red-600" />
+                            )}
 
-                          {statusLabel[order.status] || order.status}
+                            {statusLabel[order.status] || order.status}
+                          </div>
+
+                          {/* PAYMENT STATUS */}
+
+                          {order.paymentStatus === "Paid" && (
+                            <div className="inline-flex items-center gap-1.5 rounded-2xl bg-emerald-600 px-3 py-2 text-sm font-bold text-white shadow-sm">
+                              <Check className="h-4 w-4" />
+                              भुगतान हो गया
+                            </div>
+                          )}
                         </div>
                       </div>
 

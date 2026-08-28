@@ -2,6 +2,7 @@ import { Cart } from "../models/cartModel.js";
 import { User } from "../models/userModel.js";
 import { Order } from "../models/orderModel.js";
 import Payment from "../models/paymentModel.js";
+import { sendNotification } from "./oneSignalService.js";
 
 /* ============================================================
    ONLINE PAYMENT DISCOUNT (fixed tiers)
@@ -486,8 +487,12 @@ export const createPaidOrderFromCart = async ({
     await cart.save();
 
     /* ========================================================
-       15. RECORD PAYMENT LIFECYCLE
+       15. NOTIFY ADMIN + RECORD PAYMENT LIFECYCLE
+       (notify first, before the Payment record is marked
+        SUCCESS, so the once-per-transaction guard works)
     ======================================================== */
+
+    await notifyAdminOnPaidOrder(order);
 
     await markPaymentProcessed(order, paymentTransactionId);
 
@@ -537,5 +542,58 @@ const markPaymentProcessed = async (order, paymentTransactionId) => {
     );
   } catch (error) {
     console.error("markPaymentProcessed error:", error);
+  }
+};
+
+/* ============================================================
+   NOTIFY ADMIN OF PAID ORDER
+============================================================ */
+
+/*
+ * Sends a OneSignal push to all supplier/admin devices once per
+ * transaction when an online order is confirmed as paid.
+ *
+ * Idempotency guard: only sends when the Payment record was NOT
+ * already SUCCESS before this call. This prevents duplicate pushes
+ * when both the frontend (complete-payment) and the PhonePe webhook
+ * process the same transaction.
+ */
+const notifyAdminOnPaidOrder = async (order) => {
+  try {
+    if (!order?.transactionId) return;
+
+    const record = await Payment.findOne({
+      merchantOrderId: order.transactionId,
+    });
+
+    if (record && record.status === "SUCCESS") {
+      return;
+    }
+
+    const admins = await User.find({
+      role: "supplier",
+      oneSignalSubscriptionId: { $exists: true, $ne: "" },
+    });
+
+    if (admins.length === 0) {
+      return;
+    }
+
+    for (const admin of admins) {
+      await sendNotification({
+        subscriptionId: admin.oneSignalSubscriptionId,
+        title: "💰 नया भुगतान प्राप्त हुआ",
+        message: `एक ऑनलाइन ऑर्डर (₹${Number(
+          order.totalAmount || 0,
+        ).toFixed(2)}) का भुगतान verify हो गया है।`,
+        url: "https://esetu.vercel.app/today-orders",
+      });
+    }
+
+    console.log(
+      `✅ Admin notified for paid order ${order.transactionId}`,
+    );
+  } catch (error) {
+    console.error("notifyAdminOnPaidOrder error:", error);
   }
 };

@@ -34,6 +34,7 @@ const AdminMoneyControl = () => {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [paymentUpdating, setPaymentUpdating] = useState(false);
+const [receiptGenerating, setReceiptGenerating] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [isListening, setIsListening] = useState(false);
@@ -473,6 +474,34 @@ const AdminMoneyControl = () => {
       toast.error(error.response?.data?.message || "Payment update नहीं हुआ।");
     } finally {
       setPaymentUpdating(false);
+    }
+  };
+
+  /* ==========================================================
+     GENERATE RECEIPT
+  ========================================================== */
+
+  const generateReceipt = async () => {
+    if (!selectedOrder || receiptGenerating) return;
+
+    try {
+      setReceiptGenerating(true);
+
+      const response = await axios.post(
+        `${API_BASE_URL}/api/v1/order/receipt/generate`,
+        { orderId: selectedOrder._id },
+        axiosConfig,
+      );
+
+      if (response.data?.success) {
+        toast.success("रसीद बना दी गई और भेज दी गई।");
+      }
+    } catch (error) {
+      console.error("Generate receipt error:", error);
+
+      toast.error(error.response?.data?.message || "रसीद नहीं बन पाई।");
+    } finally {
+      setReceiptGenerating(false);
     }
   };
 
@@ -1089,6 +1118,38 @@ const AdminMoneyControl = () => {
                     "
                   >
                     ऑर्डर में बदलाव करें
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={generateReceipt}
+                    disabled={receiptGenerating}
+                    className="
+                      flex
+                      h-11
+                      w-full
+                      items-center
+                      justify-center
+                      gap-2
+                      rounded-2xl
+                      bg-sky-50
+                      text-sm
+                      font-black
+                      text-sky-700
+                      disabled:opacity-50
+                    "
+                  >
+                    {receiptGenerating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        रसीद बन रही है...
+                      </>
+                    ) : (
+                      <>
+                        <ReceiptText className="h-4 w-4" />
+                        रसीद बनाएं और भेजें
+                      </>
+                    )}
                   </button>
 
                   {selectedOrder.paymentStatus === "Paid" ? (

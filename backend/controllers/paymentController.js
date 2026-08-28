@@ -792,7 +792,19 @@ export const paymentWebhook = async (req, res) => {
   try {
     const body = req.body || {};
 
-    const data = body?.data || body;
+    /*
+     * PhonePe v1 sends:  { data: {...}, ... }
+     * PhonePe v2 live webhook wraps everything under a
+     * "response" object: { response: { data: {...}, success, code, message } }
+     *
+     * Normalize to a single inner-data object either way.
+     */
+    const nested =
+      body?.response && typeof body.response === "object"
+        ? body.response
+        : body;
+
+    const data = nested?.data || nested;
 
     const merchantOrderId =
       data?.merchantOrderId ||
@@ -801,6 +813,7 @@ export const paymentWebhook = async (req, res) => {
       data?.transactionId ||
       body?.merchantOrderId ||
       body?.transactionId ||
+      nested?.merchantOrderId ||
       null;
 
     if (!merchantOrderId) {
@@ -810,13 +823,20 @@ export const paymentWebhook = async (req, res) => {
       });
     }
 
-    const paymentStatus = normalizePhonePeStatus(data);
+    /*
+     * Prefer inner data.state for status. Fall back to the
+     * top-level wrapper if inner status is missing.
+     */
+    const paymentStatus =
+      normalizePhonePeStatus(data) === "PENDING"
+        ? normalizePhonePeStatus(nested)
+        : normalizePhonePeStatus(data);
 
     await Payment.updateOne(
       { merchantOrderId },
       {
         $set: {
-          phonePeResponse: data,
+          phonePeResponse: body,
           phonePeTransactionId: extractPhonePeTransactionId(data) || null,
         },
       },
