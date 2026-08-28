@@ -13,6 +13,7 @@ import {
   LogIn,
   Phone,
   RotateCcw,
+  Table,
   X,
 } from "lucide-react";
 
@@ -269,8 +270,15 @@ const AdminTodayOrders = () => {
         <div className="rounded-3xl border border-emerald-100 bg-white p-6 shadow-lg">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">
+              <h1 className="text-3xl flex justify-between font-bold text-gray-900">
                 आज के ऑर्डर ({orders.length})
+                <div
+                  onClick={() => navigate("/daily-orders")}
+                  className="rounded-full flex items-center"
+                >
+                  <Table className="h-8 w-8 mt-1 " />
+                  {/* <p>ऑर्डर</p> */}
+                </div>
               </h1>
 
               <p className="mt-2 text-gray-600">

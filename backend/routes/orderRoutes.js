@@ -12,6 +12,7 @@ import {
   updateOrderItems,
   markOrderPaymentPaid,
   markOrderPaymentPending,
+  getDailyApprovedItems,
 } from "../controllers/orderController.js";
 
 import { isAuthenticated, isSupp } from "../middleware/isAuthenticated.js";
@@ -58,6 +59,12 @@ router.get("/user-orders/:userId", isAuthenticated, isSupp, getOrdersByUser);
 /* ============================================================
                      ADMIN - PAYMENT
 ============================================================ */
+router.get(
+  "/daily-approved-items",
+  isAuthenticated,
+  isSupp,
+  getDailyApprovedItems,
+);
 
 router.put(
   "/payment/:orderId/paid",

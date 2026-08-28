@@ -39,6 +39,7 @@ import RefundCancellation from "./pages/RefundPolicy";
 import ReturnPolicy from "./pages/ReturnPolicy";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import PaymentStatus from "./components/PaymentStatus";
+import DailyOrders from "./pages/DailyOrders";
 function App() {
   const token = localStorage.getItem("token");
 
@@ -341,6 +342,15 @@ function App() {
             <Nav />
             <Footer />
             <Navbar />
+          </>
+        }
+      />
+      <Route
+        path="/daily-orders"
+        element={
+          <>
+            <Navbar />
+            <DailyOrders />
           </>
         }
       />

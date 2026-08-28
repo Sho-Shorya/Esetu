@@ -1634,3 +1634,392 @@ export const updateOrderItems = async (req, res) => {
     });
   }
 };
+
+export const getDailyApprovedItems = async (req, res) => {
+  try {
+    const { date } = req.query;
+
+    if (!date) {
+      return res.status(400).json({
+        success: false,
+        message: "Date is required",
+      });
+    }
+
+    /* ========================================================
+       VALIDATE DATE FORMAT
+    ======================================================== */
+
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+
+    if (!dateRegex.test(date)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format. Use YYYY-MM-DD",
+      });
+    }
+
+    /* ========================================================
+       DATE RANGE - ASIA/KOLKATA
+    ======================================================== */
+
+    const startOfDay = new Date(`${date}T00:00:00+05:30`);
+
+    const endOfDay = new Date(`${date}T23:59:59.999+05:30`);
+
+    if (
+      Number.isNaN(startOfDay.getTime()) ||
+      Number.isNaN(endOfDay.getTime())
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date",
+      });
+    }
+
+    /* ========================================================
+       AGGREGATION
+    ======================================================== */
+
+    const items = await Order.aggregate([
+      /* ======================================================
+         1. ONLY APPROVED ORDERS FOR SELECTED DAY
+      ====================================================== */
+
+      {
+        $match: {
+          status: "Approved",
+
+          createdAt: {
+            $gte: startOfDay,
+            $lte: endOfDay,
+          },
+        },
+      },
+
+      /* ======================================================
+         2. UNWIND ITEMS
+      ====================================================== */
+
+      {
+        $unwind: "$items",
+      },
+
+      /* ======================================================
+         3. LOOKUP USER
+
+         IMPORTANT:
+         Order.userId may be stored as String while
+         User._id is ObjectId.
+
+         Therefore convert userId to ObjectId safely.
+      ====================================================== */
+
+      {
+        $lookup: {
+          from: "users",
+
+          let: {
+            userObjectId: {
+              $convert: {
+                input: "$userId",
+                to: "objectId",
+                onError: null,
+                onNull: null,
+              },
+            },
+          },
+
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $eq: ["$_id", "$$userObjectId"],
+                },
+              },
+            },
+
+            {
+              $project: {
+                _id: 1,
+                firstName: 1,
+                lastName: 1,
+                name: 1,
+                fullName: 1,
+                shopName: 1,
+                profilePic: 1,
+                phoneNumber: 1,
+                email: 1,
+                address: 1,
+              },
+            },
+          ],
+
+          as: "user",
+        },
+      },
+
+      /* ======================================================
+         4. USER ARRAY -> OBJECT
+      ====================================================== */
+
+      {
+        $unwind: {
+          path: "$user",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+
+      /* ======================================================
+         5. GROUP PRODUCT + USER
+
+         Same user + same product + same company +
+         same measurement = one entry.
+      ====================================================== */
+
+      {
+        $group: {
+          _id: {
+            productId: "$items.productId",
+            companyId: "$items.companyId",
+            measurement: "$items.measurement",
+            userId: "$userId",
+          },
+
+          /* ==================================================
+             PRODUCT INFORMATION
+          ================================================== */
+
+          productName: {
+            $first: "$items.name",
+          },
+
+          hinglishName: {
+            $first: "$items.hinglishName",
+          },
+
+          image: {
+            $first: "$items.image",
+          },
+
+          companyName: {
+            $first: "$items.companyName",
+          },
+
+          categoryName: {
+            $first: "$items.categoryName",
+          },
+
+          measurement: {
+            $first: "$items.measurement",
+          },
+
+          /* ==================================================
+             USER INFORMATION
+          ================================================== */
+
+          firstName: {
+            $first: "$user.firstName",
+          },
+
+          lastName: {
+            $first: "$user.lastName",
+          },
+
+          userName: {
+            $first: {
+              $ifNull: [
+                "$user.name",
+                {
+                  $ifNull: ["$user.fullName", "$user.shopName"],
+                },
+              ],
+            },
+          },
+
+          userProfilePic: {
+            $first: "$user.profilePic",
+          },
+
+          /* ==================================================
+             USER QUANTITY
+          ================================================== */
+
+          userQuantity: {
+            $sum: "$items.qty",
+          },
+
+          /* ==================================================
+             USER TOTAL
+          ================================================== */
+
+          userTotal: {
+            $sum: "$items.total",
+          },
+        },
+      },
+
+      /* ======================================================
+         6. GROUP PRODUCT AGAIN
+      ====================================================== */
+
+      {
+        $group: {
+          _id: {
+            productId: "$_id.productId",
+            companyId: "$_id.companyId",
+            measurement: "$_id.measurement",
+          },
+
+          /* ==================================================
+             PRODUCT INFORMATION
+          ================================================== */
+
+          productName: {
+            $first: "$productName",
+          },
+
+          hinglishName: {
+            $first: "$hinglishName",
+          },
+
+          image: {
+            $first: "$image",
+          },
+
+          companyName: {
+            $first: "$companyName",
+          },
+
+          categoryName: {
+            $first: "$categoryName",
+          },
+
+          measurement: {
+            $first: "$measurement",
+          },
+
+          /* ==================================================
+             TOTAL QUANTITY
+          ================================================== */
+
+          totalQuantity: {
+            $sum: "$userQuantity",
+          },
+
+          /* ==================================================
+             TOTAL AMOUNT
+          ================================================== */
+
+          totalAmount: {
+            $sum: "$userTotal",
+          },
+
+          /* ==================================================
+             NUMBER OF USERS
+          ================================================== */
+
+          userCount: {
+            $sum: 1,
+          },
+
+          /* ==================================================
+             USERS
+          ================================================== */
+
+          orderedBy: {
+            $push: {
+              userId: "$_id.userId",
+
+              firstName: {
+                $ifNull: ["$firstName", ""],
+              },
+
+              lastName: {
+                $ifNull: ["$lastName", ""],
+              },
+
+              userName: {
+                $ifNull: ["$userName", "Unknown User"],
+              },
+
+              profilePic: "$userProfilePic",
+
+              quantity: "$userQuantity",
+
+              total: "$userTotal",
+            },
+          },
+        },
+      },
+
+      /* ======================================================
+         7. SORT PRODUCTS
+      ====================================================== */
+
+      {
+        $sort: {
+          categoryName: 1,
+          productName: 1,
+          companyName: 1,
+          measurement: 1,
+        },
+      },
+
+      /* ======================================================
+         8. FINAL RESPONSE
+      ====================================================== */
+
+      {
+        $project: {
+          _id: 0,
+
+          productId: "$_id.productId",
+
+          companyId: "$_id.companyId",
+
+          productName: 1,
+
+          hinglishName: 1,
+
+          image: 1,
+
+          companyName: 1,
+
+          categoryName: 1,
+
+          measurement: 1,
+
+          totalQuantity: 1,
+
+          totalAmount: 1,
+
+          userCount: 1,
+
+          orderedBy: 1,
+        },
+      },
+    ]);
+
+    /* ========================================================
+       RESPONSE
+    ======================================================== */
+
+    return res.status(200).json({
+      success: true,
+
+      date,
+
+      count: items.length,
+
+      items,
+    });
+  } catch (error) {
+    console.error("Get daily approved items error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch daily approved items",
+    });
+  }
+};

@@ -10,6 +10,7 @@ import {
   ReceiptText,
   TrendingUp,
   LayoutDashboard,
+  Table,
 } from "lucide-react";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
@@ -396,10 +397,18 @@ const Navbar = () => {
 
           {/* =================================================
               RIGHT
-          ================================================= */}
+              ================================================= */}
 
           <div className="flex items-center gap-2.5">
-            {/* Cart */}
+            {supplierData && (
+              <div
+                onClick={() => navigate("/daily-orders")}
+                className=" px-2 py-2 rounded-full border-2 border-emerald-400 border-dashed bg-emerald-100 gap-2 flex items-center"
+              >
+                <Table className="h-6 w-6 " />
+                {/* <p>ऑर्डर</p> */}
+              </div>
+            )}
 
             {userData && (
               <div
@@ -468,7 +477,6 @@ const Navbar = () => {
                 <span className="text-sm font-bold text-red-700">कार्ट</span>
               </div>
             )}
-
             {/* =================================================
                 USER / SUPPLIER
             ================================================= */}

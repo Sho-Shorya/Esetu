@@ -98,7 +98,6 @@ const orderItemSchema = new mongoose.Schema(
       min: 0,
     },
   },
-
   {
     _id: true,
   },
@@ -134,16 +133,6 @@ const orderSchema = new mongoose.Schema(
        AMOUNTS
     ======================================================== */
 
-    /*
-     * Original amount before online discount.
-     *
-     * Example:
-     *
-     * Cart = ₹1000
-     *
-     * originalTotalAmount = 1000
-     */
-
     originalTotalAmount: {
       type: Number,
       required: true,
@@ -151,29 +140,11 @@ const orderSchema = new mongoose.Schema(
       min: 0,
     },
 
-    /*
-     * Discount given for online payment.
-     *
-     * Example:
-     *
-     * ₹1000 × 2% = ₹20
-     */
-
     discountAmount: {
       type: Number,
       default: 0,
       min: 0,
     },
-
-    /*
-     * Final payable amount.
-     *
-     * COD:
-     * ₹1000
-     *
-     * ONLINE:
-     * ₹980
-     */
 
     totalAmount: {
       type: Number,
@@ -247,26 +218,27 @@ const orderSchema = new mongoose.Schema(
     ======================================================== */
 
     /*
-     * Your own unique payment transaction ID.
+     * Only ONLINE orders need a transactionId.
      *
-     * Example:
+     * COD orders do not have a transactionId.
      *
-     * ESETU_1756123456789_123456_A1B2C3D4
+     * sparse + unique means:
      *
-     * This is generated BEFORE sending the
-     * payment request to PhonePe.
+     * COD:
+     * transactionId -> null / missing
+     *
+     * ONLINE:
+     * transactionId -> unique value
      */
 
     transactionId: {
       type: String,
 
-      default: null,
+      default: undefined,
 
       unique: true,
 
       sparse: true,
-
-      index: true,
 
       trim: true,
     },
@@ -274,16 +246,14 @@ const orderSchema = new mongoose.Schema(
     /*
      * Gateway transaction/reference ID.
      *
-     * This is populated after PhonePe gives
-     * us the actual gateway transaction ID.
+     * Populated after PhonePe returns
+     * the actual gateway transaction ID.
      */
 
     paymentTransactionId: {
       type: String,
 
-      default: null,
-
-      index: true,
+      default: undefined,
 
       trim: true,
     },
@@ -379,7 +349,7 @@ const orderSchema = new mongoose.Schema(
 ============================================================ */
 
 /*
- * Find today's pending order for a user.
+ * Find today's orders for a user.
  */
 
 orderSchema.index({
@@ -390,12 +360,12 @@ orderSchema.index({
 });
 
 /*
- * Payment lookup.
+ * IMPORTANT:
  *
- * transactionId already has an index because
- * of `index: true`, but keeping the explicit
- * unique sparse index here makes the intention
- * very clear.
+ * transactionId must be unique ONLY when it exists.
+ *
+ * Multiple COD orders can therefore exist without
+ * transactionId.
  */
 
 orderSchema.index(
