@@ -212,6 +212,37 @@ export const createPaidOrderFromCart = async ({
       throw new Error("User not found.");
     }
 
+    /*
+     * Look for an order that might ALREADY exist for this confirmed
+     * paid transaction (e.g. the PhonePe webhook processed it before
+     * the frontend's complete-payment arrived). If found, return it
+     * rather than failing with "Cart is empty" — a paid order must
+     * never be reported as failed just because the cart was cleared.
+     */
+    const findExistingForTransaction = async () => {
+      if (!transactionId) return null;
+
+      return Order.findOne({
+        $or: [
+          { transactionId },
+          ...(paymentTransactionId
+            ? [{ paymentTransactionId }]
+            : []),
+        ],
+      });
+    };
+
+    const recoveredPaidOrder = await findExistingForTransaction();
+
+    if (recoveredPaidOrder) {
+      await markPaymentProcessed(recoveredPaidOrder, paymentTransactionId);
+
+      return {
+        order: recoveredPaidOrder,
+        alreadyCreated: true,
+      };
+    }
+
     /* ========================================================
        5. VALIDATE CART
     ======================================================== */
@@ -221,6 +252,29 @@ export const createPaidOrderFromCart = async ({
     }
 
     if (!Array.isArray(cart.items) || cart.items.length === 0) {
+      /*
+       * If the cart is empty but this transaction is confirmed paid
+       * and the Payment record already points to an order, return that
+       * order instead of throwing. Otherwise the frontend would show a
+       * false "payment verify nahi hua" while money was taken.
+       */
+      const completedPayment = await Payment.findOne({
+        merchantOrderId: transactionId,
+        status: "SUCCESS",
+        orderId: { $ne: null },
+      });
+
+      if (completedPayment?.orderId) {
+        const paidOrder = await Order.findById(completedPayment.orderId);
+
+        if (paidOrder) {
+          return {
+            order: paidOrder,
+            alreadyCreated: true,
+          };
+        }
+      }
+
       throw new Error("Cart is empty.");
     }
 
@@ -242,10 +296,20 @@ export const createPaidOrderFromCart = async ({
 
     /* ========================================================
        7. CHECK CUTOFF FOR EXISTING ORDER
+       A confirmed PAID online transaction must NEVER be rejected
+       because the ordering window closed after the payment was
+       accepted. New online checkouts are already gated earlier in
+       createPayment (isOrderingWindowOpen), so here we only guard
+       against silently merging this paid order into an unrelated
+       pending COD order whose cutoff has passed — never block.
     ======================================================== */
 
-    if (order && isCutoffPassed(order.cutoffTime)) {
-      throw new Error("आज का ऑर्डर अब एडिट नहीं किया जा सकता।");
+    if (
+      order &&
+      order.paymentMethod !== "Online" &&
+      isCutoffPassed(order.cutoffTime)
+    ) {
+      order = null;
     }
 
     /*

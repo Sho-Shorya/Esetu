@@ -301,22 +301,64 @@ export const getPhonePePaymentStatus = async (merchantOrderId) => {
 export const normalizePhonePeStatus = (response) => {
   if (!response) return "PENDING";
 
-  const nested = response?.data?.response;
+  /*
+   * PhonePe can return the order status in several shapes:
+   *
+   *   1) Flat:            { state: "COMPLETED", amount, paymentDetails }
+   *   2) Wrapped:         { success, code, message, data: { state, ... } }
+   *   3) data.response:   { success, code, message, data: { response: { state, ... } } }
+   *   4) PayPage handler: { success, code, message, data: { state, ... } }
+   *
+   * We descend into every layer below `state`/`status`/`orderState` and, if an
+   * order-level state is not available, fall back to the FIRST payment-attempt
+   * state (which is what actually tells us whether money moved for UPI).
+   */
 
-  const status =
-    response?.state ||
-    response?.status ||
-    response?.data?.state ||
-    response?.data?.status ||
-    response?.orderState ||
-    response?.data?.orderState ||
-    nested?.state ||
-    nested?.status ||
-    nested?.orderState;
+  const candidates = [
+    response?.state,
+    response?.status,
+    response?.orderState,
+    response?.data?.state,
+    response?.data?.status,
+    response?.data?.orderState,
+    response?.data?.response?.state,
+    response?.data?.response?.status,
+    response?.data?.response?.orderState,
+    response?.data?.transaction?.state,
+  ].filter((v) => v != null && v !== "");
 
-  if (!status) return "PENDING";
+  let firstNonNullState = candidates[0] || "PENDING";
 
-  const normalized = String(status).toUpperCase();
+  /*
+   * Only fall back to the payment-attempt state if the order-level state is
+   * PENDING/unknown but a payment attempt has a concrete terminal state. UPI
+   * sometimes leaves the order state as PENDING momentarily even though the
+   * actual attempt already COMPLETED.
+   */
+  const orderLevelState = candidates.find((s) => {
+    const n = String(s).toUpperCase();
+    return !["PENDING", ""].includes(n);
+  });
+
+  if (orderLevelState) {
+    firstNonNullState = orderLevelState;
+  } else {
+    const attemptState =
+      response?.paymentDetails?.[0]?.state ||
+      response?.data?.paymentDetails?.[0]?.state ||
+      response?.data?.response?.paymentDetails?.[0]?.state ||
+      response?.data?.paymentDetails?.at?.(-1)?.state ||
+      null;
+
+    if (attemptState) {
+      const n = String(attemptState).toUpperCase();
+      if (!["PENDING", ""].includes(n)) {
+        firstNonNullState = attemptState;
+      }
+    }
+  }
+
+  const normalized = String(firstNonNullState).toUpperCase();
 
   if (["SUCCESS", "COMPLETED", "PAID"].includes(normalized)) return "SUCCESS";
 
@@ -336,16 +378,24 @@ export const normalizePhonePeStatus = (response) => {
 
 export const extractPhonePeTransactionId = (response) => {
   const nested = response?.data?.response;
+  const inner = response?.data;
+
+  const lastAttempt =
+    inner?.paymentDetails?.[inner?.paymentDetails?.length - 1] ||
+    inner?.response?.paymentDetails?.at?.(-1) ||
+    response?.paymentDetails?.[response?.paymentDetails?.length - 1] ||
+    null;
 
   return (
     response?.transactionId ||
     response?.providerReferenceId ||
-    response?.data?.transactionId ||
-    response?.data?.providerReferenceId ||
+    inner?.transactionId ||
+    inner?.providerReferenceId ||
     nested?.transactionId ||
     nested?.providerReferenceId ||
+    lastAttempt?.transactionId ||
+    inner?.paymentDetails?.[0]?.transactionId ||
     response?.paymentDetails?.[0]?.transactionId ||
-    response?.data?.paymentDetails?.[0]?.transactionId ||
     nested?.paymentDetails?.[0]?.transactionId ||
     null
   );
