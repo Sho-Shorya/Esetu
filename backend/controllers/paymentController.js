@@ -1,6 +1,7 @@
 import { Cart } from "../models/cartModel.js";
 import { User } from "../models/userModel.js";
 import Payment from "../models/paymentModel.js";
+import AppSetting from "../models/appSettingModel.js";
 
 import {
   createPhonePePayment,
@@ -150,6 +151,34 @@ const calculateCartAmount = (cart) => {
   return Number(total.toFixed(2));
 };
 
+/*
+ * Is the user still able to place a new order today?
+ *
+ * Same rule as the COD path: once today's ordering cutoff has passed,
+ * no new order can be checked out. Matches admin's "dailyOrderCutoff"
+ * setting (or default 12:00).
+ */
+const isOrderingWindowOpen = async () => {
+  const DEFAULT_ORDER_CUTOFF = "12:00";
+
+  const setting = await AppSetting.findOne({
+    key: "dailyOrderCutoff",
+  });
+
+  const value = setting?.value || DEFAULT_ORDER_CUTOFF;
+
+  const [hour = "12", minute = "00"] = String(value).split(":");
+
+  const cutoff = new Date();
+
+  cutoff.setHours(Number.parseInt(hour, 10) || 12);
+  cutoff.setMinutes(Number.parseInt(minute, 10) || 0);
+  cutoff.setSeconds(0);
+  cutoff.setMilliseconds(0);
+
+  return new Date() <= cutoff;
+};
+
 /* ============================================================
    CREATE PAYMENT
 ============================================================ */
@@ -192,7 +221,22 @@ export const createPayment = async (req, res) => {
     }
 
     /* ========================================================
-       2. PHONEPE CONFIGURATION
+       2. ORDERING WINDOW CHECK
+       No new online order can be checked out after today's
+       ordering cutoff has passed (matches the COD path).
+    ======================================================== */
+
+    const windowOpen = await isOrderingWindowOpen();
+
+    if (!windowOpen) {
+      return res.status(400).json({
+        success: false,
+        message: "माफ़ कीजिए, ऑर्डर का समय खत्म हो गया है।",
+      });
+    }
+
+    /* ========================================================
+       3. PHONEPE CONFIGURATION
     ======================================================== */
 
     if (!isPhonePeConfigured()) {
@@ -206,7 +250,7 @@ export const createPayment = async (req, res) => {
     }
 
     /* ========================================================
-       3. GET CART + USER
+       4. GET CART + USER
     ======================================================== */
 
     const [cart, user] = await Promise.all([
