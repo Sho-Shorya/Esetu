@@ -94,6 +94,7 @@ const PaymentStatus = () => {
               Authorization: `Bearer ${token}`,
             },
             timeout: 15000,
+            validateStatus: (status) => status >= 200 && status < 500,
           },
         );
 

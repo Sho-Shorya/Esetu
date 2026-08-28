@@ -1,5 +1,6 @@
 import { Cart } from "../models/cartModel.js";
 import { User } from "../models/userModel.js";
+import Payment from "../models/paymentModel.js";
 
 import {
   createPhonePePayment,
@@ -8,6 +9,7 @@ import {
   extractPhonePeTransactionId,
   isPhonePeConfigured,
   generateMerchantOrderId,
+  rupeesToPaise,
 } from "../services/phonePeService.js";
 
 import { createPaidOrderFromCart } from "../services/paymentOrderService.js";
@@ -21,6 +23,29 @@ const ONLINE_DISCOUNT_PERCENT = 2;
 /* ============================================================
    HELPERS
 ============================================================ */
+
+/*
+ * Persist a failed/expired payment lifecycle record.
+ */
+const markPaymentFailure = async (merchantOrderId, status, failReason) => {
+  try {
+    if (!merchantOrderId) return;
+
+    await Payment.updateOne(
+      { merchantOrderId },
+      {
+        $set: {
+          status,
+          failureReason: failReason || null,
+          phonePeResponse: null,
+        },
+      },
+      { upsert: true },
+    );
+  } catch (error) {
+    console.error("markPaymentFailure error:", error);
+  }
+};
 
 /*
  * Calculate the online payment amount.
@@ -227,7 +252,38 @@ export const createPayment = async (req, res) => {
     }
 
     /* ========================================================
-       11. RETURN PAYMENT DETAILS
+       11. RECORD PENDING PAYMENT (lifecycle)
+    ======================================================== */
+
+    try {
+      const paymentExpiry = new Date(Date.now() + 15 * 60 * 1000);
+
+      await Payment.updateOne(
+        { merchantOrderId },
+        {
+          $set: {
+            userId,
+            merchantOrderId,
+            phonePeTransactionId: null,
+            originalAmount,
+            discount: discountAmount,
+            amount: finalAmount,
+            paymentMethod: "ONLINE",
+            status: "PENDING",
+            orderId: null,
+            phonePeResponse: null,
+            failureReason: null,
+            expiresAt: paymentExpiry,
+          },
+        },
+        { upsert: true },
+      );
+    } catch (paymentRecordError) {
+      console.error("Record pending payment error:", paymentRecordError);
+    }
+
+    /* ========================================================
+       12. RETURN PAYMENT DETAILS
     ======================================================== */
 
     return res.status(200).json({
@@ -321,7 +377,22 @@ export const checkPaymentStatus = async (req, res) => {
     }
 
     /* ========================================================
-       3. VERIFY WITH PHONEPE
+       3. OWNERSHIP CHECK
+    ======================================================== */
+
+    const paymentRecord = await Payment.findOne({
+      merchantOrderId: transactionId,
+    });
+
+    if (paymentRecord && String(paymentRecord.userId) !== String(userId)) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to check this payment.",
+      });
+    }
+
+    /* ========================================================
+       4. VERIFY WITH PHONEPE
     ======================================================== */
 
     const phonePeResult = await getPhonePePaymentStatus(transactionId);
@@ -329,19 +400,19 @@ export const checkPaymentStatus = async (req, res) => {
     const phonePeData = phonePeResult?.data;
 
     /* ========================================================
-       4. NORMALIZE STATUS
+       5. NORMALIZE STATUS
     ======================================================== */
 
     const paymentStatus = normalizePhonePeStatus(phonePeData);
 
     /* ========================================================
-       5. GET GATEWAY TRANSACTION ID
+       6. GET GATEWAY TRANSACTION ID
     ======================================================== */
 
     const paymentTransactionId = extractPhonePeTransactionId(phonePeData);
 
     /* ========================================================
-       6. SUCCESS
+       7. SUCCESS
     ======================================================== */
 
     if (paymentStatus === "SUCCESS") {
@@ -361,12 +432,14 @@ export const checkPaymentStatus = async (req, res) => {
     }
 
     /* ========================================================
-       7. FAILED
+       8. FAILED
     ======================================================== */
 
     if (paymentStatus === "FAILED") {
-      return res.status(200).json({
-        success: true,
+      await markPaymentFailure(transactionId, "FAILED", "Payment failed.");
+
+      return res.status(400).json({
+        success: false,
 
         paymentSuccessful: false,
 
@@ -379,12 +452,14 @@ export const checkPaymentStatus = async (req, res) => {
     }
 
     /* ========================================================
-       8. EXPIRED
+       9. EXPIRED
     ======================================================== */
 
     if (paymentStatus === "EXPIRED") {
-      return res.status(200).json({
-        success: true,
+      await markPaymentFailure(transactionId, "EXPIRED", "Payment session expired.");
+
+      return res.status(400).json({
+        success: false,
 
         paymentSuccessful: false,
 
@@ -397,7 +472,7 @@ export const checkPaymentStatus = async (req, res) => {
     }
 
     /* ========================================================
-       9. PENDING
+       10. PENDING
     ======================================================== */
 
     return res.status(200).json({
@@ -481,7 +556,29 @@ export const completeOnlinePayment = async (req, res) => {
     }
 
     /* ========================================================
-       3. VERIFY PAYMENT DIRECTLY WITH PHONEPE
+       3. OWNERSHIP CHECK
+    ======================================================== */
+
+    const paymentRecord = await Payment.findOne({
+      merchantOrderId: transactionId,
+    });
+
+    if (!paymentRecord) {
+      return res.status(404).json({
+        success: false,
+        message: "Payment record not found.",
+      });
+    }
+
+    if (String(paymentRecord.userId) !== String(userId)) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to complete this payment.",
+      });
+    }
+
+    /* ========================================================
+       4. VERIFY PAYMENT DIRECTLY WITH PHONEPE
     ======================================================== */
 
     const phonePeResult = await getPhonePePaymentStatus(transactionId);
@@ -489,16 +586,25 @@ export const completeOnlinePayment = async (req, res) => {
     const phonePeData = phonePeResult?.data;
 
     /* ========================================================
-       4. NORMALIZE PHONEPE STATUS
+       5. NORMALIZE PHONEPE STATUS
     ======================================================== */
 
     const paymentStatus = normalizePhonePeStatus(phonePeData);
 
     /* ========================================================
-       5. PAYMENT NOT SUCCESSFUL
+       6. PAYMENT NOT SUCCESSFUL
     ======================================================== */
 
     if (paymentStatus !== "SUCCESS") {
+      const failReason =
+        paymentStatus === "FAILED"
+          ? "Payment failed."
+          : paymentStatus === "EXPIRED"
+            ? "Payment session expired."
+            : "Payment is not completed yet.";
+
+      await markPaymentFailure(transactionId, paymentStatus, failReason);
+
       return res.status(400).json({
         success: false,
 
@@ -506,24 +612,51 @@ export const completeOnlinePayment = async (req, res) => {
 
         status: paymentStatus,
 
-        message:
-          paymentStatus === "FAILED"
-            ? "Payment failed."
-            : paymentStatus === "EXPIRED"
-              ? "Payment session expired."
-              : "Payment is not completed yet.",
+        message: failReason,
       });
     }
 
     /* ========================================================
-       6. GET PHONEPE TRANSACTION ID
+       7. AMOUNT RECONCILIATION
+       Verify PhonePe charged the same amount we authorized.
+    ======================================================== */
+
+    const phonePeAmountPaise =
+      phonePeData?.amount ||
+      phonePeData?.paymentDetails?.[0]?.amount ||
+      phonePeData?.data?.amount ||
+      null;
+
+    if (phonePeAmountPaise != null) {
+      const authorizedPaise = rupeesToPaise(paymentRecord.amount);
+
+      if (Number(phonePeAmountPaise) !== authorizedPaise) {
+        console.error(
+          `Amount mismatch for ${transactionId}: authorized=${authorizedPaise}p, charged=${phonePeAmountPaise}p`,
+        );
+
+        await markPaymentFailure(
+          transactionId,
+          "FAILED",
+          `Amount mismatch: expected ${authorizedPaise}p, got ${phonePeAmountPaise}p`,
+        );
+
+        return res.status(400).json({
+          success: false,
+          message: "Payment amount mismatch. Please contact support.",
+        });
+      }
+    }
+
+    /* ========================================================
+       8. GET PHONEPE TRANSACTION ID
     ======================================================== */
 
     const paymentTransactionId =
       extractPhonePeTransactionId(phonePeData) || transactionId;
 
     /* ========================================================
-       7. CREATE PAID ORDER
+       9. CREATE PAID ORDER
     ======================================================== */
 
     const result = await createPaidOrderFromCart({

@@ -149,6 +149,12 @@ paymentSchema.index({
   createdAt: -1,
 });
 
+// Auto-delete expired PENDING payment records
+paymentSchema.index(
+  { expiresAt: 1 },
+  { expireAfterSeconds: 0, partialFilterExpression: { status: "PENDING" } },
+);
+
 const Payment = mongoose.model("Payment", paymentSchema);
 
 export default Payment;

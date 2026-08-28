@@ -1,6 +1,7 @@
 import { Cart } from "../models/cartModel.js";
 import { User } from "../models/userModel.js";
 import { Order } from "../models/orderModel.js";
+import Payment from "../models/paymentModel.js";
 
 /* ============================================================
    ONLINE PAYMENT DISCOUNT
@@ -132,11 +133,39 @@ export const createPaidOrderFromCart = async ({
     });
 
     if (existingOrder) {
+      await markPaymentProcessed(existingOrder, paymentTransactionId);
+
       return {
         order: existingOrder,
         alreadyCreated: true,
       };
     }
+
+    /*
+     * Return true if a Mongo duplicate-key error was thrown
+     * (e.g. two requests raced and both tried to create an
+     * order for the same transactionId).
+     */
+    const isDuplicateKeyError = (err) => {
+      return err?.code === 11000 || err?.code === 11001;
+    };
+
+    /*
+     * Fetch the order that won the race and mark it processed.
+     */
+    const resolveRacedDuplicate = async (error) => {
+      if (!isDuplicateKeyError(error)) return null;
+
+      const wonOrder = await Order.findOne({
+        $or: existingConditions,
+      });
+
+      if (wonOrder) {
+        await markPaymentProcessed(wonOrder, paymentTransactionId);
+      }
+
+      return wonOrder;
+    };
 
     /* ========================================================
        3. GET USER + CART
@@ -204,6 +233,21 @@ export const createPaidOrderFromCart = async ({
 
     if (order && isCutoffPassed(order.cutoffTime)) {
       throw new Error("आज का ऑर्डर अब एडिट नहीं किया जा सकता।");
+    }
+
+    /*
+     * If the existing today's order was already linked to a
+     * DIFFERENT successful online transaction (a completed
+     * online payment), do NOT merge this payment's items into
+     * it. Create a separate order instead so the two paid
+     * transactions stay distinct.
+     */
+    if (
+      order &&
+      order.transactionId &&
+      String(order.transactionId) !== String(transactionId)
+    ) {
+      order = null;
     }
 
     /* ========================================================
@@ -375,35 +419,52 @@ export const createPaidOrderFromCart = async ({
     ======================================================== */
       const cutoffTime = getTodayCutoff();
 
-      order = await Order.create({
-        userId,
+      try {
+        order = await Order.create({
+          userId,
 
-        items: orderItems,
+          items: orderItems,
 
-        originalTotalAmount: cartOriginalTotal,
+          originalTotalAmount: cartOriginalTotal,
 
-        discountAmount,
+          discountAmount,
 
-        totalAmount: paidAmount,
+          totalAmount: paidAmount,
 
-        shippingAddress: user.address || "",
+          shippingAddress: user.address || "",
 
-        paymentMethod: "Online",
+          paymentMethod: "Online",
 
-        paymentStatus: "Paid",
+          paymentStatus: "Paid",
 
-        paymentTransactionId: paymentTransactionId || transactionId,
+          paymentTransactionId: paymentTransactionId || transactionId,
 
-        transactionId,
+          transactionId,
 
-        paymentPaidAt: new Date(),
+          paymentPaidAt: new Date(),
 
-        status: "Pending",
+          status: "Pending",
 
-        isTodayOrder: true,
+          isTodayOrder: true,
 
-        cutoffTime,
-      });
+          cutoffTime,
+        });
+      } catch (createError) {
+        /*
+         * Another concurrent request beat us to it.
+         * Return the already-created order instead of failing.
+         */
+        const wonOrder = await resolveRacedDuplicate(createError);
+
+        if (wonOrder) {
+          return {
+            order: wonOrder,
+            alreadyCreated: true,
+          };
+        }
+
+        throw createError;
+      }
     }
 
     /* ========================================================
@@ -417,7 +478,13 @@ export const createPaidOrderFromCart = async ({
     await cart.save();
 
     /* ========================================================
-       15. RETURN SUCCESS
+       15. RECORD PAYMENT LIFECYCLE
+    ======================================================== */
+
+    await markPaymentProcessed(order, paymentTransactionId);
+
+    /* ========================================================
+       16. RETURN SUCCESS
     ======================================================== */
 
     return {
@@ -428,5 +495,40 @@ export const createPaidOrderFromCart = async ({
     console.error("createPaidOrderFromCart error:", error);
 
     throw error;
+  }
+};
+
+/* ============================================================
+   MARK PAYMENT PROCESSED (Payment model lifecycle)
+============================================================ */
+
+/*
+ * Record the successful payment lifecycle so callbacks are
+ * idempotent and can be reconciled. The Order document remains
+ * the source of truth for the order itself.
+ */
+const markPaymentProcessed = async (order, paymentTransactionId) => {
+  try {
+    if (!order?.transactionId) return;
+
+    await Payment.updateOne(
+      { merchantOrderId: order.transactionId },
+      {
+        $set: {
+          status: "SUCCESS",
+          paymentMethod: "ONLINE",
+          phonePeTransactionId: paymentTransactionId || null,
+          orderId: order._id,
+          amount: Number(order.totalAmount || 0),
+          originalAmount: Number(order.originalTotalAmount || 0),
+          discount: Number(order.discountAmount || 0),
+          phonePeResponse: null,
+          failureReason: null,
+        },
+      },
+      { upsert: true },
+    );
+  } catch (error) {
+    console.error("markPaymentProcessed error:", error);
   }
 };
