@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 const particles = [
   { x: -70, y: -42, r: -25, d: 0 },
@@ -15,48 +15,65 @@ const particles = [
 
 const OrderSuccess = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const audioRef = useRef(null);
+
+  /*
+   * The confirm-tick animation (+ success sound) is only shown for
+   * Cash On Delivery (COD) orders. Online/UPI orders skip it, since the
+   * payment itself was already confirmed on the PhonePe side.
+   */
+  const isOnline =
+    String(location.state?.paymentMethod || "").toLowerCase() === "online";
+
+  const isCod = !isOnline;
 
   useEffect(() => {
     /* ========================================================
-       PRELOAD SOUND
+       SOUND — COD ONLY
+       Online payments are already confirmed, so no celebratory
+       sound/tick is played for them.
     ======================================================== */
 
-    const audio = new Audio("/new.mp3");
+    let soundTimer;
 
-    audio.volume = 0.9;
-    audio.preload = "auto";
+    if (isCod) {
+      const audio = new Audio("/new.mp3");
 
-    audioRef.current = audio;
-    audio.load();
+      audio.volume = 0.9;
+      audio.preload = "auto";
+
+      audioRef.current = audio;
+      audio.load();
+
+      soundTimer = setTimeout(() => {
+        audio.play().catch(() => {});
+      }, 1100);
+    }
 
     /* ========================================================
-       SOUND — WHEN SUCCESS APPEARS
-    ======================================================== */
-
-    const soundTimer = setTimeout(() => {
-      audio.play().catch(() => {});
-    }, 1100);
-
-    /* ========================================================
-       2 SEC LOADING + 1 SEC SUCCESS
+       REDIRECT TO MY ORDERS
+       COD: 2s loading + 1s success (4.5s total)
+       Online: skip the tick, redirect sooner (2.5s)
     ======================================================== */
 
     const redirectTimer = setTimeout(() => {
       navigate("/my-orders", {
         replace: true,
       });
-    }, 4500);
+    }, isCod ? 4500 : 2500);
 
     return () => {
       clearTimeout(soundTimer);
       clearTimeout(redirectTimer);
 
-      audio.pause();
-      audio.currentTime = 0;
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+      }
       audioRef.current = null;
     };
-  }, [navigate]);
+  }, [navigate, isCod]);
 
   return (
     <div
@@ -74,9 +91,10 @@ const OrderSuccess = () => {
       <div className="relative flex flex-col items-center">
         {/* ====================================================
             PARTICLES
-            ONLY AFTER SUCCESS
+            ONLY AFTER SUCCESS (COD ONLY)
         ==================================================== */}
 
+        {isCod && (
         <div
           className="
             pointer-events-none
@@ -120,21 +138,25 @@ const OrderSuccess = () => {
             />
           ))}
         </div>
+        )}
 
         {/* ====================================================
             ICON AREA
+            COD → loading + confirm tick
+            Online → static confirmation (no tick)
         ==================================================== */}
 
-        <div
-          className="
-            relative
-            flex
-            h-32
-            w-32
-            items-center
-            justify-center
-          "
-        >
+        {isCod ? (
+          <div
+            className="
+              relative
+              flex
+              h-32
+              w-32
+              items-center
+              justify-center
+            "
+          >
           {/* ==================================================
               LOADING STATE
               0 → 2 SECONDS
@@ -319,6 +341,28 @@ const OrderSuccess = () => {
             "
           />
         </div>
+        ) : (
+          /* ==================================================
+             ONLINE PAYMENT — STATIC CIRCLE, NO ANIMATED TICK
+          ================================================== */
+          <div className="relative flex h-32 w-32 items-center justify-center">
+            <div className="absolute flex h-24 w-24 items-center justify-center rounded-full bg-green-500 shadow-[0_14px_40px_rgba(34,197,94,0.28)]">
+              <svg
+                viewBox="0 0 64 64"
+                className="relative z-10 h-[46px] w-[46px]"
+                fill="none"
+              >
+                <path
+                  d="M18 32L27 41L46 22"
+                  stroke="white"
+                  strokeWidth="5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+          </div>
+        )}
 
         {/* ====================================================
             SUCCESS TEXT
@@ -334,7 +378,7 @@ const OrderSuccess = () => {
             y: 0,
           }}
           transition={{
-            delay: 2.35,
+            delay: isCod ? 2.35 : 0.15,
             duration: 0.25,
           }}
           className="
@@ -358,7 +402,7 @@ const OrderSuccess = () => {
             opacity: 1,
           }}
           transition={{
-            delay: 2.48,
+            delay: isCod ? 2.48 : 0.3,
             duration: 0.2,
           }}
           className="
