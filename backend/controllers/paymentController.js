@@ -96,6 +96,34 @@ const calculateOnlineAmount = (amount) => {
 };
 
 /*
+ * Resolve the authoritative PhonePe merchant order ID for a user.
+ *
+ * The frontend passes a `transactionId` it read from the PhonePe redirect
+ * URL, but PhonePe does not always echo back OUR merchantOrderId (or it may
+ * echo it under a different parameter name). If the passed ID does not match
+ * a Payment record we created, fall back to the user's most recent PENDING
+ * Payment record. This makes verification independent of the redirect URL.
+ */
+const resolveEffectiveTransactionId = async (userId, transactionId) => {
+  if (transactionId) {
+    const match = await Payment.findOne({ merchantOrderId: transactionId });
+
+    if (match && String(match.userId) === String(userId)) {
+      return transactionId;
+    }
+  }
+
+  const latest = await Payment.findOne({ userId })
+    .sort({ createdAt: -1 });
+
+  if (latest?.merchantOrderId && String(latest.userId) === String(userId)) {
+    return latest.merchantOrderId;
+  }
+
+  return transactionId || null;
+};
+
+/*
  * Calculate the cart total ONLY from backend cart data.
  *
  * Never trust amount sent by frontend.
@@ -407,27 +435,43 @@ export const checkPaymentStatus = async (req, res) => {
     }
 
     /* ========================================================
-       4. VERIFY WITH PHONEPE
+       4. RESOLVE AUTHORITATIVE MERCHANT ORDER ID
+       (fall back to the user's stored pending Payment record
+        if the redirect URL did not echo our ID correctly)
     ======================================================== */
 
-    const phonePeResult = await getPhonePePaymentStatus(transactionId);
+    const effectiveTransactionId =
+      await resolveEffectiveTransactionId(userId, transactionId);
+
+    if (!effectiveTransactionId) {
+      return res.status(404).json({
+        success: false,
+        message: "No pending payment found for this user.",
+      });
+    }
+
+    /* ========================================================
+       5. VERIFY WITH PHONEPE
+    ======================================================== */
+
+    const phonePeResult = await getPhonePePaymentStatus(effectiveTransactionId);
 
     const phonePeData = phonePeResult?.data;
 
     /* ========================================================
-       5. NORMALIZE STATUS
+       6. NORMALIZE STATUS
     ======================================================== */
 
     const paymentStatus = normalizePhonePeStatus(phonePeData);
 
     /* ========================================================
-       6. GET GATEWAY TRANSACTION ID
+       7. GET GATEWAY TRANSACTION ID
     ======================================================== */
 
     const paymentTransactionId = extractPhonePeTransactionId(phonePeData);
 
     /* ========================================================
-       7. SUCCESS
+       8. SUCCESS
     ======================================================== */
 
     if (paymentStatus === "SUCCESS") {
@@ -439,7 +483,7 @@ export const checkPaymentStatus = async (req, res) => {
        */
       try {
         await Payment.updateOne(
-          { merchantOrderId: transactionId },
+          { merchantOrderId: effectiveTransactionId },
           {
             $set: {
               status: "SUCCESS",
@@ -463,9 +507,9 @@ export const checkPaymentStatus = async (req, res) => {
 
         status: "SUCCESS",
 
-        transactionId,
+        transactionId: effectiveTransactionId,
 
-        paymentTransactionId: paymentTransactionId || transactionId,
+        paymentTransactionId: paymentTransactionId || effectiveTransactionId,
 
         message: "Payment successful.",
       });
@@ -476,7 +520,11 @@ export const checkPaymentStatus = async (req, res) => {
     ======================================================== */
 
     if (paymentStatus === "FAILED") {
-      await markPaymentFailure(transactionId, "FAILED", "Payment failed.");
+      await markPaymentFailure(
+        effectiveTransactionId,
+        "FAILED",
+        "Payment failed.",
+      );
 
       return res.status(400).json({
         success: false,
@@ -485,7 +533,7 @@ export const checkPaymentStatus = async (req, res) => {
 
         status: "FAILED",
 
-        transactionId,
+        transactionId: effectiveTransactionId,
 
         message: "Payment failed.",
       });
@@ -496,7 +544,11 @@ export const checkPaymentStatus = async (req, res) => {
     ======================================================== */
 
     if (paymentStatus === "EXPIRED") {
-      await markPaymentFailure(transactionId, "EXPIRED", "Payment session expired.");
+      await markPaymentFailure(
+        effectiveTransactionId,
+        "EXPIRED",
+        "Payment session expired.",
+      );
 
       return res.status(400).json({
         success: false,
@@ -505,7 +557,7 @@ export const checkPaymentStatus = async (req, res) => {
 
         status: "EXPIRED",
 
-        transactionId,
+        transactionId: effectiveTransactionId,
 
         message: "Payment session expired.",
       });
@@ -522,7 +574,7 @@ export const checkPaymentStatus = async (req, res) => {
 
       status: "PENDING",
 
-      transactionId,
+      transactionId: effectiveTransactionId,
 
       message: "Payment is still being processed.",
     });
@@ -596,11 +648,27 @@ export const completeOnlinePayment = async (req, res) => {
     }
 
     /* ========================================================
-       3. OWNERSHIP CHECK
+       3. RESOLVE AUTHORITATIVE MERCHANT ORDER ID
+       (fall back to the user's stored pending Payment record
+        if the redirect URL did not echo our ID correctly)
+    ======================================================== */
+
+    const effectiveTransactionId =
+      await resolveEffectiveTransactionId(userId, transactionId);
+
+    if (!effectiveTransactionId) {
+      return res.status(404).json({
+        success: false,
+        message: "No pending payment found for this user.",
+      });
+    }
+
+    /* ========================================================
+       4. OWNERSHIP CHECK
     ======================================================== */
 
     const paymentRecord = await Payment.findOne({
-      merchantOrderId: transactionId,
+      merchantOrderId: effectiveTransactionId,
     });
 
     if (!paymentRecord) {
@@ -618,21 +686,21 @@ export const completeOnlinePayment = async (req, res) => {
     }
 
     /* ========================================================
-       4. VERIFY PAYMENT DIRECTLY WITH PHONEPE
+       5. VERIFY PAYMENT DIRECTLY WITH PHONEPE
     ======================================================== */
 
-    const phonePeResult = await getPhonePePaymentStatus(transactionId);
+    const phonePeResult = await getPhonePePaymentStatus(effectiveTransactionId);
 
     const phonePeData = phonePeResult?.data;
 
     /* ========================================================
-       5. NORMALIZE PHONEPE STATUS
+       6. NORMALIZE PHONEPE STATUS
     ======================================================== */
 
     const paymentStatus = normalizePhonePeStatus(phonePeData);
 
     /* ========================================================
-       6. PAYMENT NOT SUCCESSFUL
+       7. PAYMENT NOT SUCCESSFUL
     ======================================================== */
 
     if (paymentStatus !== "SUCCESS") {
@@ -643,7 +711,11 @@ export const completeOnlinePayment = async (req, res) => {
             ? "Payment session expired."
             : "Payment is not completed yet.";
 
-      await markPaymentFailure(transactionId, paymentStatus, failReason);
+      await markPaymentFailure(
+        effectiveTransactionId,
+        paymentStatus,
+        failReason,
+      );
 
       return res.status(400).json({
         success: false,
@@ -657,7 +729,7 @@ export const completeOnlinePayment = async (req, res) => {
     }
 
     /* ========================================================
-       7. AMOUNT RECONCILIATION
+       8. AMOUNT RECONCILIATION
        Verify PhonePe charged the same amount we authorized.
     ======================================================== */
 
@@ -672,11 +744,11 @@ export const completeOnlinePayment = async (req, res) => {
 
       if (Number(phonePeAmountPaise) !== authorizedPaise) {
         console.error(
-          `Amount mismatch for ${transactionId}: authorized=${authorizedPaise}p, charged=${phonePeAmountPaise}p`,
+          `Amount mismatch for ${effectiveTransactionId}: authorized=${authorizedPaise}p, charged=${phonePeAmountPaise}p`,
         );
 
         await markPaymentFailure(
-          transactionId,
+          effectiveTransactionId,
           "FAILED",
           `Amount mismatch: expected ${authorizedPaise}p, got ${phonePeAmountPaise}p`,
         );
@@ -689,20 +761,20 @@ export const completeOnlinePayment = async (req, res) => {
     }
 
     /* ========================================================
-       8. GET PHONEPE TRANSACTION ID
+       9. GET PHONEPE TRANSACTION ID
     ======================================================== */
 
     const paymentTransactionId =
-      extractPhonePeTransactionId(phonePeData) || transactionId;
+      extractPhonePeTransactionId(phonePeData) || effectiveTransactionId;
 
     /* ========================================================
-       9. CREATE PAID ORDER
+       10. CREATE PAID ORDER
     ======================================================== */
 
     const result = await createPaidOrderFromCart({
       userId,
 
-      transactionId,
+      transactionId: effectiveTransactionId,
 
       paymentTransactionId,
     });
@@ -713,7 +785,7 @@ export const completeOnlinePayment = async (req, res) => {
 
     try {
       await Payment.updateOne(
-        { merchantOrderId: transactionId },
+        { merchantOrderId: effectiveTransactionId },
         {
           $set: {
             status: "SUCCESS",
@@ -747,7 +819,7 @@ export const completeOnlinePayment = async (req, res) => {
 
       alreadyCreated: result.alreadyCreated,
 
-      transactionId,
+      transactionId: effectiveTransactionId,
 
       paymentTransactionId,
     });
