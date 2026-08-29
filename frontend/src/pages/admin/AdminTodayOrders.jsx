@@ -382,9 +382,9 @@ const AdminTodayOrders = () => {
                           {/* PAYMENT STATUS */}
 
                           {order.paymentStatus === "Paid" && (
-                            <div className="inline-flex items-center gap-1.5 rounded-2xl bg-emerald-600 px-3 py-2 text-sm font-bold text-white shadow-sm">
+                            <div className="inline-flex items-center gap-1.5 rounded-2xl bg-emerald-600 px-3 py-2 text-[12px] font-bold text-white shadow-sm">
                               <Check className="h-4 w-4" />
-                              भुगतान हो गया
+                              पैसे जमा
                             </div>
                           )}
                         </div>

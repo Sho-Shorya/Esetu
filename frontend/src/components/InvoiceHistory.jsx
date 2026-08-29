@@ -4,12 +4,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowDownToLine,
   ArrowLeft,
-  CalendarDays,
   FileText,
   Loader2,
   ReceiptText,
   RefreshCw,
-  WalletCards,
 } from "lucide-react";
 
 import { API_BASE_URL } from "@/lib/constants";
@@ -84,6 +82,7 @@ const InvoiceHistory = () => {
   const navigate = useNavigate();
 
   const [invoices, setInvoices] = useState([]);
+  const [receipts, setReceipts] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -96,7 +95,7 @@ const InvoiceHistory = () => {
      FETCH INVOICES
   ======================================================= */
 
-  const fetchInvoices = async (isRefresh = false) => {
+  const fetchData = async (isRefresh = false) => {
     try {
       if (isRefresh) {
         setRefreshing(true);
@@ -108,26 +107,39 @@ const InvoiceHistory = () => {
 
       if (!token) {
         setInvoices([]);
+        setReceipts([]);
         return;
       }
 
-      const response = await axios.get(
-        `${API_BASE_URL}/api/v1/user/invoice/my-invoices`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
+      const headers = {
+        Authorization: `Bearer ${token}`,
+      };
 
-      if (response.data?.success) {
-        setInvoices(response.data.invoices || []);
+      const [invoiceResponse, receiptResponse] = await Promise.all([
+        axios.get(`${API_BASE_URL}/api/v1/user/invoice/my-invoices`, {
+          headers,
+        }),
+
+        axios.get(`${API_BASE_URL}/api/v1/order/my-receipts`, {
+          headers,
+        }),
+      ]);
+
+      if (invoiceResponse.data?.success) {
+        setInvoices(invoiceResponse.data.invoices || []);
       } else {
         setInvoices([]);
+      }
+
+      if (receiptResponse.data?.success) {
+        setReceipts(receiptResponse.data.receipts || []);
+      } else {
+        setReceipts([]);
       }
     } catch (error) {
       console.error("Invoice History Error:", error);
       setInvoices([]);
+      setReceipts([]);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -135,7 +147,7 @@ const InvoiceHistory = () => {
   };
 
   useEffect(() => {
-    fetchInvoices();
+    fetchData();
   }, []);
 
   /* =======================================================
@@ -163,6 +175,22 @@ const InvoiceHistory = () => {
   };
 
   /* =======================================================
+     DATE KEY FROM DATE
+  ======================================================= */
+
+  const toLocalDateKey = (value) => {
+    if (!value) return null;
+
+    const date = new Date(value);
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  };
+
+  /* =======================================================
      START OF TODAY
   ======================================================= */
 
@@ -176,9 +204,53 @@ const InvoiceHistory = () => {
      FILTER INVOICES
   ======================================================= */
 
-  const filteredInvoices = useMemo(() => {
+  /* =======================================================
+     COMBINED ENTRIES
+
+     DailyInvoices + per-order receipts, sorted newest first.
+  ======================================================= */
+
+  const entries = useMemo(() => {
+    const invoiceEntries = invoices.map((invoice) => ({
+      kind: "invoice",
+      _id: invoice._id,
+      dateKey: invoice.dateKey || null,
+      date: parseDateKey(invoice.dateKey),
+      totalAmount: invoice.totalAmount || 0,
+      totalOrders: invoice.totalOrders || 0,
+      itemCount: invoice.items?.length || 0,
+    }));
+
+    const receiptEntries = receipts.map((receipt) => ({
+      kind: "receipt",
+      _id: receipt._id,
+      orderId: receipt.orderId,
+      dateKey: toLocalDateKey(receipt.orderCreatedAt || receipt.generatedAt),
+      date: receipt.orderCreatedAt
+        ? new Date(receipt.orderCreatedAt)
+        : receipt.generatedAt
+          ? new Date(receipt.generatedAt)
+          : null,
+      generatedDateKey: toLocalDateKey(receipt.generatedAt),
+      receiptNumber: receipt.receiptNumber,
+      totalAmount: receipt.totalAmount || 0,
+    }));
+
+    return [...invoiceEntries, ...receiptEntries].sort((a, b) => {
+      const timeA = a.date ? new Date(a.date).getTime() : 0;
+      const timeB = b.date ? new Date(b.date).getTime() : 0;
+
+      return timeB - timeA;
+    });
+  }, [invoices, receipts]);
+
+  /* =======================================================
+     FILTER ENTRIES
+  ======================================================= */
+
+  const filteredEntries = useMemo(() => {
     if (dateFilter === "all") {
-      return invoices;
+      return entries;
     }
 
     const now = new Date();
@@ -190,12 +262,10 @@ const InvoiceHistory = () => {
     ----------------------------------------------------- */
 
     if (dateFilter === "today") {
-      return invoices.filter((invoice) => {
-        const invoiceDate = parseDateKey(invoice.dateKey);
+      return entries.filter((entry) => {
+        if (!entry.date) return false;
 
-        if (!invoiceDate) return false;
-
-        return invoiceDate.getTime() === startOfToday.getTime();
+        return new Date(entry.date).getTime() === startOfToday.getTime();
       });
     }
 
@@ -221,14 +291,34 @@ const InvoiceHistory = () => {
       startDate.setMonth(startDate.getMonth() - 6);
     }
 
-    return invoices.filter((invoice) => {
-      const invoiceDate = parseDateKey(invoice.dateKey);
+    return entries.filter((entry) => {
+      if (!entry.date) return false;
 
-      if (!invoiceDate) return false;
+      const entryDate = new Date(entry.date);
 
-      return invoiceDate >= startDate && invoiceDate <= now;
+      return entryDate >= startDate && entryDate <= now;
     });
-  }, [invoices, dateFilter]);
+  }, [entries, dateFilter]);
+
+  /* =======================================================
+     GROUP ENTRIES BY DAY
+  ======================================================= */
+
+  const groupedEntries = useMemo(() => {
+    const groupMap = new Map();
+
+    for (const entry of filteredEntries) {
+      const key = entry.dateKey || "---";
+
+      if (!groupMap.has(key)) {
+        groupMap.set(key, []);
+      }
+
+      groupMap.get(key).push(entry);
+    }
+
+    return Array.from(groupMap.entries());
+  }, [filteredEntries]);
 
   /* =======================================================
      ACTIVE FILTER LABEL
@@ -245,21 +335,21 @@ const InvoiceHistory = () => {
   ======================================================= */
 
   const filteredTotal = useMemo(() => {
-    return filteredInvoices.reduce(
-      (sum, invoice) => sum + Number(invoice.totalAmount || 0),
+    return filteredEntries.reduce(
+      (sum, entry) => sum + Number(entry.totalAmount || 0),
       0,
     );
-  }, [filteredInvoices]);
+  }, [filteredEntries]);
 
   /* =======================================================
      DOWNLOAD PDF
   ======================================================= */
 
-  const downloadInvoice = async (invoice) => {
-    if (!invoice?._id) return;
+  const downloadEntry = async (entry) => {
+    if (!entry || !entry._id) return;
 
     try {
-      setDownloadingId(invoice._id);
+      setDownloadingId(entry._id);
 
       const token = localStorage.getItem("token");
 
@@ -268,27 +358,32 @@ const InvoiceHistory = () => {
         return;
       }
 
-      const response = await axios.get(
-        `${API_BASE_URL}/api/v1/user/invoice/${invoice._id}/pdf`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          responseType: "blob",
+      const isInvoice = entry.kind === "invoice";
+
+      const url = isInvoice
+        ? `${API_BASE_URL}/api/v1/user/invoice/${entry._id}/pdf`
+        : `${API_BASE_URL}/api/v1/order/receipt/${entry.orderId}/pdf`;
+
+      const response = await axios.get(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
         },
-      );
+        responseType: "blob",
+      });
 
       const blob = new Blob([response.data], {
         type: "application/pdf",
       });
 
-      const url = window.URL.createObjectURL(blob);
+      const objectUrl = window.URL.createObjectURL(blob);
 
       const link = document.createElement("a");
 
-      link.href = url;
+      link.href = objectUrl;
 
-      link.download = `e-setu-receipt-${invoice.dateKey || invoice._id}.pdf`;
+      link.download = isInvoice
+        ? `e-setu-receipt-${entry.dateKey || entry._id}.pdf`
+        : `e-setu-receipt-${String(entry.orderId || "").slice(-8)}.pdf`;
 
       document.body.appendChild(link);
 
@@ -297,10 +392,10 @@ const InvoiceHistory = () => {
       link.remove();
 
       setTimeout(() => {
-        window.URL.revokeObjectURL(url);
+        window.URL.revokeObjectURL(objectUrl);
       }, 1000);
     } catch (error) {
-      console.error("Download Invoice Error:", error);
+      console.error("Download Receipt Error:", error);
 
       alert("रसीद डाउनलोड नहीं हो सकी।");
     } finally {
@@ -448,11 +543,11 @@ const InvoiceHistory = () => {
                   sm:text-2xl
                 "
               >
-                दैनिक रसीदें
+                सभी रसीदें
               </h1>
 
               <p className="mt-0.5 text-xs font-medium text-neutral-400">
-                आपकी सभी रसीदें
+                दैनिक और ऑर्डर रसीदें
               </p>
             </div>
           </div>
@@ -461,7 +556,7 @@ const InvoiceHistory = () => {
 
           <button
             type="button"
-            onClick={() => fetchInvoices(true)}
+            onClick={() => fetchData(true)}
             disabled={refreshing}
             aria-label="रसीदें रिफ्रेश करें"
             className="
@@ -493,20 +588,6 @@ const InvoiceHistory = () => {
         {/* =================================================
             QUICK STATS
         ================================================= */}
-
-        {!loading && invoices.length > 0 && (
-          <motion.div
-            initial={{
-              opacity: 0,
-              y: 8,
-            }}
-            animate={{
-              opacity: 1,
-              y: 0,
-            }}
-            className="mb-5 grid grid-cols-2 gap-2"
-          ></motion.div>
-        )}
 
         {/* =================================================
             DATE FILTER
@@ -594,7 +675,7 @@ const InvoiceHistory = () => {
             FILTER SUMMARY
         ================================================= */}
 
-        {!loading && invoices.length > 0 && (
+        {!loading && entries.length > 0 && (
           <AnimatePresence mode="wait">
             <motion.div
               key={dateFilter}
@@ -634,7 +715,7 @@ const InvoiceHistory = () => {
               </div>
 
               <p className="text-[10px] font-black text-red-500">
-                {filteredInvoices.length} रसीद
+                {filteredEntries.length} रसीद
               </p>
             </motion.div>
           </AnimatePresence>
@@ -650,7 +731,7 @@ const InvoiceHistory = () => {
             <LoadingCard />
             <LoadingCard />
           </div>
-        ) : filteredInvoices.length === 0 ? (
+        ) : filteredEntries.length === 0 ? (
           /* =================================================
              EMPTY
           ================================================= */
@@ -700,7 +781,7 @@ const InvoiceHistory = () => {
 
             <p className="mt-1 text-xs text-neutral-400">
               {dateFilter === "all"
-                ? "आपकी दैनिक रसीदें यहाँ दिखाई देंगी"
+                ? "आपकी सभी रसीदें यहाँ दिखाई देंगी"
                 : "इस अवधि में कोई रसीद नहीं मिली"}
             </p>
 
@@ -729,77 +810,88 @@ const InvoiceHistory = () => {
           </motion.div>
         ) : (
           /* =================================================
-             INVOICE LIST
-             IMPORTANT:
+             INVOICE LIST (grouped by day)
              Card height intentionally kept compact.
           ================================================= */
 
-          <div className="space-y-3">
-            {filteredInvoices.map((invoice, index) => {
-              const isDownloading = downloadingId === invoice._id;
+          <div className="space-y-6">
+            {groupedEntries.map(([dateKey, rows], groupIndex) => (
+              <div key={dateKey}>
+                {/* DAY HEADER */}
 
-              return (
-                <motion.div
-                  key={invoice._id}
-                  initial={{
-                    opacity: 0,
-                    y: 8,
-                  }}
-                  animate={{
-                    opacity: 1,
-                    y: 0,
-                  }}
-                  transition={{
-                    duration: 0.2,
-                    delay: Math.min(index * 0.025, 0.12),
-                  }}
-                  className="
-                    group
-                    relative
-                    overflow-hidden
-                    rounded-[22px]
-                    border
-                    border-neutral-200
-                    bg-white
-                    shadow-sm
-                    transition
-                    hover:border-red-100
-                    hover:shadow-md
-                  "
-                >
-                  {/* =========================================
-                      RED ACCENT
-                  ========================================= */}
+                <div className="mb-2 flex items-center gap-2 px-1">
+                  <p className="text-xs font-black tracking-wide text-neutral-500">
+                    {formatDate(dateKey)}
+                  </p>
 
-                  <div
-                    className="
-                      absolute
-                      left-0
-                      top-0
-                      h-full
-                      w-1
-                      bg-red-600
-                    "
-                  />
+                  <div className="h-px flex-1 rounded-full bg-neutral-200" />
 
-                  <div
-                    className="
-                      flex
-                      min-h-[82px]
-                      items-center
-                      gap-3
-                      p-4
-                      pl-5
-                      sm:gap-4
-                      sm:pl-6
-                    "
-                  >
+                  <span className="text-[10px] font-bold text-neutral-400">
+                    {rows.length} रसीद
+                  </span>
+                </div>
+
+                <div className="space-y-3">
+                  {rows.map((entry, index) => {
+                    const isDownloading = downloadingId === entry._id;
+
+                    const isReceipt = entry.kind === "receipt";
+
+                    return (
+                      <motion.div
+                        key={`${entry.kind}-${entry._id}`}
+                        initial={{
+                          opacity: 0,
+                          y: 8,
+                        }}
+                        animate={{
+                          opacity: 1,
+                          y: 0,
+                        }}
+                        transition={{
+                          duration: 0.2,
+                          delay: Math.min(
+                            groupIndex * 0.02 + index * 0.02,
+                            0.15,
+                          ),
+                        }}
+                        className="
+                          overflow-hidden
+                          rounded-[22px]
+                          border
+                          border-neutral-200
+                          bg-white
+                          shadow-sm
+                          transition
+                          hover:border-red-100
+                          hover:shadow-md
+                        "
+                      >
+                        <div
+                          className={`
+                            h-1
+                            ${isReceipt ? "bg-red-600" : "bg-neutral-900"}
+                          `}
+                        />
+
+                        <div
+                          className="
+                            flex
+                            min-h-[82px]
+                            items-center
+                            gap-3
+                            p-4
+                            pl-5
+                            sm:gap-4
+                            sm:pl-6
+                          "
+                        >
                     {/* =======================================
                         RECEIPT ICON
                     ======================================= */}
 
                     <div
-                      className="
+                      className={`
                         flex
                         h-11
                         w-11
@@ -807,11 +899,15 @@ const InvoiceHistory = () => {
                         items-center
                         justify-center
                         rounded-xl
-                        bg-neutral-950
                         text-white
-                      "
+                        ${isReceipt ? "bg-red-600" : "bg-neutral-950"}
+                      `}
                     >
-                      <FileText className="h-5 w-5" />
+                      {isReceipt ? (
+                        <ReceiptText className="h-5 w-5" />
+                      ) : (
+                        <FileText className="h-5 w-5" />
+                      )}
                     </div>
 
                     {/* =======================================
@@ -819,54 +915,59 @@ const InvoiceHistory = () => {
                     ======================================= */}
 
                     <div className="min-w-0 flex-1">
-                      {/* DATE */}
+                      {/* TYPE BADGE */}
 
-                      <div className="flex items-center gap-1.5">
-                        <CalendarDays
-                          className="
-                            h-3.5
-                            w-3.5
-                            shrink-0
-                            text-red-600
-                          "
-                        />
-
-                        <p
-                          className="
-                            text-base
-                            font-black
-                            tracking-tight
-                            text-neutral-950
-                          "
-                        >
-                          {formatDate(invoice.dateKey)}
-                        </p>
-                      </div>
+                      <span
+                        className={`
+                          inline-block
+                          rounded-full
+                          px-2
+                          py-0.5
+                          text-[9px]
+                          font-black
+                          uppercase
+                          tracking-wide
+                          ${
+                            isReceipt
+                              ? "bg-red-50 text-red-600"
+                              : "bg-neutral-100 text-neutral-500"
+                          }
+                        `}
+                      >
+                        {isReceipt ? "ऑर्डर रसीद" : "दैनिक रसीद"}
+                      </span>
 
                       {/* META */}
 
-                      <div className="mt-1.5 flex items-center gap-2">
-                        <span
-                          className="
-                            text-xs
-                            font-medium
-                            text-neutral-400
-                          "
-                        >
-                          {invoice.totalOrders || 0} ऑर्डर
-                        </span>
+                      <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                        {isReceipt ? (
+                          <>
+                            <span className="text-xs font-medium text-neutral-400">
+                              ऑर्डर #
+                              {String(entry.orderId || "")
+                                .slice(-8)
+                                .toUpperCase()}
+                            </span>
 
-                        <span className="text-neutral-300">•</span>
+                            <span className="text-neutral-300">•</span>
 
-                        <span
-                          className="
-                            text-xs
-                            font-medium
-                            text-neutral-400
-                          "
-                        >
-                          {invoice.items?.length || 0} आइटम
-                        </span>
+                            <span className="text-[11px] font-medium text-neutral-400">
+                              रसीद बनी: {formatDate(entry.generatedDateKey)}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-xs font-medium text-neutral-400">
+                              {entry.totalOrders} ऑर्डर
+                            </span>
+
+                            <span className="text-neutral-300">•</span>
+
+                            <span className="text-xs font-medium text-neutral-400">
+                              {entry.itemCount} आइटम
+                            </span>
+                          </>
+                        )}
                       </div>
                     </div>
 
@@ -875,18 +976,17 @@ const InvoiceHistory = () => {
                     ======================================= */}
 
                     <div className="flex shrink-0 items-center gap-2">
-                      {/* DESKTOP AMOUNT */}
+                      {/* AMOUNT */}
 
                       <p
                         className="
-                          hidden
-                          text-base
+                          text-sm
                           font-black
                           text-neutral-950
-                          sm:block
+                          sm:text-base
                         "
                       >
-                        {formatMoney(invoice.totalAmount)}
+                        {formatMoney(entry.totalAmount)}
                       </p>
 
                       {/* DOWNLOAD */}
@@ -896,7 +996,7 @@ const InvoiceHistory = () => {
                         whileTap={{
                           scale: 0.94,
                         }}
-                        onClick={() => downloadInvoice(invoice)}
+                        onClick={() => downloadEntry(entry)}
                         disabled={isDownloading}
                         aria-label="रसीद डाउनलोड करें"
                         title="रसीद डाउनलोड करें"
@@ -947,32 +1047,11 @@ const InvoiceHistory = () => {
                 </motion.div>
               );
             })}
+</div>
           </div>
-        )}
-
-        {/* =================================================
-            BOTTOM NOTE
-        ================================================= */}
-
-        {!loading && filteredInvoices.length > 0 && (
-          <motion.p
-            initial={{
-              opacity: 0,
-            }}
-            animate={{
-              opacity: 1,
-            }}
-            className="
-              mt-5
-              text-center
-              text-[11px]
-              font-medium
-              text-neutral-400
-            "
-          >
-            अपनी रसीद डाउनलोड करने के लिए डाउनलोड दबाएँ
-          </motion.p>
-        )}
+        ))}
+        </div>
+      )}
       </div>
     </main>
   );

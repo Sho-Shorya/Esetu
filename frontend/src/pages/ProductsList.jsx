@@ -2,14 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { AnimatePresence, motion } from "framer-motion";
-import {
-  Loader2,
-  Package,
-  Search,
-  ShoppingCart,
-  Sparkles,
-  X,
-} from "lucide-react";
+import { Check, Loader2, Package, ShoppingCart, X } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 
@@ -41,6 +34,9 @@ const ProductsList = () => {
 
   const productsRef = useRef(null);
   const [addLoading, setAddLoading] = useState(false);
+  const [addSuccess, setAddSuccess] = useState(false);
+  const [flyImage, setFlyImage] = useState(null);
+  const sheetImageRef = useRef(null);
   const cartSound = () => {
     const audio = new Audio("/addtocart6.mp3");
 
@@ -134,6 +130,8 @@ const ProductsList = () => {
     setSelectedVariantCompany("");
     setSelectedMeasurement("");
     setQty(1);
+    setAddSuccess(false);
+    setFlyImage(null);
   };
   const selectedVariant = selectedProduct?.variants.find(
     (variant) =>
@@ -141,6 +139,11 @@ const ProductsList = () => {
       variant.measurement === selectedMeasurement,
   );
   const currentPrice = (selectedVariant?.price || 0) * qty;
+  const currentStep = !selectedVariantCompany
+    ? 0
+    : !selectedMeasurement
+      ? 1
+      : 2;
   const handleSubmit = async (e) => {
     cartSound();
     e.preventDefault();
@@ -188,7 +191,40 @@ const ProductsList = () => {
       if (res.data.success) {
         dispatch(setCartData(res.data.cart));
 
-        handleCross();
+        setAddSuccess(true);
+
+        const start = sheetImageRef.current?.getBoundingClientRect();
+
+        const target = document
+          .querySelector("[data-cart-target]")
+          ?.getBoundingClientRect();
+
+        const end = target || {
+          left: window.innerWidth - 56,
+          top: 16,
+          width: 48,
+          height: 48,
+        };
+
+        if (start && end) {
+          const startCenterX = start.left + start.width / 2;
+          const startCenterY = start.top + start.height / 2;
+          const endCenterX = end.left + end.width / 2;
+          const endCenterY = end.top + end.height / 2;
+
+          setFlyImage({
+            src: selectedProduct.image,
+            size: Math.max(40, Math.min(start.width, start.height)),
+            startX: startCenterX,
+            startY: startCenterY,
+            deltaX: endCenterX - startCenterX,
+            deltaY: endCenterY - startCenterY,
+          });
+        }
+
+        setTimeout(() => {
+          handleCross();
+        }, 720);
       } else {
         toast.error(res.data.message);
       }
@@ -418,45 +454,53 @@ const ProductsList = () => {
 
               <div className="p-5">
                 {/* Header */}
-                <div className="flex gap-5">
+                <div className="flex gap-4">
                   <motion.div
                     layoutId={selectedProduct._id}
-                    className="flex h-32 w-32 items-center justify-center rounded-3xl bg-gradient-to-br from-gray-50 to-red-50"
+                    className="flex h-28 w-28 mb-6 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-gray-50 to-red-50"
                   >
                     <img
+                      ref={sheetImageRef}
                       src={selectedProduct.image}
                       alt={selectedProduct.name}
-                      className="h-28 object-contain"
+                      className="h-24 object-contain"
                     />
                   </motion.div>
 
-                  <div className="flex-1">
-                    <h1 className="text-2xl font-bold text-gray-800">
+                  <div className="min-w-0 flex-1 pr-10">
+                    <h1 className="line-clamp-2 text-xl font-bold leading-tight text-gray-800">
                       {selectedProduct.name}
                     </h1>
 
-                    <p className="mt-1 text-sm text-gray-500">
+                    <p className="mt-0.5 line-clamp-1 text-sm text-gray-500">
                       {selectedProduct.hinglishName}
+                    </p>
+
+                    <p className="mt-1.5 line-clamp-3 text-[13px] leading-snug text-gray-600">
+                      {selectedProduct.description}
                     </p>
                   </div>
 
                   <button
                     onClick={handleCross}
-                    className="absolute right-5 top-6 flex h-11 w-11 items-center justify-center rounded-full bg-gray-100 transition hover:bg-gray-200"
+                    className="absolute right-5 top-6 flex h-10 w-10 items-center justify-center rounded-full bg-gray-100 transition hover:bg-gray-200"
                   >
                     <X size={20} />
                   </button>
                 </div>
-                <div className="mt-4 flex items-center gap-2">
-                  <span className="rounded-full  px-5 py-1 text-[11px] font-xl text-gray-600">
-                    Product Description : {selectedProduct.description}
-                  </span>
-                </div>
                 {/* Company Selection */}
-                <div className="mt-8">
-                  <h3 className="mb-3 text-lg font-bold">ब्रांड चुनें</h3>
+                <div className="mt-5 mb-6">
+                  <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-gray-700">
+                    1 · ब्रांड चुनें
+                    {currentStep === 0 && (
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
+                        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-600" />
+                      </span>
+                    )}
+                  </h3>
 
-                  <div className="flex flex-wrap gap-3">
+                  <div className="no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5 pb-1">
                     {[
                       ...new Map(
                         selectedProduct.variants.map((variant) => [
@@ -464,40 +508,60 @@ const ProductsList = () => {
                           variant,
                         ]),
                       ).values(),
-                    ].map((variant) => (
-                      <motion.button
-                        whileTap={{ scale: 0.95 }}
-                        key={variant.company._id}
-                        type="button"
-                        onClick={() =>
-                          setSelectedVariantCompany(variant.company)
-                        }
-                        className={`flex items-center gap-2 rounded-2xl border px-4 py-3 transition-all ${
-                          selectedVariantCompany?._id === variant.company._id
-                            ? "border-red-600 bg-red-600 text-white"
-                            : "border-gray-200 bg-white"
-                        }`}
-                      >
-                        {variant.company.logo && (
-                          <img
-                            src={variant.company.logo}
-                            className="h-6 w-6 object-contain"
-                          />
-                        )}
+                    ].map((variant) => {
+                      const isSelected =
+                        selectedVariantCompany?._id === variant.company._id;
 
-                        <span className="font-medium">
-                          {variant.company.name}
-                        </span>
-                      </motion.button>
-                    ))}
+                      return (
+                        <motion.button
+                          whileTap={{ scale: 0.95 }}
+                          key={variant.company._id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedVariantCompany(variant.company);
+                            setSelectedMeasurement("");
+                          }}
+                          className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
+                            isSelected
+                              ? "scale-[1.05] border-red-600 bg-red-600 text-white shadow-md shadow-red-600/30"
+                              : "border-gray-200 bg-white text-gray-700"
+                          }`}
+                        >
+                          {isSelected && (
+                            <Check
+                              size={14}
+                              strokeWidth={3}
+                              className="shrink-0"
+                            />
+                          )}
+
+                          {variant.company.logo && (
+                            <img
+                              src={variant.company.logo}
+                              className="h-5 w-5 object-contain"
+                            />
+                          )}
+
+                          <span>{variant.company.name}</span>
+                        </motion.button>
+                      );
+                    })}
                   </div>
                 </div>{" "}
                 {/* Measurement Selection */}
                 {selectedVariantCompany && (
-                  <div className="mt-8">
-                    <h3 className="mb-3 text-lg font-bold">माप चुनें</h3>
+                  <div className="mt-4">
+                    <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-gray-700">
+                      2 · माप चुनें
+                      {currentStep === 1 && (
+                        <span className="relative flex h-2.5 w-2.5">
+                          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
+                          <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-600" />
+                        </span>
+                      )}
+                    </h3>
 
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5 pb-1">
                       {selectedProduct.variants
                         .filter(
                           (variant) =>
@@ -510,9 +574,6 @@ const ProductsList = () => {
                           return (
                             <motion.button
                               key={variant.measurement}
-                              whileHover={{
-                                y: -2,
-                              }}
                               whileTap={{
                                 scale: 0.95,
                               }}
@@ -520,18 +581,19 @@ const ProductsList = () => {
                               onClick={() =>
                                 setSelectedMeasurement(variant.measurement)
                               }
-                              className={`rounded-2xl border p-4 transition-all ${
+                              className={`flex shrink-0 flex-col items-center rounded-xl border px-4 py-2.5 transition-all ${
                                 active
-                                  ? "border-red-600 bg-gradient-to-br from-red-600 to-red-500 text-white shadow-lg"
+                                  ? "scale-[1.05] border-red-600 bg-gradient-to-br from-red-600 to-red-500 text-white shadow-md shadow-red-600/30"
                                   : "border-gray-200 bg-white"
                               }`}
                             >
-                              <p className="font-semibold">
+                              <p className="flex items-center gap-1 whitespace-nowrap text-sm font-semibold">
+                                {active && <Check size={13} strokeWidth={3} />}
                                 {variant.measurement}
                               </p>
 
                               <p
-                                className={`mt-2 text-lg font-bold ${
+                                className={`text-base font-bold ${
                                   active ? "text-white" : "text-red-600"
                                 }`}
                               >
@@ -544,29 +606,39 @@ const ProductsList = () => {
                   </div>
                 )}
                 {/* Quantity */}
-                <div className="mt-8">
-                  <h3 className="mb-3 text-lg font-bold">मात्रा</h3>
+                <div className="mt-5">
+                  <h3 className="mb-2 flex items-center gap-2 text-sm font-bold text-gray-700">
+                    3 · मात्रा
+                    {currentStep === 2 && (
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-500 opacity-75" />
+                        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-600" />
+                      </span>
+                    )}
+                  </h3>
 
-                  <div className="flex items-center justify-between rounded-3xl bg-gray-100 p-4">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setQty((prev) => (prev > 10 ? prev - 10 : 1))
-                      }
-                      className="flex h-12 w-14 items-center justify-center rounded-2xl bg-white text-xl font-bold shadow"
-                    >
-                      −10
-                    </button>
+                  <div className="flex items-center justify-between rounded-2xl bg-gray-100 p-2">
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setQty((prev) => (prev > 10 ? prev - 10 : 1))
+                        }
+                        className="flex h-10 items-center justify-center rounded-xl bg-white px-3 text-sm font-bold text-gray-600 shadow"
+                      >
+                        −10
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setQty((prev) => (prev > 1 ? prev - 1 : 1))
-                      }
-                      className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-2xl font-bold shadow"
-                    >
-                      −
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setQty((prev) => (prev > 1 ? prev - 1 : 1))
+                        }
+                        className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-xl font-bold text-gray-600 shadow"
+                      >
+                        −
+                      </button>
+                    </div>
 
                     <motion.div
                       key={qty}
@@ -576,91 +648,152 @@ const ProductsList = () => {
                       animate={{
                         scale: 1,
                       }}
-                      className="min-w-[90px] text-center"
+                      className="min-w-[72px] text-center"
                     >
-                      <h2 className="text-3xl font-bold">{qty}</h2>
+                      <h2 className="text-2xl font-bold">{qty}</h2>
 
-                      <p className="text-xs text-gray-500">Quantity</p>
+                      <p className="text-[11px] text-gray-500">Quantity</p>
                     </motion.div>
 
-                    <button
-                      type="button"
-                      onClick={() => setQty((prev) => prev + 1)}
-                      className="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-600 text-2xl font-bold text-white shadow"
-                    >
-                      +
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setQty((prev) => prev + 1)}
+                        className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-600 text-xl font-bold text-white shadow"
+                      >
+                        +
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => setQty((prev) => prev + 10)}
-                      className="flex h-12 w-14 items-center justify-center rounded-2xl bg-red-600 text-xl font-bold text-white shadow"
-                    >
-                      +10
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => setQty((prev) => prev + 10)}
+                        className="flex h-10 items-center justify-center rounded-xl bg-red-600 px-3 text-sm font-bold text-white shadow"
+                      >
+                        +10
+                      </button>
+                    </div>
                   </div>
                 </div>
-                {/* Price Summary */}
-                <motion.div
-                  layout
-                  className="mt-8 rounded-3xl bg-gradient-to-r from-red-50 via-orange-50 to-red-50 p-5"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-500">कुल कीमत</p>
+                {/* Price Summary + Bottom Action */}
+                <div className="sticky bottom-0 left-0 right-0 -mx-5 mt-5 border-t bg-white pb-2 pt-3">
+                  <div className="flex items-center gap-3 px-5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-gray-500">कुल कीमत</p>
 
-                      <h2 className="mt-1 text-4xl font-bold text-red-600">
-                        ₹{currentPrice}
-                      </h2>
+                      <div className="flex items-baseline gap-2">
+                        <h2 className="text-2xl font-bold text-red-600">
+                          ₹{currentPrice}
+                        </h2>
 
-                      {selectedVariant && (
-                        <p className="mt-1 text-sm text-gray-500">
-                          ₹{selectedVariant.price} × {qty}
-                        </p>
-                      )}
+                        {selectedVariant && (
+                          <p className="text-[11px] text-gray-400">
+                            ₹{selectedVariant.price} × {qty}
+                          </p>
+                        )}
+                      </div>
                     </div>
 
-                    <div className="rounded-full bg-white p-4 shadow-lg">
-                      <ShoppingCart size={34} className="text-red-600" />
+                    <div className="relative w-[55%]">
+                      {currentStep === 2 && !addLoading && (
+                        <span className="absolute inset-0 animate-ping rounded-2xl bg-red-500/30" />
+                      )}
+
+                      <motion.button
+                        whileTap={{
+                          scale: 0.97,
+                        }}
+                        type="submit"
+                        onClick={handleSubmit}
+                        disabled={addLoading}
+                        className="relative flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-red-600 via-red-500 to-orange-500 text-base font-bold text-white shadow-lg transition-all disabled:opacity-70"
+                      >
+                        {addLoading ? (
+                          <>
+                            <Loader2 size={20} className="animate-spin" />
+                            जोड़ रहे हैं...
+                          </>
+                        ) : (
+                          <>
+                            <ShoppingCart size={20} />
+                            कार्ट में जोड़ें
+                          </>
+                        )}
+                      </motion.button>
                     </div>
                   </div>
-                </motion.div>{" "}
-                {/* Bottom Action */}
-                <div className="sticky bottom-0 left-0 right-0 mt-8 border-t bg-white px-1 pt-5 pb-2">
-                  <motion.button
-                    whileHover={{
-                      scale: 1.01,
-                    }}
-                    whileTap={{
-                      scale: 0.98,
-                    }}
-                    type="submit"
-                    onClick={handleSubmit}
-                    disabled={addLoading}
-                    className="flex h-15 w-full items-center justify-center gap-3 rounded-3xl bg-gradient-to-r from-red-600 via-red-500 to-orange-500 text-lg font-bold text-white shadow-xl transition-all disabled:opacity-70"
-                  >
-                    {addLoading ? (
-                      <>
-                        <Loader2 size={24} className="animate-spin" />
-                        जोड़ रहे हैं...
-                      </>
-                    ) : (
-                      <>
-                        <ShoppingCart size={22} />
-                        कार्ट में जोड़ें • ₹{currentPrice}
-                      </>
-                    )}
-                  </motion.button>
 
-                  <p className="mt-3 text-center text-xs text-gray-500">
+                  <p className="mt-1.5 text-center text-[11px] text-gray-400">
                     कीमत में टैक्स शामिल है।
                   </p>
                 </div>
               </div>
+              {addSuccess && (
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="absolute inset-0 z-30 flex flex-col items-center justify-center rounded-t-[34px] bg-white/90 backdrop-blur-sm"
+                >
+                  <motion.div
+                    initial={{ scale: 0, rotate: -30 }}
+                    animate={{ scale: 1, rotate: 0 }}
+                    transition={{
+                      type: "spring",
+                      stiffness: 320,
+                      damping: 16,
+                    }}
+                    className="flex h-18 w-18 items-center justify-center rounded-full bg-green-500 shadow-xl shadow-green-500/40"
+                  >
+                    <Check size={36} className="text-white" strokeWidth={3} />
+                  </motion.div>
+
+                  <motion.p
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.1 }}
+                    className="mt-4 text-lg font-bold text-green-700"
+                  >
+                    कार्ट में जोड़ दिया गया!
+                  </motion.p>
+                </motion.div>
+              )}
             </motion.div>
           </>
         )}
       </AnimatePresence>
+
+      {flyImage && (
+        <motion.img
+          src={flyImage.src}
+          initial={{
+            x: 0,
+            y: 0,
+            scale: 1,
+            opacity: 1,
+            rotate: 0,
+          }}
+          animate={{
+            x: flyImage.deltaX,
+            y: flyImage.deltaY,
+            scale: [1, 0.5, 0.12],
+            opacity: [1, 1, 0.8],
+            rotate: [0, -8, 18],
+          }}
+          transition={{
+            duration: 0.72,
+            ease: "easeInOut",
+            times: [0, 0.55, 1],
+          }}
+          onAnimationComplete={() => setFlyImage(null)}
+          className="pointer-events-none fixed z-[80] rounded-xl object-contain shadow-xl"
+          style={{
+            left: flyImage.startX - flyImage.size / 2,
+            top: flyImage.startY - flyImage.size / 2,
+            width: flyImage.size,
+            height: flyImage.size,
+            willChange: "transform, opacity",
+          }}
+        />
+      )}
     </div>
   );
 };

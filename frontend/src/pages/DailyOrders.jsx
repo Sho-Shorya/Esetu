@@ -113,20 +113,23 @@ const downloadPDF = async (items, selectedDate) => {
     });
 
     const doc = new jsPDF({
-      orientation: "landscape",
+      orientation: "portrait",
       unit: "mm",
       format: "a4",
     });
 
     /* --------------------------------------------------------
-       DEVANAGARI FONT
+       DEVANAGARI FONTS (regular + bold)
     -------------------------------------------------------- */
 
-    const fontBase64 = await loadFontAsBase64(
+    const regularFontBase64 = await loadFontAsBase64(
       "/fonts/NotoSansDevanagari-Regular.ttf",
     );
 
-    doc.addFileToVFS("NotoSansDevanagari-Regular.ttf", fontBase64);
+    doc.addFileToVFS(
+      "NotoSansDevanagari-Regular.ttf",
+      regularFontBase64,
+    );
 
     doc.addFont(
       "NotoSansDevanagari-Regular.ttf",
@@ -134,22 +137,73 @@ const downloadPDF = async (items, selectedDate) => {
       "normal",
     );
 
-    doc.setFont("NotoSansDevanagari", "normal");
+    const boldFontBase64 = await loadFontAsBase64(
+      "/fonts/NotoSansDevanagari-Bold.ttf",
+    );
+
+    doc.addFileToVFS("NotoSansDevanagari-Bold.ttf", boldFontBase64);
+
+    doc.addFont(
+      "NotoSansDevanagari-Bold.ttf",
+      "NotoSansDevanagari",
+      "bold",
+    );
+
+    doc.setFont("NotoSansDevanagari", "bold");
+
+    /* --------------------------------------------------------
+       HELPERS
+    -------------------------------------------------------- */
+
+const money = (n) => `₹${Number(n || 0).toFixed(2)}`;
+
+const isPaid = (buyer) =>
+  String(buyer.paymentStatus || "").toLowerCase() === "paid";
 
     /* --------------------------------------------------------
        CALCULATIONS
     -------------------------------------------------------- */
 
+    let totalQuantity = 0;
+
+    let totalAmount = 0;
+
+    let buyerLines = 0;
+
+    let paidAmount = 0;
+
+    let dueAmount = 0;
+
+    const buyerKeySet = new Set();
+
+    items.forEach((item) => {
+      totalQuantity += Number(item.totalQuantity || 0);
+
+      totalAmount += Number(item.totalAmount || 0);
+
+      (item.orderedBy || []).forEach((buyer) => {
+        buyerLines += 1;
+
+        const buyerTotal = Number(buyer.total || 0);
+
+        if (isPaid(buyer)) {
+          paidAmount += buyerTotal;
+        } else {
+          dueAmount += buyerTotal;
+        }
+
+        buyerKeySet.add(
+          String(
+            buyer.userId ||
+              `${buyer.firstName || ""}-${buyer.lastName || ""}-${buyer.phoneNumber || ""}`,
+          ),
+        );
+      });
+    });
+
     const totalProducts = items.length;
 
-    const totalQuantity = items.reduce(
-      (sum, item) => sum + Number(item.totalQuantity || 0),
-      0,
-    );
-
-    const totalOrders = getTotalOrders(items);
-
-    const totalAmount = getTotalAmount(items);
+    const uniqueBuyers = buyerKeySet.size;
 
     /* --------------------------------------------------------
        PAGE SIZE
@@ -158,247 +212,354 @@ const downloadPDF = async (items, selectedDate) => {
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
 
-    /* --------------------------------------------------------
-       MAIN DATE HEADING
-    -------------------------------------------------------- */
+    const margin = 12;
 
-    doc.setFont("NotoSansDevanagari", "normal");
-    doc.setFontSize(20);
+    const contentWidth = pageWidth - margin * 2;
 
-    doc.text(formatDate(selectedDate), pageWidth / 2, 16, {
-      align: "center",
+    const generated = new Date().toLocaleString("en-IN", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: true,
     });
 
     /* --------------------------------------------------------
-       SMALL SUMMARY CARDS
+       BRANDED HEADER BAND
     -------------------------------------------------------- */
 
-    const cardY = 23;
-    const cardHeight = 12;
+    doc.setFillColor(6, 78, 59);
 
-    const cardGap = 5;
-    const cardWidth = 55;
+    doc.roundedRect(margin, 10, contentWidth, 26, 3, 3, "F");
 
-    const totalCardsWidth = cardWidth * 2 + cardGap;
+    doc.setFont("NotoSansDevanagari", "bold");
+    doc.setFontSize(21);
+    doc.setTextColor(255, 255, 255);
 
-    const cardsStartX = (pageWidth - totalCardsWidth) / 2;
+    doc.text("ई-सेतु", margin + 5, 21);
 
-    /* --------------------------------------------------------
-       TOTAL ORDERS CARD
-    -------------------------------------------------------- */
+    doc.setFont("NotoSansDevanagari", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(210, 235, 225);
 
-    doc.setDrawColor(220, 220, 220);
-    doc.setFillColor(250, 250, 250);
-    doc.setLineWidth(0.3);
+    doc.text("e-Setu  •  दैनिक ऑर्डर रिपोर्ट", margin + 5, 26);
 
-    doc.roundedRect(cardsStartX, cardY, cardWidth, cardHeight, 2, 2, "FD");
+    doc.setFont("NotoSansDevanagari", "bold");
+    doc.setFontSize(13);
 
+    doc.text("दैनिक Approved ऑर्डर शीट", pageWidth - margin - 5, 20, {
+      align: "right",
+    });
+
+    doc.setFont("NotoSansDevanagari", "normal");
     doc.setFontSize(8);
-    doc.setTextColor(100, 100, 100);
+    doc.setTextColor(220, 240, 230);
 
-    doc.text("Total Orders", cardsStartX + 5, cardY + 5);
-
-    doc.setFontSize(10);
-    doc.setTextColor(30, 30, 30);
-
-    doc.text(String(totalOrders), cardsStartX + cardWidth - 5, cardY + 7, {
+    doc.text(formatDate(selectedDate), pageWidth - margin - 5, 25.5, {
       align: "right",
     });
 
     /* --------------------------------------------------------
-       TOTAL AMOUNT CARD
+       DATE + GENERATED LINE
     -------------------------------------------------------- */
 
-    const amountCardX = cardsStartX + cardWidth + cardGap;
+    doc.setFont("NotoSansDevanagari", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(35, 35, 35);
 
-    doc.setDrawColor(220, 220, 220);
-    doc.setFillColor(250, 250, 250);
+    doc.text(`तारीख: ${formatDate(selectedDate)}`, margin, 44);
 
-    doc.roundedRect(amountCardX, cardY, cardWidth, cardHeight, 2, 2, "FD");
-
-    doc.setFontSize(8);
-    doc.setTextColor(100, 100, 100);
-
-    doc.text("Total Amount", amountCardX + 5, cardY + 5);
-
-    doc.setFontSize(10);
-    doc.setTextColor(30, 30, 30);
+    doc.setFont("NotoSansDevanagari", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(140, 140, 140);
 
     doc.text(
-      `₹${totalAmount.toFixed(2)}`,
-      amountCardX + cardWidth - 5,
-      cardY + 7,
+      `Generated: ${generated}  •  केवल Approved ऑर्डर शामिल हैं`,
+      pageWidth - margin,
+      44,
       {
         align: "right",
       },
     );
 
+    doc.setDrawColor(235, 235, 235);
+    doc.setLineWidth(0.3);
+
+    doc.line(margin, 47, pageWidth - margin, 47);
+
     /* --------------------------------------------------------
-       TABLE DATA
+       SUMMARY CARDS (2 x 3)
     -------------------------------------------------------- */
 
-    const tableData = items.map((item, index) => [
+    const cards = [
+      { label: "कुल Products", value: String(totalProducts) },
+      { label: "कुल मात्रा", value: String(totalQuantity) },
+      { label: "कुल Orders", value: String(buyerLines) },
+      { label: "कुल खरीदार", value: String(uniqueBuyers) },
+      { label: "कुल राशि", value: money(totalAmount), sub: `जमा ${money(paidAmount)}` },
+      { label: "बकाया राशि", value: money(dueAmount) },
+    ];
+
+    const cardWidth = (contentWidth - 2 * 5) / 3;
+
+    const cardHeight = 15;
+
+    const drawCard = (x, y, label, value, sub) => {
+      doc.setFillColor(246, 246, 246);
+      doc.setDrawColor(228, 228, 228);
+      doc.setLineWidth(0.3);
+
+      doc.roundedRect(x, y, cardWidth, cardHeight, 2.5, 2.5, "FD");
+
+      doc.setFont("NotoSansDevanagari", "normal");
+      doc.setFontSize(6.5);
+      doc.setTextColor(130, 130, 130);
+
+      doc.text(label, x + 3, y + 4);
+
+      doc.setFont("NotoSansDevanagari", "bold");
+      doc.setFontSize(10.5);
+      doc.setTextColor(20, 20, 20);
+
+      doc.text(value, x + 3, y + 10);
+
+      if (sub) {
+        doc.setFont("NotoSansDevanagari", "normal");
+        doc.setFontSize(6);
+        doc.setTextColor(150, 150, 150);
+
+        doc.text(sub, x + 3, y + 13.2);
+      }
+    };
+
+    const cardsStartY = 52;
+
+    cards.forEach((card, index) => {
+      const row = Math.floor(index / 3);
+
+      const col = index % 3;
+
+      const x = margin + col * (cardWidth + 5);
+
+      const y = cardsStartY + row * (cardHeight + 5);
+
+      drawCard(x, y, card.label, card.value, card.sub);
+    });
+
+    /* --------------------------------------------------------
+       TABLE BODY (flat product list, like the app page)
+    -------------------------------------------------------- */
+
+    const body = items.map((item, index) => [
       index + 1,
-      item.productName || "-",
-      item.hinglishName || "-",
+      {
+        content: [item.productName || "-", item.hinglishName]
+          .filter(Boolean)
+          .join("\n"),
+        styles: {
+          fontStyle: "bold",
+          fontSize: 9.5,
+        },
+      },
       item.companyName || "-",
       item.measurement || "-",
       Number(item.totalQuantity || 0),
+      {
+        content: money(item.totalAmount),
+        styles: {
+          halign: "right",
+          fontSize: 9.5,
+        },
+      },
+      {
+        content: `${(item.orderedBy || []).length}`,
+        styles: {
+          halign: "center",
+        },
+      },
     ]);
+
+    body.push([
+      {
+        content: `कुल राशि: ${money(totalAmount)}   •   जमा: ${money(paidAmount)}   •   बकाया: ${money(dueAmount)}   •   कुल मात्रा: ${totalQuantity}`,
+        colSpan: 7,
+        styles: {
+          font: "NotoSansDevanagari",
+          fontStyle: "bold",
+          fontSize: 9,
+          textColor: [255, 255, 255],
+          fillColor: [6, 78, 59],
+        },
+      },
+    ]);
+
+    /* --------------------------------------------------------
+       TABLE HEADING
+    -------------------------------------------------------- */
+
+    doc.setFont("NotoSansDevanagari", "bold");
+    doc.setFontSize(11);
+    doc.setTextColor(30, 30, 30);
+
+    doc.text("प्रोडक्ट सूची", margin, 93);
+
+    doc.setFont("NotoSansDevanagari", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(140, 140, 140);
+
+    doc.text("कम्पनी व माप सहित", pageWidth - margin, 93, {
+      align: "right",
+    });
 
     /* --------------------------------------------------------
        TABLE
     -------------------------------------------------------- */
 
     autoTable(doc, {
-      startY: 40,
+      startY: 97,
 
-      head: [["#", "Product", "Hinglish Name", "Company", "माप", "कुल मात्रा"]],
+      head: [["#", "प्रोडक्ट", "कंपनी", "माप", "मात्रा", "राशि", "खरीदार"]],
 
-      body: tableData,
+      body,
 
       theme: "grid",
 
       styles: {
         font: "NotoSansDevanagari",
         fontStyle: "normal",
-        fontSize: 9,
+        fontSize: 8,
         cellPadding: {
-          top: 4,
-          bottom: 4,
+          top: 2.5,
+          bottom: 2.5,
           left: 3,
           right: 3,
         },
         valign: "middle",
         overflow: "linebreak",
-        lineColor: [210, 210, 210],
-        lineWidth: 0.2,
-        textColor: [40, 40, 40],
+        lineColor: [220, 220, 220],
+        lineWidth: 0.15,
+        textColor: [45, 45, 45],
       },
 
       headStyles: {
         font: "NotoSansDevanagari",
-        fontStyle: "normal",
-        fontSize: 10,
+        fontStyle: "bold",
+        fontSize: 8.5,
         halign: "center",
         valign: "middle",
-        cellPadding: 4,
-        fillColor: [245, 245, 245],
-        textColor: [45, 45, 45],
-        lineColor: [210, 210, 210],
-      },
-
-      bodyStyles: {
-        font: "NotoSansDevanagari",
-        fontStyle: "normal",
-        fontSize: 9,
-        valign: "middle",
+        cellPadding: 3.5,
+        fillColor: [6, 78, 59],
+        textColor: [255, 255, 255],
+        lineColor: [6, 78, 59],
       },
 
       alternateRowStyles: {
-        fillColor: [252, 252, 252],
+        fillColor: [250, 251, 250],
       },
 
       columnStyles: {
         /* # */
         0: {
-          cellWidth: 12,
+          cellWidth: 9,
           halign: "center",
         },
 
         /* PRODUCT */
         1: {
-          cellWidth: 48,
-        },
-
-        /* HINGLISH */
-        2: {
-          cellWidth: 45,
+          cellWidth: 66,
         },
 
         /* COMPANY */
-        3: {
-          cellWidth: 48,
+        2: {
+          cellWidth: 30,
         },
 
         /* MEASUREMENT */
-        4: {
-          cellWidth: 32,
+        3: {
+          cellWidth: 18,
           halign: "center",
         },
 
         /* QUANTITY */
+        4: {
+          cellWidth: 15,
+          halign: "center",
+        },
+
+        /* AMOUNT */
         5: {
-          cellWidth: 32,
+          cellWidth: 28,
+          halign: "right",
+        },
+
+        /* BUYERS */
+        6: {
+          cellWidth: 20,
           halign: "center",
         },
       },
 
       margin: {
-        left: 14,
-        right: 14,
-        bottom: 20,
-      },
-
-      didParseCell: (data) => {
-        /* Product name slightly larger */
-        if (data.section === "body" && data.column.index === 1) {
-          data.cell.styles.fontSize = 10;
-        }
-
-        /* Quantity slightly stronger */
-        if (data.section === "body" && data.column.index === 5) {
-          data.cell.styles.fontSize = 10;
-        }
+        left: margin,
+        right: margin,
+        bottom: 18,
       },
 
       didDrawPage: () => {
         /* Keep Hindi font active */
         doc.setFont("NotoSansDevanagari", "normal");
 
-        /* Page number */
-        const pageNumber = doc.internal.getNumberOfPages();
-
+        /* Footer */
         doc.setFontSize(8);
-        doc.setTextColor(120, 120, 120);
+        doc.setTextColor(140, 140, 140);
 
-        doc.text(`Page ${pageNumber}`, pageWidth - 14, pageHeight - 8, {
-          align: "right",
-        });
+        doc.text(
+          "ई-सेतु  •  दैनिक ऑर्डर रिपोर्ट",
+          margin,
+          pageHeight - 6,
+        );
+
+        doc.text(
+          `पृष्ठ ${doc.internal.getNumberOfPages()}`,
+          pageWidth - margin,
+          pageHeight - 6,
+          {
+            align: "right",
+          },
+        );
       },
     });
 
     /* ========================================================
-       FINAL SUMMARY
+       CLOSING NOTE
     ======================================================== */
 
     const finalY = doc.lastAutoTable.finalY + 8;
 
-    let summaryY = finalY;
+    let noteY = finalY;
 
-    if (summaryY > pageHeight - 30) {
+    if (noteY > pageHeight - 20) {
       doc.addPage();
-      summaryY = 20;
+      noteY = 20;
     }
-
-    /* --------------------------------------------------------
-       SUMMARY
-    -------------------------------------------------------- */
 
     doc.setFont("NotoSansDevanagari", "normal");
 
-    doc.setFontSize(9);
-    doc.setTextColor(80, 80, 80);
+    doc.setFontSize(7);
+    doc.setTextColor(150, 150, 150);
 
-    doc.text(`कुल Products: ${totalProducts}`, 14, summaryY);
-
-    doc.text(`कुल मात्रा: ${totalQuantity}`, 14, summaryY + 6);
+    doc.text(
+      `यह रिपोर्ट e-Setu द्वारा ${generated} को स्वतः तैयार की गई है। सभी राशियाँ ₹ में हैं।`,
+      margin,
+      noteY,
+    );
 
     /* --------------------------------------------------------
        FILE NAME
     -------------------------------------------------------- */
 
-    doc.save(`approved-orders-${selectedDate}.pdf`);
+    doc.save(`daily-orders-${selectedDate}.pdf`);
 
     toast.success("PDF download हो गई", {
       id: "pdf-download",

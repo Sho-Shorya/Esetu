@@ -16,6 +16,7 @@ import {
   generateOrderReceipt,
   getOrderReceipt,
   downloadOrderReceiptPdf,
+  getMyOrderReceipts,
 } from "../controllers/orderController.js";
 
 import { isAuthenticated, isSupp } from "../middleware/isAuthenticated.js";
@@ -96,6 +97,8 @@ router.get(
   isAuthenticated,
   downloadOrderReceiptPdf,
 );
+
+router.get("/my-receipts", isAuthenticated, getMyOrderReceipts);
 
 /* ============================================================
                      ADMIN - EDIT ORDER

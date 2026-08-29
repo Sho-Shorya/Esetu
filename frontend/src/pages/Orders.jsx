@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -16,7 +16,6 @@ import {
   WalletCards,
   CheckCircle2,
   CircleAlert,
-  X,
 } from "lucide-react";
 
 import { API_BASE_URL } from "@/lib/constants";
@@ -125,12 +124,7 @@ const Orders = () => {
 
   const [expandedOrder, setExpandedOrder] = useState(null);
   const [downloadingInvoice, setDownloadingInvoice] = useState(null);
-
-  const [receiptOrder, setReceiptOrder] = useState(null);
-  const [receiptData, setReceiptData] = useState(null);
-  const [receiptLoading, setReceiptLoading] = useState(false);
-  const [receiptError, setReceiptError] = useState("");
-  const [downloadingReceipt, setDownloadingReceipt] = useState(false);
+  const [downloadingReceiptId, setDownloadingReceiptId] = useState(null);
 
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -374,77 +368,24 @@ const Orders = () => {
   };
 
   /* ====================================================
-     ORDER RECEIPT MODAL
+     DOWNLOAD ORDER RECEIPT PDF
      
      Per-order receipt generated manually by the admin.
-     Shown on-screen with a download option.
+     Download-only, no on-screen viewer.
   ==================================================== */
 
-  const openReceipt = useCallback(async (order) => {
-    if (!order) return;
-
-    setReceiptOrder(order);
-    setReceiptData(null);
-    setReceiptError("");
-    setReceiptLoading(true);
+  const downloadOrderReceipt = async (orderId) => {
+    if (!orderId || downloadingReceiptId) return;
 
     try {
-      const token = localStorage.getItem("token");
-
-      if (!token) {
-        setReceiptLoading(false);
-        return;
-      }
-
-      const response = await axios.get(
-        `${API_BASE_URL}/api/v1/order/receipt/${order._id}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        },
-      );
-
-      if (response.data?.success) {
-        setReceiptData(response.data);
-      } else {
-        setReceiptError(
-          response.data?.message || "रसीद नहीं मिली।",
-        );
-      }
-    } catch (error) {
-      console.error("Open receipt error:", error);
-
-      setReceiptError(
-        error.response?.data?.message || "रसीद नहीं मिली।",
-      );
-    } finally {
-      setReceiptLoading(false);
-    }
-  }, []);
-
-  const closeReceipt = () => {
-    setReceiptOrder(null);
-    setReceiptData(null);
-    setReceiptError("");
-
-    if (searchParams.get("receipt")) {
-      setSearchParams({}, { replace: true });
-    }
-  };
-
-  const downloadReceipt = async () => {
-    if (!receiptOrder || downloadingReceipt) return;
-
-    try {
-      setDownloadingReceipt(true);
+      setDownloadingReceiptId(orderId);
 
       const token = localStorage.getItem("token");
 
       if (!token) return;
 
       const response = await axios.get(
-        `${API_BASE_URL}/api/v1/order/receipt/${receiptOrder._id}/pdf`,
+        `${API_BASE_URL}/api/v1/order/receipt/${orderId}/pdf`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -462,7 +403,7 @@ const Orders = () => {
       const link = document.createElement("a");
 
       link.href = url;
-      link.download = `e-setu-receipt-${receiptOrder._id.slice(-8)}.pdf`;
+      link.download = `e-setu-receipt-${String(orderId).slice(-8)}.pdf`;
 
       link.style.display = "none";
 
@@ -476,12 +417,12 @@ const Orders = () => {
     } catch (error) {
       console.error("Receipt PDF download error:", error);
     } finally {
-      setDownloadingReceipt(false);
+      setDownloadingReceiptId(null);
     }
   };
 
   /* ====================================================
-     AUTO-OPEN RECEIPT FROM ONESIGNAL DEEP LINK
+     AUTO-DOWNLOAD FROM ONESIGNAL DEEP LINK
      
      The admin's OneSignal push links to:
      ?receipt=<orderId>
@@ -492,16 +433,18 @@ const Orders = () => {
 
     if (!receiptParam) return;
 
-    if (receiptOrder) return;
+    if (!orders.length) return;
 
     const target = orders.find(
       (order) => String(order._id) === String(receiptParam),
     );
 
-    if (target) {
-      openReceipt(target);
+    if (target?.receiptGenerated) {
+      downloadOrderReceipt(receiptParam);
     }
-  }, [searchParams, orders, receiptOrder, openReceipt]);
+
+    setSearchParams({}, { replace: true });
+  }, [searchParams, orders]);
 
   /* ====================================================
      FORMATTERS
@@ -564,65 +507,14 @@ const Orders = () => {
   return (
     <div className="min-h-screen bg-slate-50 pb-28 pt-20">
       {/* ==================================================
-          1. RECEIPTS
-      ================================================== */}
-
-      <div className="mx-auto max-w-5xl px-4">
-        <motion.button
-          initial={{ opacity: 0, y: -6 }}
-          animate={{ opacity: 1, y: 0 }}
-          whileTap={{ scale: 0.985 }}
-          onClick={() => navigate("/invoice-history")}
-          className="
-            flex
-            w-full
-            items-center
-            justify-between
-            rounded-2xl
-            border
-            border-red-100
-            bg-white
-            px-3.5
-            py-2.5
-            shadow-sm
-            transition
-            hover:border-red-200
-          "
-        >
-          <div className="flex items-center gap-2.5">
-            <div
-              className="
-                flex
-                h-8
-                w-8
-                items-center
-                justify-center
-                rounded-xl
-                bg-red-600
-                text-white
-              "
-            >
-              <ReceiptText className="h-4 w-4" />
-            </div>
-
-            <div className="text-left">
-              <p className="text-sm font-black text-slate-900">सभी रसीदें</p>
-            </div>
-          </div>
-
-          <ArrowRight className="h-4 w-4 text-red-500" />
-        </motion.button>
-      </div>
-
-      {/* ==================================================
-          2. MERA HISAB
+          1. MERA HISAB
       ================================================== */}
 
       <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
-        className="mx-auto max-w-5xl px-4 pt-5"
+        className="mx-auto max-w-5xl px-4"
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -653,31 +545,60 @@ const Orders = () => {
             </div>
           </div>
 
-          <button
-            onClick={() => fetchData(true)}
-            disabled={refreshing}
-            className="
-              flex
-              h-10
-              w-10
-              items-center
-              justify-center
-              rounded-xl
-              bg-white
-              shadow-sm
-              ring-1
-              ring-slate-100
-              transition
-              active:scale-95
-              disabled:opacity-60
-            "
-          >
-            <RefreshCw
-              className={`h-4 w-4 text-slate-600 ${
-                refreshing ? "animate-spin" : ""
-              }`}
-            />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => navigate("/invoice-history")}
+              className="
+                flex
+                items-center
+                gap-1.5
+                rounded-xl
+                border
+                border-red-100
+                bg-white
+                px-3.5
+                py-2.5
+                text-xs
+                font-black
+                text-red-600
+                shadow-sm
+                transition
+                hover:border-red-200
+                hover:bg-red-50
+                active:scale-95
+              "
+            >
+              <ReceiptText className="h-4 w-4" />
+              सभी रसीदें
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+
+            <button
+              onClick={() => fetchData(true)}
+              disabled={refreshing}
+              className="
+                flex
+                h-10
+                w-10
+                items-center
+                justify-center
+                rounded-xl
+                bg-white
+                shadow-sm
+                ring-1
+                ring-slate-100
+                transition
+                active:scale-95
+                disabled:opacity-60
+              "
+            >
+              <RefreshCw
+                className={`h-4 w-4 text-slate-600 ${
+                  refreshing ? "animate-spin" : ""
+                }`}
+              />
+            </button>
+          </div>
         </div>
       </motion.div>
 
@@ -915,11 +836,8 @@ const Orders = () => {
             {filteredOrders.map((order, index) => {
               const isExpanded = expandedOrder === order._id;
 
-              const hasReceipt = receiptOrderIds.has(String(order._id));
-
-              const invoice = hasReceipt ? getInvoiceForOrder(order._id) : null;
-
-              const isDownloading = downloadingInvoice === invoice?._id;
+              const isDownloadingReceipt =
+                downloadingReceiptId === order._id;
 
               const isPaid = order.paymentStatus === "Paid";
 
@@ -1031,27 +949,11 @@ const Orders = () => {
                       `}
                     >
                       <div className="flex items-center gap-2.5">
-                        <div
-                          className={`
-                            flex
-                            h-9
-                            w-9
-                            items-center
-                            justify-center
-                            rounded-xl
-                            ${
-                              isPaid
-                                ? "bg-green-100 text-green-600"
-                                : "bg-orange-100 text-orange-600"
-                            }
-                          `}
-                        >
-                          {isPaid ? (
-                            <CheckCircle2 className="h-4 w-4" />
-                          ) : (
-                            <WalletCards className="h-4 w-4" />
-                          )}
-                        </div>
+                        {isPaid ? (
+                          <CheckCircle2 className="h-5 w-5 shrink-0 text-green-600" />
+                        ) : (
+                          <WalletCards className="h-5 w-5 shrink-0 text-orange-600" />
+                        )}
 
                         <div>
                           <p className="text-[10px] font-medium text-slate-400">
@@ -1101,10 +1003,8 @@ const Orders = () => {
                               flex
                               items-center
                               gap-3
-                              rounded-2xl
-                              border
-                              border-slate-100
-                              bg-white
+                              rounded-xl
+                              bg-slate-50
                               p-2.5
                             "
                           >
@@ -1258,11 +1158,11 @@ const Orders = () => {
                       </p>
 
                       <div className="flex items-center gap-2">
-                        {hasReceipt && invoice && (
+                        {order.receiptGenerated && (
                           <motion.button
                             whileTap={{ scale: 0.95 }}
-                            onClick={() => downloadInvoice(order._id)}
-                            disabled={isDownloading}
+                            onClick={() => downloadOrderReceipt(order._id)}
+                            disabled={isDownloadingReceipt}
                             className="
                               flex
                               items-center
@@ -1279,38 +1179,17 @@ const Orders = () => {
                               disabled:opacity-60
                             "
                           >
-                            {isDownloading ? (
+                            {isDownloadingReceipt ? (
                               <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                             ) : (
                               <Download className="h-3.5 w-3.5" />
                             )}
 
-                            {isDownloading ? "डाउनलोड..." : "रसीद"}
+                            {isDownloadingReceipt
+                              ? "डाउनलोड..."
+                              : "रसीड डाउनलोड"}
                           </motion.button>
                         )}
-
-                        <motion.button
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => openReceipt(order)}
-                          title="रसीद देखें"
-                          className="
-                            flex
-                            items-center
-                            gap-1.5
-                            rounded-xl
-                            bg-slate-100
-                            px-3
-                            py-2
-                            text-xs
-                            font-bold
-                            text-slate-600
-                            transition
-                            hover:bg-slate-200
-                          "
-                        >
-                          <ReceiptText className="h-3.5 w-3.5" />
-                          रसीद
-                        </motion.button>
 
                         <button
                           onClick={() => toggleOrder(order._id)}
@@ -1427,199 +1306,6 @@ const Orders = () => {
           </div>
         )}
       </div>
-
-      {/* ------------------------------------------------
-          ORDER RECEIPT MODAL
-      ------------------------------------------------ */}
-
-      <AnimatePresence>
-        {receiptOrder && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-0 sm:items-center sm:p-6"
-            onClick={closeReceipt}
-          >
-            <motion.div
-              initial={{ y: 60, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 60, opacity: 0 }}
-              transition={{ type: "spring", damping: 26, stiffness: 300 }}
-              onClick={(e) => e.stopPropagation()}
-              className="
-                max-h-[90vh]
-                w-full
-                max-w-md
-                overflow-y-auto
-                rounded-t-[28px]
-                bg-white
-                p-5
-                shadow-2xl
-                sm:rounded-[28px]
-              "
-            >
-              {/* HEADER */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-lg font-black text-slate-900">
-                    ऑर्डर रसीद
-                  </h2>
-
-                  <p className="text-xs font-semibold text-slate-400">
-                    #{String(receiptOrder._id).slice(-8).toUpperCase()}
-                  </p>
-                </div>
-
-                <button
-                  onClick={closeReceipt}
-                  className="
-                    flex
-                    h-9
-                    w-9
-                    items-center
-                    justify-center
-                    rounded-full
-                    bg-slate-100
-                    text-slate-600
-                    transition
-                    hover:bg-slate-200
-                  "
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              {/* LOADING */}
-              {receiptLoading && (
-                <div className="flex flex-col items-center justify-center gap-3 py-16">
-                  <RefreshCw className="h-8 w-8 animate-spin text-sky-600" />
-                  <p className="text-sm font-semibold text-slate-500">
-                    रसीद लोड हो रही है...
-                  </p>
-                </div>
-              )}
-
-              {/* ERROR */}
-              {!receiptLoading && receiptError && (
-                <div className="mt-6 flex flex-col items-center justify-center gap-3 rounded-2xl bg-slate-50 py-10 text-center">
-                  <CircleAlert className="h-8 w-8 text-slate-400" />
-                  <p className="px-6 text-sm font-semibold text-slate-500">
-                    {receiptError}
-                  </p>
-                </div>
-              )}
-
-              {/* RECEIPT CONTENT */}
-              {!receiptLoading && !receiptError && receiptData && (
-                <>
-                  {/* ORDER INFO */}
-                  <div className="mt-5 grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl bg-slate-50 p-3">
-                      <p className="text-[10px] font-bold text-slate-400">
-                        रसीद संख्या
-                      </p>
-
-                      <p className="mt-1 break-all text-xs font-black text-slate-800">
-                        {receiptData.receipt?.receiptNumber}
-                      </p>
-                    </div>
-
-                    <div className="rounded-2xl bg-slate-50 p-3">
-                      <p className="text-[10px] font-bold text-slate-400">
-                        तारीख
-                      </p>
-
-                      <p className="mt-1 text-xs font-black text-slate-800">
-                        {formatDate(receiptData.receipt?.generatedAt)}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* ITEMS */}
-                  <div className="mt-4 overflow-hidden rounded-2xl border border-slate-100">
-                    <div className="bg-slate-50 px-3 py-2">
-                      <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">
-                        आइटम
-                      </p>
-                    </div>
-
-                    <div className="divide-y divide-slate-100">
-                      {(receiptData.order?.items || []).map((item) => (
-                        <div
-                          key={item._id}
-                          className="flex items-center justify-between px-3 py-3"
-                        >
-                          <div>
-                            <p className="text-sm font-bold text-slate-800">
-                              {item.name}
-                            </p>
-
-                            <p className="text-[11px] font-semibold text-slate-400">
-                              {item.measurement || ""} · {item.qty} ×{" "}
-                              {formatMoney(item.price)}
-                            </p>
-                          </div>
-
-                          <p className="text-sm font-black text-slate-900">
-                            {formatMoney(item.total)}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* TOTAL */}
-                  <div className="mt-4 rounded-2xl bg-emerald-50 p-4">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-bold text-emerald-700">
-                        कुल राशि
-                      </p>
-
-                      <p className="text-xl font-black text-emerald-700">
-                        {formatMoney(receiptData.receipt?.totalAmount)}
-                      </p>
-                    </div>
-                  </div>
-                </>
-              )}
-
-              {/* DOWNLOAD */}
-              {!receiptLoading && !receiptError && receiptData && (
-                <button
-                  onClick={downloadReceipt}
-                  disabled={downloadingReceipt}
-                  className="
-                    mt-5
-                    flex
-                    h-12
-                    w-full
-                    items-center
-                    justify-center
-                    gap-2
-                    rounded-2xl
-                    bg-slate-900
-                    text-sm
-                    font-black
-                    text-white
-                    transition
-                    hover:bg-slate-800
-                    disabled:opacity-50
-                  "
-                >
-                  {downloadingReceipt ? (
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Download className="h-4 w-4" />
-                  )}
-
-                  {downloadingReceipt ? "डाउनलोड हो रहा..." : "PDF डाउनलोड करें"}
-                </button>
-              )}
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
 };

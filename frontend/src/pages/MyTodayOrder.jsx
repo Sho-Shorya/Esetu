@@ -4,7 +4,7 @@ import { useDispatch, useSelector } from "react-redux";
 import { toast } from "sonner";
 import { FaClock } from "react-icons/fa";
 import { MdDeleteOutline } from "react-icons/md";
-import { Loader2, X } from "lucide-react";
+import { Loader2, ReceiptText, X } from "lucide-react";
 
 import { API_BASE_URL } from "../lib/constants";
 
@@ -44,6 +44,8 @@ const MyTodayOrder = () => {
 
   const [removingId, setRemovingId] = useState(null);
 
+  const [downloadingReceiptId, setDownloadingReceiptId] = useState(null);
+
   const token = localStorage.getItem("token");
 
   /*
@@ -51,6 +53,57 @@ const MyTodayOrder = () => {
     again whenever Redux data changes.
   */
   const hasFetchedRef = useRef(false);
+
+  // ==========================================================
+  // DOWNLOAD RECEIPT PDF
+  // ==========================================================
+
+  const downloadReceipt = async (order) => {
+    if (!order || downloadingReceiptId) return;
+
+    try {
+      setDownloadingReceiptId(order._id);
+
+      const res = await axios.get(
+        `${API_BASE_URL}/api/v1/order/receipt/${order._id}/pdf`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+
+          responseType: "blob",
+          timeout: 15000,
+        },
+      );
+
+      const blob = new Blob([res.data], {
+        type: "application/pdf",
+      });
+
+      const url = window.URL.createObjectURL(blob);
+
+      const link = document.createElement("a");
+
+      link.href = url;
+      link.download = `e-setu-receipt-${String(order._id).slice(-8)}.pdf`;
+
+      link.style.display = "none";
+
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url);
+      }, 1000);
+    } catch (error) {
+      console.error("Receipt download error:", error);
+
+      toast.error("रसीद डाउनलोड नहीं हो सकी।");
+    } finally {
+      setDownloadingReceiptId(null);
+    }
+  };
 
   // ==========================================================
   // FETCH TODAY'S ORDERS
@@ -928,6 +981,47 @@ const MyTodayOrder = () => {
                       </h2>
                     </div>
                   </div>
+
+                  {/* RECEIPT DOWNLOAD */}
+
+                  {order.receiptGenerated && (
+                    <div className="mt-5">
+                      <button
+                        type="button"
+                        disabled={downloadingReceiptId === order._id}
+                        onClick={() => downloadReceipt(order)}
+                        className="
+                          flex
+                          w-full
+                          items-center
+                          justify-center
+                          gap-2
+                          rounded-2xl
+                          border
+                          border-red-100
+                          bg-red-50
+                          px-4
+                          py-3.5
+                          font-semibold
+                          text-red-600
+                          transition-all
+                          hover:bg-red-100
+                          disabled:cursor-not-allowed
+                          disabled:opacity-60
+                        "
+                      >
+                        {downloadingReceiptId === order._id ? (
+                          <Loader2 size={18} className="animate-spin" />
+                        ) : (
+                          <ReceiptText size={18} />
+                        )}
+
+                        {downloadingReceiptId === order._id
+                          ? "डाउनलोड हो रहा..."
+                          : "रसीड डाउनलोड करें"}
+                      </button>
+                    </div>
+                  )}
 
                   {/* ========================================
                       PENDING

@@ -135,7 +135,6 @@ export const startReminderCron = () => {
   Checks whether we are exactly around:
 
   60 minutes
-  30 minutes
   10 minutes
 
   before today's order cutoff.
@@ -197,11 +196,10 @@ export const startReminderCron = () => {
         ------------------------------------------------
 
         60 minutes
-        30 minutes
         10 minutes
         */
 
-        if (![60, 30, 10].includes(remainingMinutes)) {
+        if (![60, 10].includes(remainingMinutes)) {
           return;
         }
 
@@ -281,21 +279,6 @@ export const startReminderCron = () => {
 
                 message =
                   "आज के ऑर्डर का कट-ऑफ समय सिर्फ 1 घंटे में है। समय रहते अपना ऑर्डर पूरा करें।";
-              }
-
-              /*
-              ------------------------------------------
-              30 MINUTES
-              ------------------------------------------
-              */
-
-              if (remainingMinutes === 30) {
-                reminderType = "30min-no-order";
-
-                title = "⚠️ सिर्फ 30 मिनट बाकी!";
-
-                message =
-                  "जल्दी करें! आज के ऑर्डर का कट-ऑफ समय 30 मिनट में समाप्त हो जाएगा।";
               }
 
               /*
@@ -443,5 +426,5 @@ export const startReminderCron = () => {
 
   console.log("⏰ Order reminder cron: Every minute");
 
-  console.log("⏰ Order reminders: 60 / 30 / 10 minutes before cutoff");
+  console.log("⏰ Order reminders: 60 / 10 minutes before cutoff");
 };

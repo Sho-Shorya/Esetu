@@ -526,6 +526,30 @@ const sendOrderNotifications = async ({ user }) => {
    GET TODAY ORDERS - USER
 ============================================================ */
 
+/* ============================================================
+   ATTACH RECEIPT FLAGS
+   ============================================================ */
+
+const attachReceiptFlags = async (orders) => {
+  if (!orders.length) return;
+
+  const receipts = await OrderReceipt.find({
+    orderId: { $in: orders.map((order) => order._id) },
+  }).select("orderId receiptNumber generatedAt");
+
+  const receiptMap = new Map(
+    receipts.map((receipt) => [String(receipt.orderId), receipt]),
+  );
+
+  for (const order of orders) {
+    const receipt = receiptMap.get(String(order._id));
+
+    order._doc.receiptGenerated = Boolean(receipt);
+    order._doc.receiptNumber = receipt ? receipt.receiptNumber : null;
+    order._doc.receiptGeneratedAt = receipt ? receipt.generatedAt : null;
+  }
+};
+
 export const getTodayOrders = async (req, res) => {
   try {
     const userId = req.userId;
@@ -542,6 +566,8 @@ export const getTodayOrders = async (req, res) => {
     }).sort({
       createdAt: -1,
     });
+
+    await attachReceiptFlags(orders);
 
     return res.status(200).json({
       success: true,
@@ -743,17 +769,13 @@ export const getOrderHistory = async (req, res) => {
   try {
     const userId = req.userId;
 
-    const { start } = getTodayDateRange();
-
     const orders = await Order.find({
       userId,
-
-      createdAt: {
-        $lt: start,
-      },
     }).sort({
       createdAt: -1,
     });
+
+    await attachReceiptFlags(orders);
 
     return res.status(200).json({
       success: true,
@@ -1562,7 +1584,10 @@ export const downloadOrderReceiptPdf = async (req, res) => {
       });
     }
 
-    const pdfBuffer = await generateOrderReceiptPDF(order._id);
+    const pdfBuffer = await generateOrderReceiptPDF(
+      order._id,
+      receipt.receiptNumber,
+    );
 
     res.setHeader("Content-Type", "application/pdf");
 
@@ -1586,6 +1611,43 @@ export const downloadOrderReceiptPdf = async (req, res) => {
    UPDATE ORDER ITEMS
    ADMIN / SUPPLIER
 ============================================================ */
+
+/* ============================================================
+   GET MY ORDER RECEIPTS
+   USER
+============================================================ */
+
+export const getMyOrderReceipts = async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    const receipts = await OrderReceipt.find({ userId })
+      .populate("orderId", "createdAt totalAmount")
+      .sort({ generatedAt: -1, createdAt: -1 });
+
+    const data = receipts.map((receipt) => ({
+      _id: receipt._id,
+      orderId: receipt.orderId?._id || null,
+      orderCreatedAt: receipt.orderId?.createdAt || null,
+      receiptNumber: receipt.receiptNumber,
+      totalAmount: receipt.totalAmount,
+      generatedAt: receipt.generatedAt,
+      status: receipt.status,
+    }));
+
+    return res.status(200).json({
+      success: true,
+      receipts: data,
+    });
+  } catch (error) {
+    console.error(error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
 
 export const updateOrderItems = async (req, res) => {
   try {
@@ -2088,6 +2150,22 @@ export const getDailyApprovedItems = async (req, res) => {
           },
 
           /* ==================================================
+             USER PHONE NUMBER
+          ================================================== */
+
+          phone: {
+            $first: "$user.phoneNumber",
+          },
+
+          /* ==================================================
+             USER PAYMENT STATUS
+          ================================================== */
+
+          userPaymentStatus: {
+            $first: "$paymentStatus",
+          },
+
+          /* ==================================================
              USER QUANTITY
           ================================================== */
 
@@ -2190,6 +2268,14 @@ export const getDailyApprovedItems = async (req, res) => {
               },
 
               profilePic: "$userProfilePic",
+
+              phoneNumber: {
+                $ifNull: ["$phone", ""],
+              },
+
+              paymentStatus: {
+                $ifNull: ["$userPaymentStatus", "Pending"],
+              },
 
               quantity: "$userQuantity",
 

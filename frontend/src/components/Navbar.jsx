@@ -403,7 +403,7 @@ const Navbar = () => {
             {supplierData && (
               <div
                 onClick={() => navigate("/daily-orders")}
-                className=" px-2 py-2 rounded-full border-2 border-emerald-400 border-dashed bg-emerald-100 gap-2 flex items-center"
+                className=" px-2 py-2 rounded-full border-2 border-spin border-emerald-400 border-dashed bg-emerald-100 gap-2 flex items-center"
               >
                 <Table className="h-6 w-6 " />
                 {/* <p>ऑर्डर</p> */}
@@ -431,6 +431,7 @@ const Navbar = () => {
               >
                 <Link
                   to="/cart"
+                  data-cart-target
                   className="
       relative
       flex
