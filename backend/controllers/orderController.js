@@ -158,6 +158,48 @@ export const syncTodayOrderFlags = async () => {
 /* ============================================================
    ADD ORDER
 ============================================================ */
+
+/*
+ * Serializes order placement per user so simultaneous
+ * requests (double-tap, deadline burst) cannot create
+ * duplicate "today's" orders.
+ */
+
+const userOrderLocks = new Map();
+
+const withUserOrderLock = async (userId, task) => {
+  const previous = userOrderLocks.get(userId) ?? Promise.resolve();
+
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+
+  const current = previous
+    .catch(() => {})
+    .then(task)
+    .then(
+      (value) => {
+        release();
+        return value;
+      },
+      (error) => {
+        release();
+        throw error;
+      },
+    );
+
+  userOrderLocks.set(userId, current);
+
+  try {
+    return await current;
+  } finally {
+    if (userOrderLocks.get(userId) === current) {
+      userOrderLocks.delete(userId);
+    }
+  }
+};
+
 export const addOrder = async (req, res) => {
   try {
     // ---------------------------------------
@@ -243,38 +285,7 @@ export const addOrder = async (req, res) => {
     }
 
     // ---------------------------------------
-    // 7. Today's date range
-    // ---------------------------------------
-    const { start, end } = getTodayDateRange();
-
-    // ---------------------------------------
-    // 8. Find today's pending order
-    // ---------------------------------------
-    let order = await Order.findOne({
-      userId,
-
-      status: "Pending",
-
-      isTodayOrder: true,
-
-      createdAt: {
-        $gte: start,
-        $lte: end,
-      },
-    });
-
-    // ---------------------------------------
-    // 9. Check cutoff
-    // ---------------------------------------
-    if (order && isCutoffPassed(order.cutoffTime)) {
-      return res.status(400).json({
-        success: false,
-        message: "आज का ऑर्डर अब एडिट नहीं किया जा सकता।",
-      });
-    }
-
-    // ---------------------------------------
-    // 10. Convert cart → order items
+    // 7. Convert cart → order items
     // ---------------------------------------
     const orderItems = cart.items.map((cartItem) => {
       const product = cartItem.productId;
@@ -322,7 +333,7 @@ export const addOrder = async (req, res) => {
     });
 
     // ---------------------------------------
-    // 11. Validate items
+    // 8. Validate items
     // ---------------------------------------
     const invalidItem = orderItems.find(
       (item) =>
@@ -343,81 +354,126 @@ export const addOrder = async (req, res) => {
     }
 
     // ---------------------------------------
-    // 12. Existing today's order
+    // 9. Place / update today's order (serialized per user)
     // ---------------------------------------
-    if (order) {
-      for (const newItem of orderItems) {
-        const existingItem = order.items.find(
-          (item) =>
-            item.productId?.toString() === newItem.productId?.toString() &&
-            item.companyId?.toString() === newItem.companyId?.toString() &&
-            item.measurement === newItem.measurement,
-        );
+    const newOrder = await withUserOrderLock(userId, async () => {
+      // ---- Re-check cutoff inside the lock ----
+      const lockedWithinWindow = await isWithinOrderingWindow();
 
-        if (existingItem) {
-          existingItem.qty =
-            Number(existingItem.qty || 0) + Number(newItem.qty || 0);
-
-          existingItem.total =
-            Number(existingItem.total || 0) + Number(newItem.total || 0);
-
-          if (existingItem.qty > 0) {
-            existingItem.price = existingItem.total / existingItem.qty;
-          }
-        } else {
-          order.items.push(newItem);
-        }
+      if (!lockedWithinWindow) {
+        const noWindowError = new Error("closed");
+        noWindowError.code = "ORDER_WINDOW_CLOSED";
+        throw noWindowError;
       }
 
-      order.totalAmount = calculateOrderTotal(order.items);
-
-      order.paymentMethod = "COD";
-
-      order.paymentStatus = "Pending";
-
-      await order.save();
-    } else {
       // ---------------------------------------
-      // 13. Create new COD order
+      // Today's date range
       // ---------------------------------------
-      const cutoffTime = await getTodayCutoff();
+      const { start, end } = getTodayDateRange();
 
-      const totalAmount = calculateOrderTotal(orderItems);
-
-      order = await Order.create({
+      // ---------------------------------------
+      // Find today's pending order
+      // ---------------------------------------
+      let currentOrder = await Order.findOne({
         userId,
-
-        items: orderItems,
-
-        totalAmount,
-
-        originalTotalAmount: totalAmount,
-
-        shippingAddress: user.address || "",
-
-        paymentMethod: "COD",
-
-        paymentStatus: "Pending",
 
         status: "Pending",
 
         isTodayOrder: true,
 
-        cutoffTime,
+        createdAt: {
+          $gte: start,
+          $lte: end,
+        },
       });
-    }
+
+      // ---------------------------------------
+      // Check cutoff
+      // ---------------------------------------
+      if (currentOrder && isCutoffPassed(currentOrder.cutoffTime)) {
+        const cutoffError = new Error("cutoff-passed");
+        cutoffError.code = "ORDER_CUTOFF_PASSED";
+        throw cutoffError;
+      }
+
+      if (currentOrder) {
+        for (const newItem of orderItems) {
+          const existingItem = currentOrder.items.find(
+            (item) =>
+              item.productId?.toString() === newItem.productId?.toString() &&
+              item.companyId?.toString() === newItem.companyId?.toString() &&
+              item.measurement === newItem.measurement,
+          );
+
+          if (existingItem) {
+            existingItem.qty =
+              Number(existingItem.qty || 0) + Number(newItem.qty || 0);
+
+            existingItem.total =
+              Number(existingItem.total || 0) + Number(newItem.total || 0);
+
+            if (existingItem.qty > 0) {
+              existingItem.price = existingItem.total / existingItem.qty;
+            }
+          } else {
+            currentOrder.items.push(newItem);
+          }
+        }
+
+        currentOrder.totalAmount = calculateOrderTotal(currentOrder.items);
+
+        currentOrder.paymentMethod = "COD";
+
+        currentOrder.paymentStatus = "Pending";
+
+        await currentOrder.save();
+      } else {
+        // ---------------------------------------
+        // Create new COD order
+        // ---------------------------------------
+        const cutoffTime = await getTodayCutoff();
+
+        const totalAmount = calculateOrderTotal(orderItems);
+
+        currentOrder = await Order.create({
+          userId,
+
+          items: orderItems,
+
+          totalAmount,
+
+          originalTotalAmount: totalAmount,
+
+          shippingAddress: user.address || "",
+
+          paymentMethod: "COD",
+
+          paymentStatus: "Pending",
+
+          status: "Pending",
+
+          isTodayOrder: true,
+
+          cutoffTime,
+        });
+      }
+
+      // ---------------------------------------
+      // Clear cart
+      // ---------------------------------------
+      cart.items = [];
+
+      cart.totalPrice = 0;
+
+      await cart.save();
+
+      return currentOrder;
+    });
+
+    order = newOrder;
 
     // ---------------------------------------
-    // 14. Clear cart
-    // ---------------------------------------
-    cart.items = [];
-
-    cart.totalPrice = 0;
-
-    await cart.save();
-
-    // ---------------------------------------
-    // 15. Send notification
+    // 12. Send notification
     // ---------------------------------------
     setImmediate(() => {
       sendOrderNotifications({
@@ -429,7 +485,7 @@ export const addOrder = async (req, res) => {
     });
 
     // ---------------------------------------
-    // 16. Response
+    // 13. Response
     // ---------------------------------------
     return res.status(200).json({
       success: true,
@@ -439,6 +495,20 @@ export const addOrder = async (req, res) => {
       order,
     });
   } catch (error) {
+    if (error?.code === "ORDER_WINDOW_CLOSED") {
+      return res.status(400).json({
+        success: false,
+        message: "माफ़ कीजिए, ऑर्डर का समय खत्म हो गया है।",
+      });
+    }
+
+    if (error?.code === "ORDER_CUTOFF_PASSED") {
+      return res.status(400).json({
+        success: false,
+        message: "आज का ऑर्डर अब एडिट नहीं किया जा सकता।",
+      });
+    }
+
     console.error("Add Order Error:", error);
 
     if (res.headersSent) {

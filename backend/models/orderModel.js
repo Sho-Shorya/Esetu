@@ -360,6 +360,32 @@ orderSchema.index({
 });
 
 /*
+ * Admin "today's Approved orders" daily rollup.
+ */
+
+orderSchema.index({
+  status: 1,
+  createdAt: -1,
+});
+
+/*
+ * Admin date-filtered order list.
+ */
+
+orderSchema.index({
+  createdAt: -1,
+});
+
+/*
+ * User order history (sorted newest first).
+ */
+
+orderSchema.index({
+  userId: 1,
+  createdAt: -1,
+});
+
+/*
  * IMPORTANT:
  *
  * transactionId must be unique ONLY when it exists.

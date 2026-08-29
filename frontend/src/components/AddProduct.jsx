@@ -38,6 +38,10 @@ const AddProduct = () => {
 
   const [companyLoading, setCompanyLoading] = useState(false);
 
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
+
+  const [companiesLoading, setCompaniesLoading] = useState(false);
+
   // =====================================================
   // PRODUCT
   // =====================================================
@@ -106,6 +110,18 @@ const AddProduct = () => {
   const [companyLogo, setCompanyLogo] = useState(null);
 
   const [selectedCategories, setSelectedCategories] = useState([]);
+
+  // =====================================================
+  // PRODUCT CONFIRMATION
+  // =====================================================
+
+  const [showProductConfirm, setShowProductConfirm] = useState(false);
+
+  const [notifyAll, setNotifyAll] = useState(false);
+
+  const [notifyTitle, setNotifyTitle] = useState("");
+
+  const [notifyMessage, setNotifyMessage] = useState("");
 
   // =====================================================
   // AUTH CONFIG
@@ -395,6 +411,8 @@ const AddProduct = () => {
 
   const getCategories = async () => {
     try {
+      setCategoriesLoading(true);
+
       const res = await axios.get(`${API_BASE_URL}/api/v1/category/get-cat`);
 
       if (res.data.success) {
@@ -404,6 +422,8 @@ const AddProduct = () => {
       console.error("Get categories error:", error);
 
       toast.error("कैटेगरी लोड नहीं हो सकीं");
+    } finally {
+      setCategoriesLoading(false);
     }
   };
 
@@ -413,6 +433,8 @@ const AddProduct = () => {
 
   const getCompanies = async () => {
     try {
+      setCompaniesLoading(true);
+
       const res = await axios.get(`${API_BASE_URL}/api/v1/company/get-com`);
 
       if (res.data.success) {
@@ -424,6 +446,8 @@ const AddProduct = () => {
       console.error("Get companies error:", error);
 
       toast.error("कंपनियां लोड नहीं हो सकीं");
+    } finally {
+      setCompaniesLoading(false);
     }
   };
 
@@ -464,6 +488,8 @@ const AddProduct = () => {
   // =====================================================
 
   const addCategory = async () => {
+    if (categoryLoading) return;
+
     const trimmedName = categoryName.trim();
 
     if (!trimmedName) {
@@ -527,6 +553,8 @@ const AddProduct = () => {
   // =====================================================
 
   const addCompanyHandler = async () => {
+    if (companyLoading) return;
+
     const trimmedName = companyName.trim();
 
     if (!trimmedName) {
@@ -650,6 +678,32 @@ const AddProduct = () => {
       return;
     }
 
+    // =================================================
+    // AUTO-GENERATED HINDI NOTIFICATION
+    // =================================================
+
+    const trimmedProductName = product.name.trim();
+
+    setNotifyTitle(`🆕 नया प्रोडक्ट: ${trimmedProductName}`);
+
+    setNotifyMessage(
+      `${trimmedProductName} अब हमारे स्टोर में उपलब्ध है! आज ही ऑर्डर करें। 🛒`,
+    );
+
+    // =================================================
+    // OPEN CONFIRMATION
+    // =================================================
+
+    setShowProductConfirm(true);
+  };
+
+  // =====================================================
+  // CONFIRM PRODUCT
+  // =====================================================
+
+  const handleConfirmSubmit = async () => {
+    if (loading) return;
+
     try {
       setLoading(true);
 
@@ -733,7 +787,35 @@ const AddProduct = () => {
 
       dispatch(addProduct(newProduct));
 
+      // =================================================
+      // ⭐ SEND NOTIFICATION TO ALL USERS (OPTIONAL)
+      // =================================================
+
+      if (notifyAll) {
+        try {
+          await axios.post(
+            `${API_BASE_URL}/api/v1/notify/all`,
+            {
+              title: notifyTitle.trim(),
+              message: notifyMessage.trim(),
+            },
+            getAuthConfig(),
+          );
+
+          toast.success("सभी उपयोगकर्ताओं को नोटिफिकेशन भेज दी गई");
+        } catch (notifyError) {
+          console.error("Notify all error:", notifyError);
+
+          toast.error(
+            notifyError.response?.data?.message ||
+              "प्रोडक्ट जुड़ गया, पर नोटिफिकेशन भेजने में समस्या हुई",
+          );
+        }
+      }
+
       toast.success("प्रोडक्ट सफलतापूर्वक जोड़ दिया गया");
+
+      setShowProductConfirm(false);
 
       // -----------------------------------------------
       // RESET FORM
@@ -763,6 +845,10 @@ const AddProduct = () => {
       setKeywordInput("");
       setPreview("");
       setFilteredCompanies([]);
+
+      setNotifyAll(false);
+      setNotifyTitle("");
+      setNotifyMessage("");
 
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
@@ -1010,9 +1096,14 @@ const AddProduct = () => {
             <select
               value={product.category}
               onChange={handleCategoryChange}
+              disabled={categoriesLoading}
               className="w-full p-3 rounded-xl border-2 border-emerald-200 focus:border-emerald-500 outline-none bg-white"
             >
-              <option value="">कैटेगरी चुनें</option>
+              <option value="">
+                {categoriesLoading
+                  ? "कैटेगरी लोड हो रही हैं..."
+                  : "कैटेगरी चुनें"}
+              </option>
 
               {categories.map((category) => (
                 <option key={category._id} value={category._id}>
@@ -1046,15 +1137,17 @@ const AddProduct = () => {
               name="company"
               value={variant.company}
               onChange={handleVariantChange}
-              disabled={!product.category}
+              disabled={!product.category || companiesLoading}
               className="w-full p-3 rounded-xl border-2 border-emerald-200 focus:border-emerald-500 outline-none bg-white disabled:bg-gray-100 disabled:cursor-not-allowed"
             >
               <option value="">
                 {!product.category
                   ? "पहले कैटेगरी चुनें"
-                  : filteredCompanies.length === 0
-                    ? "इस कैटेगरी में कोई कंपनी नहीं है"
-                    : "कंपनी चुनें"}
+                  : companiesLoading
+                    ? "कंपनियां लोड हो रही हैं..."
+                    : filteredCompanies.length === 0
+                      ? "इस कैटेगरी में कोई कंपनी नहीं है"
+                      : "कंपनी चुनें"}
               </option>
 
               {filteredCompanies.map((company) => (
@@ -1221,6 +1314,158 @@ const AddProduct = () => {
             )}
           </button>
         </form>
+
+        {/* =================================================
+            PRODUCT CONFIRMATION MODAL
+        ================================================= */}
+
+        {showProductConfirm && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-md space-y-5 shadow-2xl max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold">प्रोडक्ट पक्का करें?</h2>
+
+                <button
+                  type="button"
+                  onClick={() => setShowProductConfirm(false)}
+                >
+                  <X />
+                </button>
+              </div>
+
+              {/* Summary */}
+
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-2">
+                <div>
+                  <p className="text-xs text-gray-500">प्रोडक्ट का नाम</p>
+
+                  <p className="font-semibold text-gray-800">
+                    {product.name}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-gray-500">कैटेगरी</p>
+
+                  <p className="font-semibold text-gray-800">
+                    {categories.find(
+                      (category) =>
+                        String(category._id) === String(product.category),
+                    )?.name || "—"}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs text-gray-500">वेरिएंट</p>
+
+                  <p className="font-semibold text-gray-800">
+                    {product.variants.map((item) => {
+                      const company = companies.find(
+                        (c) => String(c._id) === String(item.company),
+                      );
+
+                      return (
+                        <span
+                          key={`${item.company}-${item.measurement}`}
+                          className="inline-block mr-2 mb-1 px-2 py-0.5 bg-white border rounded-full text-sm"
+                        >
+                          {company?.name || "कंपनी"} • {item.measurement} • ₹
+                          {item.price}
+                        </span>
+                      );
+                    })}
+                  </p>
+                </div>
+              </div>
+
+              {/* Notification toggle */}
+
+              <div className="rounded-xl border-2 border-gray-200 p-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-gray-800">
+                      सभी उपयोगकर्ताओं को नोटिफिकेशन भेजें
+                    </p>
+
+                    <p className="text-xs text-gray-500">
+                      नया प्रोडक्ट स्टोर में जुड़ने की सूचना सबको जाएगी
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setNotifyAll((prev) => !prev)}
+                    className={`relative w-12 h-6 rounded-full transition shrink-0 ${
+                      notifyAll ? "bg-emerald-500" : "bg-gray-300"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-1 w-4 h-4 bg-white rounded-full transition ${
+                        notifyAll ? "left-7" : "left-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {notifyAll && (
+                  <div className="space-y-3 pt-2 border-t border-gray-100">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">
+                        टाइटल
+                      </label>
+
+                      <input
+                        type="text"
+                        value={notifyTitle}
+                        onChange={(e) => setNotifyTitle(e.target.value)}
+                        className="w-full p-2.5 border rounded-xl outline-none focus:border-emerald-500"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-1">
+                        मैसेज
+                      </label>
+
+                      <textarea
+                        rows="3"
+                        value={notifyMessage}
+                        onChange={(e) => setNotifyMessage(e.target.value)}
+                        className="w-full p-2.5 border rounded-xl outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowProductConfirm(false)}
+                  className="flex-1 py-3 rounded-xl bg-gray-200 font-semibold"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleConfirmSubmit}
+                  disabled={loading}
+                  className="flex-1 py-3 rounded-xl bg-emerald-600 disabled:bg-emerald-300 text-white font-semibold flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      सेव हो रहा है...
+                    </>
+                  ) : (
+                    "प्रोडक्ट सेव करें"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* =================================================
             CATEGORY MODAL

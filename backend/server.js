@@ -19,6 +19,7 @@ import { startReminderCron } from "./services/reminderCron.js";
 import trackingRoute from "./routes/trackingRoute.js";
 import routeRoute from "./routes/routeRoute.js";
 import paymentRouter from "./routes/paymentRouter.js";
+import notificationRouter from "./routes/notificationRoutes.js";
 
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
 const app = express();
@@ -48,6 +49,7 @@ app.use("/api/v1/offer", offerRoute);
 app.use("/api/v1/tracking", trackingRoute);
 app.use("/api/v1/route", routeRoute);
 app.use("/api/v1/payment", paymentRouter);
+app.use("/api/v1/notify", notificationRouter);
 
 const scheduleMidnightSync = () => {
   const now = new Date();

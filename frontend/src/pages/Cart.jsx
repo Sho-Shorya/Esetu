@@ -152,7 +152,9 @@ const Cart = () => {
      REFS
   ========================================================== */
 
-  const requestQueues = useRef(new Map());
+  const mutationQueue = useRef(Promise.resolve());
+
+  const cartStateRef = useRef(cartData);
 
   const checkoutLock = useRef(false);
 
@@ -173,6 +175,10 @@ const Cart = () => {
       mountedRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    cartStateRef.current = cartData;
+  }, [cartData]);
 
   /* ==========================================================
      DERIVED DATA
@@ -253,6 +259,28 @@ const Cart = () => {
 
   const syncCart = (newCart) => {
     dispatch(setCartData(newCart || EMPTY_CART));
+  };
+
+  const applyCart = (newCart) => {
+    const next = newCart || EMPTY_CART;
+
+    cartStateRef.current = next;
+
+    dispatch(setCartData(next));
+  };
+
+  /* ==========================================================
+     MUTATION QUEUE
+     Serializes all cart writes so optimistic actions and
+     network requests stay in the user's tap order.
+  ========================================================== */
+
+  const enqueueMutation = (task) => {
+    const run = mutationQueue.current.then(task);
+
+    mutationQueue.current = run.catch(() => {});
+
+    return run;
   };
 
   /* ==========================================================
@@ -408,7 +436,9 @@ const Cart = () => {
       return;
     }
 
-    const latestItem = (cartData?.items || []).find(
+    const latestCart = cartStateRef.current;
+
+    const latestItem = (latestCart?.items || []).find(
       (cartItem) => getItemKey(cartItem) === itemKey,
     );
 
@@ -429,84 +459,51 @@ const Cart = () => {
        OPTIMISTIC UPDATE
     -------------------------------------------------------- */
 
-    const optimisticCart = buildQuantityCart(cartData, itemKey, newQty);
-
-    dispatch(setCartData(optimisticCart));
+    applyCart(buildQuantityCart(latestCart, itemKey, newQty));
 
     /* --------------------------------------------------------
        QUEUE REQUEST
     -------------------------------------------------------- */
 
-    const previousQueue =
-      requestQueues.current.get(itemKey) || Promise.resolve();
-
-    const request = previousQueue
-      .catch(() => {})
-      .then(async () => {
-        try {
-          const res = await axios.put(
-            `${API_BASE_URL}/api/v1/cart/update-cart`,
-            {
-              productId,
-              company: companyId,
-              measurement: latestItem?.measurement,
-              type,
+    await enqueueMutation(async () => {
+      try {
+        const res = await axios.put(
+          `${API_BASE_URL}/api/v1/cart/update-cart`,
+          {
+            productId,
+            company: companyId,
+            measurement: latestItem?.measurement,
+            type,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
             },
+          },
+        );
+
+        if (!res.data?.success) {
+          throw new Error(res.data?.message || "मात्रा अपडेट नहीं हो सकी");
+        }
+
+        return res.data;
+      } catch (error) {
+        console.error("Quantity update error:", error);
+
+        if (mountedRef.current) {
+          toast.error(
+            error.response?.data?.message ||
+              error.message ||
+              "मात्रा अपडेट नहीं हो सकी",
             {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
+              duration: 1200,
             },
           );
-
-          if (!res.data?.success) {
-            throw new Error(res.data?.message || "मात्रा अपडेट नहीं हो सकी");
-          }
-
-          return res.data;
-        } catch (error) {
-          console.error("Quantity update error:", error);
-
-          try {
-            const fresh = await axios.get(`${API_BASE_URL}/api/v1/cart`, {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            });
-
-            if (fresh.data?.success && mountedRef.current) {
-              dispatch(setCartData(fresh.data.cart));
-            }
-          } catch (syncError) {
-            console.error("Cart resync error:", syncError);
-          }
-
-          if (mountedRef.current) {
-            toast.error(
-              error.response?.data?.message ||
-                error.message ||
-                "मात्रा अपडेट नहीं हो सकी",
-              {
-                duration: 1200,
-              },
-            );
-          }
-
-          throw error;
         }
-      });
 
-    requestQueues.current.set(itemKey, request);
-
-    try {
-      await request;
-    } catch {
-      // Already handled
-    } finally {
-      if (requestQueues.current.get(itemKey) === request) {
-        requestQueues.current.delete(itemKey);
+        throw error;
       }
-    }
+    });
   };
 
   /* ==========================================================
@@ -534,9 +531,9 @@ const Cart = () => {
       return;
     }
 
-    const previousCart = cartData;
+    const latestCart = cartStateRef.current;
 
-    const updatedItems = (cartData?.items || []).filter(
+    const updatedItems = (latestCart?.items || []).filter(
       (cartItem) => getItemKey(cartItem) !== itemKey,
     );
 
@@ -545,38 +542,56 @@ const Cart = () => {
       0,
     );
 
-    dispatch(
-      setCartData({
-        ...cartData,
-        items: updatedItems,
-        totalPrice: newTotal,
-      }),
-    );
+    applyCart({
+      ...latestCart,
+      items: updatedItems,
+      totalPrice: newTotal,
+    });
 
-    try {
-      const res = await axios.delete(
-        `${API_BASE_URL}/api/v1/cart/remove-cart`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
+    await enqueueMutation(async () => {
+      try {
+        const res = await axios.delete(
+          `${API_BASE_URL}/api/v1/cart/remove-cart`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+
+            data: {
+              productId,
+              company: companyId,
+              measurement: item?.measurement,
+            },
           },
+        );
 
-          data: {
-            productId,
-            company: companyId,
-            measurement: item?.measurement,
-          },
-        },
-      );
+        if (!res.data?.success) {
+          throw new Error(res.data?.message || "प्रोडक्ट हटाया नहीं जा सका");
+        }
 
-      if (!res.data?.success) {
-        throw new Error(res.data?.message || "प्रोडक्ट हटाया नहीं जा सका");
-      }
-    } catch (error) {
-      console.error("Remove item error:", error);
+        if (res.data?.cart && mountedRef.current) {
+          applyCart(res.data.cart);
+        }
+      } catch (error) {
+        console.error("Remove item error:", error);
 
-      if (mountedRef.current) {
-        dispatch(setCartData(previousCart));
+        if (!mountedRef.current) {
+          return;
+        }
+
+        try {
+          const fresh = await axios.get(`${API_BASE_URL}/api/v1/cart`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          if (fresh.data?.success) {
+            applyCart(fresh.data.cart);
+          }
+        } catch (syncError) {
+          console.error("Cart resync error:", syncError);
+        }
 
         toast.error(
           error.response?.data?.message ||
@@ -587,7 +602,7 @@ const Cart = () => {
           },
         );
       }
-    }
+    });
   };
 
   /* ==========================================================

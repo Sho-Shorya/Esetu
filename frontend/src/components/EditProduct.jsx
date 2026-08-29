@@ -45,6 +45,8 @@ const EditProduct = () => {
   const [saving, setSaving] = useState(false);
   const [loadingCompanies, setLoadingCompanies] = useState(false);
   const [loadingCategories, setLoadingCategories] = useState(false);
+  const [categoryLoading, setCategoryLoading] = useState(false);
+  const [companyLoading, setCompanyLoading] = useState(false);
 
   // ----------------------------------------------------
   // Product
@@ -74,6 +76,24 @@ const EditProduct = () => {
 
   const [categories, setCategories] = useState([]);
   const [companies, setCompanies] = useState([]);
+
+  // ----------------------------------------------------
+  // Add category / company modals
+  // ----------------------------------------------------
+
+  const [openCategoryModal, setOpenCategoryModal] = useState(false);
+  const [openCompanyModal, setOpenCompanyModal] = useState(false);
+  const [categoryName, setCategoryName] = useState("");
+  const [categoryImage, setCategoryImage] = useState(null);
+  const [companyName, setCompanyName] = useState("");
+  const [companyLogo, setCompanyLogo] = useState(null);
+  const [selectedCategories, setSelectedCategories] = useState([]);
+
+  // ----------------------------------------------------
+  // Remove variant confirmation
+  // ----------------------------------------------------
+
+  const [removeVariantTarget, setRemoveVariantTarget] = useState(null);
 
   // ----------------------------------------------------
   // Existing + new variants
@@ -256,6 +276,161 @@ const EditProduct = () => {
   };
 
   // ======================================================
+  // AUTH HEADER HELPER
+  // ======================================================
+
+  const getAuthConfig = () => ({
+    headers: {
+      Authorization: `Bearer ${localStorage.getItem("token")}`,
+    },
+  });
+
+  // ======================================================
+  // ADD CATEGORY
+  // ======================================================
+
+  const addCategory = async () => {
+    if (categoryLoading) return;
+
+    const trimmedName = categoryName.trim();
+
+    if (!trimmedName) {
+      toast.error("कैटेगरी का नाम भरें");
+      return;
+    }
+
+    try {
+      setCategoryLoading(true);
+
+      const formData = new FormData();
+
+      formData.append("name", trimmedName);
+
+      if (categoryImage) {
+        formData.append("image", categoryImage);
+      }
+
+      const res = await axios.post(
+        `${API_BASE_URL}/api/v1/category/add-cat`,
+        formData,
+        getAuthConfig(),
+      );
+
+      if (!res.data.success) {
+        throw new Error(res.data.message || "कैटेगरी नहीं बनी");
+      }
+
+      const newCategory = res.data.category;
+
+      setCategories((prev) => [...prev, newCategory]);
+
+      setProduct((prev) => ({
+        ...prev,
+        category: newCategory._id,
+      }));
+
+      setCategoryName("");
+      setCategoryImage(null);
+      setOpenCategoryModal(false);
+
+      toast.success("कैटेगरी जोड़ दी गई");
+    } catch (error) {
+      console.error("Add category error:", error);
+
+      toast.error(
+        error.response?.data?.message ||
+          error.message ||
+          "कैटेगरी जोड़ने में कुछ गलत हो गया",
+      );
+    } finally {
+      setCategoryLoading(false);
+    }
+  };
+
+  // ======================================================
+  // ADD COMPANY
+  // ======================================================
+
+  const addCompanyHandler = async () => {
+    if (companyLoading) return;
+
+    const trimmedName = companyName.trim();
+
+    if (!trimmedName) {
+      toast.error("कंपनी का नाम भरें");
+      return;
+    }
+
+    if (selectedCategories.length === 0) {
+      toast.error("कम से कम एक कैटेगरी चुनें");
+      return;
+    }
+
+    try {
+      setCompanyLoading(true);
+
+      const formData = new FormData();
+
+      formData.append("name", trimmedName);
+
+      formData.append("categories", JSON.stringify(selectedCategories));
+
+      if (companyLogo) {
+        formData.append("logo", companyLogo);
+      }
+
+      const res = await axios.post(
+        `${API_BASE_URL}/api/v1/company/add-com`,
+        formData,
+        getAuthConfig(),
+      );
+
+      if (!res.data.success) {
+        throw new Error(res.data.message || "कंपनी नहीं बनी");
+      }
+
+      const newCompany = res.data.company;
+
+      setCompanies((prev) => [...prev, newCompany]);
+
+      const belongsToCurrentCategory = newCompany.categories?.some(
+        (category) => {
+          if (typeof category === "object" && category !== null) {
+            return String(category._id) === String(product.category);
+          }
+
+          return String(category) === String(product.category);
+        },
+      );
+
+      if (belongsToCurrentCategory) {
+        setNewVariant((prev) => ({
+          ...prev,
+          company: newCompany._id,
+        }));
+      }
+
+      setCompanyName("");
+      setCompanyLogo(null);
+      setSelectedCategories([]);
+
+      setOpenCompanyModal(false);
+
+      toast.success("कंपनी जोड़ दी गई");
+    } catch (error) {
+      console.error("Add company error:", error);
+
+      toast.error(
+        error.response?.data?.message ||
+          error.message ||
+          "कंपनी जोड़ने में कुछ गलत हो गया",
+      );
+    } finally {
+      setCompanyLoading(false);
+    }
+  };
+
+  // ======================================================
   // IMAGE
   // ======================================================
 
@@ -319,6 +494,14 @@ const EditProduct = () => {
 
   const removeVariant = (index) => {
     setVariants((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const confirmRemoveVariant = () => {
+    if (removeVariantTarget !== null) {
+      removeVariant(removeVariantTarget);
+    }
+
+    setRemoveVariantTarget(null);
   };
 
   // ======================================================
@@ -737,9 +920,20 @@ const EditProduct = () => {
               {/* Category */}
 
               <div className="md:col-span-2">
-                <label className="block font-semibold text-gray-700 mb-2">
-                  कैटेगरी
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block font-semibold text-gray-700">
+                    कैटेगरी
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => setOpenCategoryModal(true)}
+                    className="flex items-center gap-1 text-sm bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg"
+                  >
+                    <Plus size={16} />
+                    नई कैटेगरी
+                  </button>
+                </div>
 
                 <select
                   value={product.category}
@@ -884,7 +1078,7 @@ const EditProduct = () => {
 
                     <button
                       type="button"
-                      onClick={() => removeVariant(index)}
+                      onClick={() => setRemoveVariantTarget(index)}
                       className="p-2 rounded-lg text-red-500 hover:bg-red-100"
                     >
                       <Trash2 size={19} />
@@ -1022,9 +1216,20 @@ const EditProduct = () => {
               {/* Company */}
 
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  कंपनी
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-semibold text-gray-700">
+                    कंपनी
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => setOpenCompanyModal(true)}
+                    className="flex items-center gap-1 text-xs bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg"
+                  >
+                    <Plus size={13} />
+                    नई कंपनी
+                  </button>
+                </div>
 
                 <select
                   value={newVariant.company}
@@ -1141,6 +1346,226 @@ const EditProduct = () => {
             </button>
           </div>
         </form>
+
+        {/* ==================================================
+            REMOVE VARIANT CONFIRMATION
+        ================================================== */}
+
+        {removeVariantTarget !== null && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-sm space-y-4 shadow-2xl">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold">वैरिएंट हटाएं?</h2>
+
+                <button
+                  type="button"
+                  onClick={() => setRemoveVariantTarget(null)}
+                >
+                  <X />
+                </button>
+              </div>
+
+              <p className="text-sm text-gray-600">
+                क्या आप{" "}
+                <span className="font-semibold text-gray-900">
+                  वैरिएंट {removeVariantTarget + 1}
+                </span>{" "}
+                ({variants[removeVariantTarget]?.measurement || ""}) को हटाना
+                चाहते हैं? यह बदलाव सेव करने पर लागू होगा।
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setRemoveVariantTarget(null)}
+                  className="flex-1 bg-gray-200 rounded-xl py-3 font-semibold"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={confirmRemoveVariant}
+                  className="flex-1 bg-red-500 hover:bg-red-600 text-white rounded-xl py-3 font-semibold"
+                >
+                  हटाएं
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ==================================================
+            ADD CATEGORY MODAL
+        ================================================== */}
+
+        {openCategoryModal && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-sm space-y-4 shadow-2xl">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold">नई कैटेगरी जोड़ें</h2>
+
+                <button
+                  type="button"
+                  onClick={() => setOpenCategoryModal(false)}
+                >
+                  <X />
+                </button>
+              </div>
+
+              <input
+                type="text"
+                value={categoryName}
+                onChange={(e) => setCategoryName(e.target.value)}
+                placeholder="कैटेगरी का नाम"
+                className="w-full p-3 border rounded-xl outline-none focus:border-emerald-500"
+              />
+
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setCategoryImage(e.target.files?.[0] || null)}
+                className="w-full text-sm"
+              />
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setOpenCategoryModal(false)}
+                  className="flex-1 bg-gray-200 rounded-xl py-3"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={addCategory}
+                  disabled={categoryLoading}
+                  className="flex-1 bg-emerald-600 disabled:bg-emerald-300 text-white rounded-xl py-3 flex items-center justify-center gap-2"
+                >
+                  {categoryLoading ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    "Save"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ==================================================
+            ADD COMPANY MODAL
+        ================================================== */}
+
+        {openCompanyModal && (
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl p-6 w-full max-w-sm space-y-4 shadow-2xl">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-bold">नई कंपनी जोड़ें</h2>
+
+                <button
+                  type="button"
+                  onClick={() => setOpenCompanyModal(false)}
+                >
+                  <X />
+                </button>
+              </div>
+
+              <input
+                type="text"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+                placeholder="कंपनी का नाम"
+                className="w-full p-3 border rounded-xl outline-none focus:border-emerald-500"
+              />
+
+              <div>
+                <label className="font-semibold block mb-2">
+                  कंपनी की फोटो
+                </label>
+
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setCompanyLogo(e.target.files?.[0] || null)}
+                  className="w-full text-sm"
+                />
+              </div>
+
+              <div>
+                <label className="font-semibold block mb-2">
+                  कंपनी किन कैटेगरी में है?
+                </label>
+
+                <div className="space-y-2 max-h-40 overflow-y-auto border rounded-xl p-3">
+                  {categories.length === 0 ? (
+                    <p className="text-sm text-gray-500">
+                      पहले कोई कैटेगरी जोड़ें
+                    </p>
+                  ) : (
+                    categories.map((category) => (
+                      <label
+                        key={category._id}
+                        className="flex items-center gap-2 cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedCategories.includes(category._id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedCategories((prev) => [
+                                ...prev,
+                                category._id,
+                              ]);
+                            } else {
+                              setSelectedCategories((prev) =>
+                                prev.filter(
+                                  (id) => String(id) !== String(category._id),
+                                ),
+                              );
+                            }
+                          }}
+                        />
+
+                        <span>{category.name}</span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setOpenCompanyModal(false)}
+                  className="flex-1 py-3 rounded-xl bg-gray-200"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={addCompanyHandler}
+                  disabled={companyLoading}
+                  className="flex-1 py-3 rounded-xl bg-emerald-600 disabled:bg-emerald-300 text-white flex items-center justify-center gap-2"
+                >
+                  {companyLoading ? (
+                    <>
+                      <Loader2 size={18} className="animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    "Save"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
