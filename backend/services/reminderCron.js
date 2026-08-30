@@ -75,20 +75,6 @@ REMINDER LOG HELPERS
 */
 
 /*
-Check whether this reminder has already been sent
-to this user today.
-*/
-const alreadySent = async (userId, reminderType, date) => {
-  const exists = await ReminderLog.findOne({
-    userId,
-    reminderType,
-    date,
-  });
-
-  return !!exists;
-};
-
-/*
 Save reminder log.
 
 Duplicate reminder errors are ignored because
@@ -149,6 +135,12 @@ export const startReminderCron = () => {
         ------------------------------------------------
         GET ORDER CUTOFF SETTING
         ------------------------------------------------
+
+        This is the only query on a "normal" minute.
+        We do the cheap check first and return early
+        unless we are exactly 60 or 10 minutes before
+        the cutoff. This keeps the per-minute load tiny.
+        ------------------------------------------------
         */
 
         const setting = await AppSetting.findOne({
@@ -162,14 +154,6 @@ export const startReminderCron = () => {
         }
 
         /*
-        ------------------------------------------------
-        PARSE CUTOFF TIME
-        ------------------------------------------------
-        */
-
-        const cutoffTime = setting.value;
-
-        /*
         IMPORTANT:
 
         We explicitly create the cutoff in IST.
@@ -180,13 +164,7 @@ export const startReminderCron = () => {
 
         const today = getTodayDate();
 
-        const cutoff = new Date(`${today}T${cutoffTime}:00+05:30`);
-
-        /*
-        ------------------------------------------------
-        CALCULATE REMAINING MINUTES
-        ------------------------------------------------
-        */
+        const cutoff = new Date(`${today}T${setting.value}:00+05:30`);
 
         const remainingMinutes = getRemainingMinutes(cutoff);
 
@@ -197,6 +175,11 @@ export const startReminderCron = () => {
 
         60 minutes
         10 minutes
+
+        Everything else returns after just ONE cheap
+        AppSetting query (see above), so the 43,200
+        monthly executions are essentially free.
+        ------------------------------------------------
         */
 
         if (![60, 10].includes(remainingMinutes)) {
@@ -205,23 +188,22 @@ export const startReminderCron = () => {
 
         console.log(`🔔 Sending ${remainingMinutes} minute reminder...`);
 
-        /*
-        ------------------------------------------------
-        TODAY RANGE
-        ------------------------------------------------
-        */
-
         const { start, end } = getTodayRange();
 
         /*
         ------------------------------------------------
-        FIND USERS
+        BULK FETCH (replaces N+1 queries)
+        ------------------------------------------------
+
+        Instead of running 2 queries *per user inside
+        the loop, we do exactly 3 bulk queries here and
+        filter in memory. Load is constant regardless of
+        how many users we have.
         ------------------------------------------------
         */
 
         const users = await User.find({
           role: "user",
-
           oneSignalSubscriptionId: {
             $exists: true,
             $ne: "",
@@ -230,30 +212,59 @@ export const startReminderCron = () => {
 
         console.log(`👥 Users Found : ${users.length}`);
 
+        const userIds = users.map((user) => user._id);
+
         /*
-        ------------------------------------------------
-        PROCESS USERS
-        ------------------------------------------------
+        Bulk query 1: all user IDs who already ordered today.
         */
+
+        const orderedUserIds = await Order.distinct("userId", {
+          userId: { $in: userIds },
+          isTodayOrder: true,
+          createdAt: { $gte: start, $lte: end },
+        });
+
+        const orderedSet = new Set(orderedUserIds.map(String));
+
+        /*
+        Bulk query 2: reminder logs already sent today
+        whose reminderType we may need to send now.
+        */
+
+        const reminderTypesNeeded =
+          remainingMinutes === 60
+            ? ["1hour-no-order"]
+            : ["10min-no-order", "10min-edit-order"];
+
+        const sentLogs = await ReminderLog.find({
+          userId: { $in: userIds },
+          date: today,
+          reminderType: { $in: reminderTypesNeeded },
+        }).select("userId reminderType");
+
+        const sentSet = new Set(
+          sentLogs.map(
+            (log) => `${String(log.userId)}:${log.reminderType}`,
+          ),
+        );
+
+        /*
+        Note: We track newly-sent keys in sentSet as we go
+        so a retry within the same run (or a duplicate
+        within the same minute) cannot double-send.
+        */
+
+        let sentCount = 0;
 
         for (const user of users) {
           try {
             /*
             --------------------------------------------
-            CHECK WHETHER USER ALREADY ORDERED TODAY
+            RESOLVE ORDERED STATE FROM BULK RESULT
             --------------------------------------------
             */
 
-            const hasOrderToday = await Order.exists({
-              userId: user._id,
-
-              isTodayOrder: true,
-
-              createdAt: {
-                $gte: start,
-                $lte: end,
-              },
-            });
+            const hasOrderToday = orderedSet.has(String(user._id));
 
             /*
             ============================================
@@ -266,12 +277,6 @@ export const startReminderCron = () => {
               let title = "";
               let message = "";
 
-              /*
-              ------------------------------------------
-              60 MINUTES
-              ------------------------------------------
-              */
-
               if (remainingMinutes === 60) {
                 reminderType = "1hour-no-order";
 
@@ -280,12 +285,6 @@ export const startReminderCron = () => {
                 message =
                   "आज के ऑर्डर का कट-ऑफ समय सिर्फ 1 घंटे में है। समय रहते अपना ऑर्डर पूरा करें।";
               }
-
-              /*
-              ------------------------------------------
-              10 MINUTES
-              ------------------------------------------
-              */
 
               if (remainingMinutes === 10) {
                 reminderType = "10min-no-order";
@@ -297,26 +296,18 @@ export const startReminderCron = () => {
               }
 
               /*
-              ------------------------------------------
-              CHECK DUPLICATE
-              ------------------------------------------
+              Duplicate check from the bulk-fetched set.
               */
 
-              const sent = await alreadySent(user._id, reminderType, today);
+              const key = `${String(user._id)}:${reminderType}`;
 
-              if (sent) {
+              if (sentSet.has(key)) {
                 console.log(
                   `⏭️ Already sent ${reminderType} -> ${user.firstName}`,
                 );
 
                 continue;
               }
-
-              /*
-              ------------------------------------------
-              SEND NOTIFICATION
-              ------------------------------------------
-              */
 
               console.log(`📨 Sending ${reminderType} -> ${user.firstName}`);
 
@@ -328,13 +319,11 @@ export const startReminderCron = () => {
                 message,
               });
 
-              /*
-              ------------------------------------------
-              SAVE LOG
-              ------------------------------------------
-              */
-
               await saveReminder(user._id, reminderType, today);
+
+              sentSet.add(key);
+
+              sentCount += 1;
 
               continue;
             }
@@ -353,27 +342,15 @@ export const startReminderCron = () => {
             if (remainingMinutes === 10) {
               const reminderType = "10min-edit-order";
 
-              /*
-              ------------------------------------------
-              CHECK DUPLICATE
-              ------------------------------------------
-              */
+              const key = `${String(user._id)}:${reminderType}`;
 
-              const sent = await alreadySent(user._id, reminderType, today);
-
-              if (sent) {
+              if (sentSet.has(key)) {
                 console.log(
                   `⏭️ Edit reminder already sent -> ${user.firstName}`,
                 );
 
                 continue;
               }
-
-              /*
-              ------------------------------------------
-              SEND EDIT REMINDER
-              ------------------------------------------
-              */
 
               console.log(`📝 Edit Reminder -> ${user.firstName}`);
 
@@ -386,13 +363,11 @@ export const startReminderCron = () => {
                   "यदि आपको अपने ऑर्डर में कोई बदलाव करना है, तो अभी कर लें। कट-ऑफ समय में केवल 10 मिनट शेष हैं।",
               });
 
-              /*
-              ------------------------------------------
-              SAVE LOG
-              ------------------------------------------
-              */
-
               await saveReminder(user._id, reminderType, today);
+
+              sentSet.add(key);
+
+              sentCount += 1;
             }
           } catch (userError) {
             /*
@@ -407,7 +382,9 @@ export const startReminderCron = () => {
           }
         }
 
-        console.log(`✅ ${remainingMinutes} minute reminder completed`);
+        console.log(
+          `✅ ${remainingMinutes} minute reminder completed (${sentCount} sent)`,
+        );
       } catch (error) {
         console.error("❌ Reminder Cron Error:", error);
       }

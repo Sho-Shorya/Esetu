@@ -87,18 +87,13 @@ const dailyInvoiceSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["Generated", "WhatsApp Sent", "Failed"],
+      enum: ["Generated", "Failed"],
       default: "Generated",
     },
 
     generatedAt: {
       type: Date,
       default: Date.now,
-    },
-
-    whatsappSentAt: {
-      type: Date,
-      default: null,
     },
   },
   {
