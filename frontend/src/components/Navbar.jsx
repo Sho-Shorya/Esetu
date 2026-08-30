@@ -23,6 +23,8 @@ import { useDispatch, useSelector } from "react-redux";
 
 import { clearUserData, clearSupplierData } from "../redux/userSlice";
 
+import { clearCart } from "../redux/ProductSlice";
+
 import axios from "axios";
 import { toast } from "sonner";
 
@@ -126,6 +128,7 @@ const Navbar = () => {
     // Clear local auth immediately.
     dispatch(clearUserData());
     dispatch(clearSupplierData());
+    dispatch(clearCart());
 
     localStorage.removeItem("token");
 

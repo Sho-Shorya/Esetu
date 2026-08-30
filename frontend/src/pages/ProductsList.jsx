@@ -18,7 +18,9 @@ const ProductsList = () => {
   const dispatch = useDispatch();
   const [search, setSearch] = useState("");
 
-  const { productData, prodLoading } = useSelector((state) => state.product);
+  const { productData, prodLoading, cartData } = useSelector(
+    (state) => state.product,
+  );
 
   const location = useLocation();
 
@@ -37,6 +39,11 @@ const ProductsList = () => {
   const [addSuccess, setAddSuccess] = useState(false);
   const [flyImage, setFlyImage] = useState(null);
   const sheetImageRef = useRef(null);
+  const cartStateRef = useRef(cartData);
+
+  useEffect(() => {
+    cartStateRef.current = cartData;
+  }, [cartData]);
   const cartSound = () => {
     const audio = new Audio("/addtocart6.mp3");
 
@@ -144,8 +151,57 @@ const ProductsList = () => {
     : !selectedMeasurement
       ? 1
       : 2;
+  const getCartId = (value) =>
+    typeof value === "object" && value !== null ? value._id : value;
+
+  const buildOptimisticCart = (currentCart, item) => {
+    const items = (currentCart?.items || []).map((cartItem) => ({
+      ...cartItem,
+    }));
+
+    const existingItem = items.find(
+      (cartItem) =>
+        getCartId(cartItem.productId) === item.productId &&
+        getCartId(cartItem.company) === item.company &&
+        cartItem.measurement === item.measurement,
+    );
+
+    if (existingItem) {
+      existingItem.qty = Number(existingItem.qty || 0) + Number(item.qty || 0);
+      existingItem.price = item.price;
+      existingItem.total = existingItem.qty * item.price;
+    } else {
+      items.push(item);
+    }
+
+    const totalPrice = items.reduce(
+      (sum, cartItem) => sum + Number(cartItem?.total || 0),
+      0,
+    );
+
+    return {
+      items,
+      totalPrice,
+    };
+  };
+
+  const rollbackCart = async (token) => {
+    try {
+      const serverCart = await axios.get(`${API_BASE_URL}/api/v1/cart`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (serverCart.data?.success) {
+        dispatch(setCartData(serverCart.data.cart || { items: [] }));
+      }
+    } catch (syncError) {
+      console.error("Cart rollback error:", syncError);
+    }
+  };
+
   const handleSubmit = async (e) => {
-    cartSound();
     e.preventDefault();
 
     if (!selectedVariantCompany) {
@@ -163,16 +219,82 @@ const ProductsList = () => {
       return;
     }
 
+    const token = localStorage.getItem("token");
+
+    if (!token) {
+      toast.error("कृपया पहले लॉगिन करें");
+      return;
+    }
+
+    const price = Number(selectedVariant.price);
+
+    const optimisticItem = {
+      productId: selectedProduct._id,
+      company: selectedVariantCompany._id,
+      measurement: selectedMeasurement,
+      qty,
+      price,
+      total: price * qty,
+    };
+
+    const optimisticCart = buildOptimisticCart(
+      cartStateRef.current,
+      optimisticItem,
+    );
+
+    cartStateRef.current = optimisticCart;
+
+    dispatch(setCartData(optimisticCart));
+
     setAddLoading(true);
 
+    /* --------------------------------------------------------
+       Instant feedback: fly image + close the sheet immediately.
+    -------------------------------------------------------- */
+
+    cartSound();
+
+    setAddSuccess(true);
+
+    const start = sheetImageRef.current?.getBoundingClientRect();
+
+    const target = document
+      .querySelector("[data-cart-target]")
+      ?.getBoundingClientRect();
+
+    const end = target || {
+      left: window.innerWidth - 56,
+      top: 16,
+      width: 48,
+      height: 48,
+    };
+
+    if (start && end) {
+      const startCenterX = start.left + start.width / 2;
+      const startCenterY = start.top + start.height / 2;
+      const endCenterX = end.left + end.width / 2;
+      const endCenterY = end.top + end.height / 2;
+
+      setFlyImage({
+        src: selectedProduct.image,
+        size: Math.max(40, Math.min(start.width, start.height)),
+        startX: startCenterX,
+        startY: startCenterY,
+        deltaX: endCenterX - startCenterX,
+        deltaY: endCenterY - startCenterY,
+      });
+    }
+
+    setTimeout(() => {
+      handleCross();
+    }, 720);
+
+    /* --------------------------------------------------------
+       Background network sync (authoritative server response
+       overwrites the optimistic cart).
+    -------------------------------------------------------- */
+
     try {
-      const token = localStorage.getItem("token");
-
-      if (!token) {
-        toast.error("कृपया पहले लॉगिन करें");
-        return;
-      }
-
       const res = await axios.post(
         `${API_BASE_URL}/api/v1/cart/add-cart`,
         {
@@ -189,47 +311,16 @@ const ProductsList = () => {
       );
 
       if (res.data.success) {
+        cartStateRef.current = res.data.cart;
         dispatch(setCartData(res.data.cart));
-
-        setAddSuccess(true);
-
-        const start = sheetImageRef.current?.getBoundingClientRect();
-
-        const target = document
-          .querySelector("[data-cart-target]")
-          ?.getBoundingClientRect();
-
-        const end = target || {
-          left: window.innerWidth - 56,
-          top: 16,
-          width: 48,
-          height: 48,
-        };
-
-        if (start && end) {
-          const startCenterX = start.left + start.width / 2;
-          const startCenterY = start.top + start.height / 2;
-          const endCenterX = end.left + end.width / 2;
-          const endCenterY = end.top + end.height / 2;
-
-          setFlyImage({
-            src: selectedProduct.image,
-            size: Math.max(40, Math.min(start.width, start.height)),
-            startX: startCenterX,
-            startY: startCenterY,
-            deltaX: endCenterX - startCenterX,
-            deltaY: endCenterY - startCenterY,
-          });
-        }
-
-        setTimeout(() => {
-          handleCross();
-        }, 720);
       } else {
+        await rollbackCart(token);
         toast.error(res.data.message);
       }
     } catch (error) {
       console.error(error);
+
+      await rollbackCart(token);
 
       toast.error(
         error.response?.data?.message || "कार्ट में जोड़ने में समस्या हुई",

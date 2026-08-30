@@ -470,7 +470,7 @@ export const addOrder = async (req, res) => {
       return currentOrder;
     });
 
-    order = newOrder;
+    const order = newOrder;
 
     // ---------------------------------------
     // 12. Send notification

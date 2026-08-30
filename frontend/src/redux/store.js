@@ -5,6 +5,7 @@ import { combineReducers, configureStore } from "@reduxjs/toolkit";
 import orderReducer from "./orderSlice";
 import {
   persistReducer,
+  persistStore,
   FLUSH,
   REHYDRATE,
   PAUSE,
@@ -38,5 +39,7 @@ const store = configureStore({
       },
     }),
 });
+
+export const persistor = persistStore(store);
 
 export default store;
