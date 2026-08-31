@@ -8,6 +8,12 @@ import {
   User,
   X,
   ChevronLeft,
+  Phone,
+  MapPin,
+  ShieldCheck,
+  ShieldAlert,
+  Store,
+  Calendar,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -126,10 +132,7 @@ const downloadPDF = async (items, selectedDate) => {
       "/fonts/NotoSansDevanagari-Regular.ttf",
     );
 
-    doc.addFileToVFS(
-      "NotoSansDevanagari-Regular.ttf",
-      regularFontBase64,
-    );
+    doc.addFileToVFS("NotoSansDevanagari-Regular.ttf", regularFontBase64);
 
     doc.addFont(
       "NotoSansDevanagari-Regular.ttf",
@@ -143,11 +146,7 @@ const downloadPDF = async (items, selectedDate) => {
 
     doc.addFileToVFS("NotoSansDevanagari-Bold.ttf", boldFontBase64);
 
-    doc.addFont(
-      "NotoSansDevanagari-Bold.ttf",
-      "NotoSansDevanagari",
-      "bold",
-    );
+    doc.addFont("NotoSansDevanagari-Bold.ttf", "NotoSansDevanagari", "bold");
 
     doc.setFont("NotoSansDevanagari", "bold");
 
@@ -155,10 +154,10 @@ const downloadPDF = async (items, selectedDate) => {
        HELPERS
     -------------------------------------------------------- */
 
-const money = (n) => `₹${Number(n || 0).toFixed(2)}`;
+    const money = (n) => `₹${Number(n || 0).toFixed(2)}`;
 
-const isPaid = (buyer) =>
-  String(buyer.paymentStatus || "").toLowerCase() === "paid";
+    const isPaid = (buyer) =>
+      String(buyer.paymentStatus || "").toLowerCase() === "paid";
 
     /* --------------------------------------------------------
        CALCULATIONS
@@ -297,7 +296,11 @@ const isPaid = (buyer) =>
       { label: "कुल मात्रा", value: String(totalQuantity) },
       { label: "कुल Orders", value: String(buyerLines) },
       { label: "कुल खरीदार", value: String(uniqueBuyers) },
-      { label: "कुल राशि", value: money(totalAmount), sub: `जमा ${money(paidAmount)}` },
+      {
+        label: "कुल राशि",
+        value: money(totalAmount),
+        sub: `जमा ${money(paidAmount)}`,
+      },
       { label: "बकाया राशि", value: money(dueAmount) },
     ];
 
@@ -514,11 +517,7 @@ const isPaid = (buyer) =>
         doc.setFontSize(8);
         doc.setTextColor(140, 140, 140);
 
-        doc.text(
-          "ई-सेतु  •  दैनिक ऑर्डर रिपोर्ट",
-          margin,
-          pageHeight - 6,
-        );
+        doc.text("ई-सेतु  •  दैनिक ऑर्डर रिपोर्ट", margin, pageHeight - 6);
 
         doc.text(
           `पृष्ठ ${doc.internal.getNumberOfPages()}`,
@@ -724,6 +723,34 @@ const DailyOrders = () => {
     );
   };
 
+  const formatMemberSince = (date) => {
+    if (!date) return "-";
+
+    const d = new Date(date);
+
+    if (isNaN(d.getTime())) return "-";
+
+    return d.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
+  const getGenderLabel = (gender) => {
+    if (!gender) return "";
+
+    const g = gender.toLowerCase();
+
+    if (g === "male") return "पुरुष";
+
+    if (g === "female") return "महिला";
+
+    if (g === "other") return "अन्य";
+
+    return gender;
+  };
+
   /* ==========================================================
      UI
   ========================================================== */
@@ -744,12 +771,12 @@ const DailyOrders = () => {
                 className="shrink-0"
               />
 
-              <h1 className="text-base sm:text-lg font-bold truncate">
-                सभी ऑर्डर की table
+              <h1 className="text-[18px] font-bold truncate">
+                सभी ऑर्डर की Table
               </h1>
             </div>
 
-            <span className="text-xs sm:text-sm font-semibold whitespace-nowrap">
+            <span className="text-md sm:text-sm font-semibold whitespace-nowrap">
               {formatDate(selectedDate)}
             </span>
           </div>
@@ -766,7 +793,7 @@ const DailyOrders = () => {
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="w-full h-10 px-3 rounded-xl border-2 border-gray-200 outline-none focus:border-emerald-500 text-sm"
+                className="w-full h-10 px-3 rounded-xl border-2 border-gray-200 outline-none focus:border-emerald-500 text-md"
               />
             </div>
 
@@ -793,8 +820,8 @@ const DailyOrders = () => {
 
             <div className="bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] sm:text-xs text-gray-500 font-medium">
-                  Total Orders
+                <span className="text-[14px] sm:text-xs text-gray-500 font-medium">
+                  कुल ऑर्डर आइटम
                 </span>
 
                 <span className="text-sm sm:text-base font-bold text-gray-800">
@@ -807,8 +834,8 @@ const DailyOrders = () => {
 
             <div className="bg-white border border-gray-200 rounded-xl px-3 py-2 shadow-sm">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[11px] sm:text-xs text-gray-500 font-medium">
-                  Total Amount
+                <span className="text-[14px] sm:text-xs text-gray-500 font-medium">
+                  कुल राशि
                 </span>
 
                 <span className="text-sm sm:text-base font-bold text-gray-800">
@@ -829,23 +856,23 @@ const DailyOrders = () => {
 
             <thead>
               <tr className="bg-gray-50 border-b-2 border-gray-200">
-                <th className="w-[7%] px-2 sm:px-3 py-3 text-left text-[11px] sm:text-xs font-bold text-gray-700">
+                <th className="w-[7%] px-2 sm:px-3 py-3 text-left text-[13px] sm:text-xs font-bold text-gray-700">
                   #
                 </th>
 
-                <th className="w-[35%] px-2 sm:px-3 py-3 text-left text-[11px] sm:text-xs font-bold text-gray-700">
+                <th className="w-[35%] px-2 sm:px-3 py-3 text-left text-[13px] sm:text-xs font-bold text-gray-700">
                   Product
                 </th>
 
-                <th className="w-[25%] px-2 sm:px-3 py-3 text-left text-[11px] sm:text-xs font-bold text-gray-700">
+                <th className="w-[20%] px-2 sm:px-3 py-3 text-left text-[13px] sm:text-xs font-bold text-gray-700">
                   कंपनी
                 </th>
 
-                <th className="w-[18%] px-2 sm:px-3 py-3 text-left text-[11px] sm:text-xs font-bold text-gray-700">
+                <th className="w-[20%] px-2 sm:px-3 py-3 text-left text-[13px] sm:text-xs font-bold text-gray-700">
                   माप
                 </th>
 
-                <th className="w-[15%] px-2 sm:px-3 py-3 text-center text-[11px] sm:text-xs font-bold text-gray-700">
+                <th className="w-[15%] px-2 sm:px-3 py-3 text-center text-[13px] sm:text-xs font-bold text-gray-700">
                   मात्रा
                 </th>
               </tr>
@@ -894,19 +921,19 @@ const DailyOrders = () => {
                           isExpanded ? "bg-emerald-50" : "hover:bg-emerald-50"
                         }`}
                       >
-                        <td className="px-2 sm:px-3 py-3 text-xs text-gray-500">
+                        <td className="px-2 sm:px-3 py-3 text-sm text-gray-500">
                           {index + 1}
                         </td>
 
                         <td className="px-2 sm:px-3 py-3">
                           <div className="flex items-center gap-2 min-w-0">
                             <div className="min-w-0">
-                              <p className="font-semibold text-gray-800 text-xs sm:text-sm truncate">
+                              <p className="font-semibold text-gray-800 text-[13px] sm:text-sm truncate">
                                 {item.productName || "-"}
                               </p>
 
                               {item.hinglishName && (
-                                <p className="text-[10px] sm:text-xs text-gray-400 truncate">
+                                <p className="text-[14px] sm:text-xs text-gray-400 truncate">
                                   {item.hinglishName}
                                 </p>
                               )}
@@ -922,18 +949,18 @@ const DailyOrders = () => {
                         </td>
 
                         <td className="px-2 sm:px-3 py-3">
-                          <p className="text-xs sm:text-sm text-gray-700 truncate">
+                          <p className="text-[13px] sm:text-sm text-gray-700 truncate">
                             {item.companyName || "-"}
                           </p>
                         </td>
 
                         <td className="px-2 sm:px-3 py-3">
-                          <p className="text-xs sm:text-sm font-medium text-gray-700 truncate">
+                          <p className="text-[13px] sm:text-sm font-medium text-gray-700 truncate">
                             {item.measurement || "-"}
                           </p>
                         </td>
 
-                        <td className="px-2 sm:px-3 py-3 text-center">
+                        <td className="px-2 text-[13px] sm:px-3 py-3 text-center">
                           <span className="inline-flex items-center justify-center min-w-8 px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 font-bold text-sm">
                             {item.totalQuantity || 0}
                           </span>
@@ -948,63 +975,48 @@ const DailyOrders = () => {
                             colSpan="5"
                             className="bg-emerald-50 px-3 sm:px-5 py-4"
                           >
-                            <div className="bg-white rounded-xl border border-emerald-100 overflow-hidden shadow-sm">
+                            <div className="bg-white rounded-xl border border-emerald-100 shadow-sm p-2.5">
                               {item.orderedBy?.length > 0 ? (
-                                item.orderedBy.map((user, userIndex) => (
-                                  <div
-                                    key={user.userId || userIndex}
-                                    className="flex items-center justify-between gap-3 px-3 py-3 border-b last:border-b-0"
-                                  >
-                                    <div className="flex items-center gap-2 min-w-0">
-                                      <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center shrink-0">
-                                        {user.profilePic ? (
-                                          <img
-                                            src={user.profilePic}
-                                            alt=""
-                                            className="w-8 h-8 rounded-full object-cover"
-                                          />
-                                        ) : (
-                                          <User
-                                            size={16}
-                                            className="text-emerald-600"
-                                          />
-                                        )}
-                                      </div>
-
-                                      <div className="min-w-0">
-                                        <p className="font-semibold text-gray-800 text-sm truncate">
-                                          {getUserDisplayName(user)}
-                                        </p>
-
-                                        <p className="text-[11px] text-gray-400">
-                                          Ordered
-                                        </p>
-                                      </div>
-                                    </div>
-
-                                    <div className="flex items-center gap-3 shrink-0">
-                                      <span className="font-bold text-emerald-700 text-sm">
-                                        × {user.quantity || 0}
-                                      </span>
-
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    {item.orderedBy.map((user, userIndex) => (
                                       <button
+                                        key={user.userId || userIndex}
                                         type="button"
                                         onClick={(e) => {
                                           e.stopPropagation();
-
                                           openUserProfile(user.userId);
                                         }}
-                                        className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold hover:bg-emerald-700"
+                                        className="relative group shrink-0"
                                       >
-                                        Profile
+                                        <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center overflow-hidden border-2 border-emerald-200 group-hover:border-emerald-400 transition">
+                                          {user.profilePic ? (
+                                            <img
+                                              src={user.profilePic}
+                                              alt=""
+                                              className="w-full h-full rounded-full object-cover"
+                                            />
+                                          ) : (
+                                            <User
+                                              size={24}
+                                              className="text-emerald-600"
+                                            />
+                                          )}
+                                        </div>
+
+                                        <span className="absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] px-1 flex items-center justify-center rounded-full bg-emerald-600 text-white text-[12px] font-extrabold border-2 border-white shadow-sm leading-none">
+                                          {user.quantity || 0}
+                                        </span>
+
+                                        <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap bg-gray-800 text-white text-[10px] font-medium px-2 py-0.5 rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition z-10">
+                                          {getUserDisplayName(user)}
+                                        </span>
                                       </button>
-                                    </div>
+                                    ))}
                                   </div>
-                                ))
                               ) : (
-                                <div className="px-3 py-4 text-center text-sm text-gray-500">
+                                <p className="text-center text-sm text-gray-500 py-2">
                                   User details उपलब्ध नहीं हैं।
-                                </div>
+                                </p>
                               )}
                             </div>
                           </td>
@@ -1029,100 +1041,183 @@ const DailyOrders = () => {
           onClick={closeProfile}
         >
           <div
-            className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden"
+            className="w-full max-w-sm bg-white rounded-3xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* HEADER */}
-
-            <div className="bg-emerald-600 text-white px-4 py-3 flex items-center justify-between">
-              <h2 className="font-bold">User Profile</h2>
-
-              <button
-                type="button"
-                onClick={closeProfile}
-                disabled={loadingProfile}
-                className="p-1 rounded-lg hover:bg-emerald-700 disabled:opacity-50"
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* LOADING */}
-
             {loadingProfile ? (
-              <div className="py-12 flex justify-center">
-                <Loader2 size={32} className="animate-spin text-emerald-600" />
+              <div className="py-20 flex flex-col items-center gap-3">
+                <Loader2 size={36} className="animate-spin text-emerald-600" />
+                <p className="text-sm text-gray-400">लोड हो रहा है...</p>
               </div>
             ) : selectedUser ? (
-              <div className="p-5 space-y-4">
-                {/* PROFILE IMAGE */}
+              <>
+                {/* HERO */}
 
-                <div className="flex justify-center">
+                <div className="relative bg-gradient-to-br from-emerald-500 to-emerald-700 pt-8 pb-16 px-5 flex flex-col items-center">
+                  <button
+                    type="button"
+                    onClick={closeProfile}
+                    disabled={loadingProfile}
+                    className="absolute top-3 right-3 p-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white disabled:opacity-50 transition"
+                  >
+                    <X size={18} />
+                  </button>
+
                   {selectedUser.profilePic ? (
                     <img
                       src={selectedUser.profilePic}
                       alt="Profile"
-                      className="w-20 h-20 rounded-full object-cover border-2 border-emerald-200"
+                      className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg"
                     />
                   ) : (
-                    <div className="w-20 h-20 rounded-full bg-emerald-100 flex items-center justify-center">
-                      <User size={35} className="text-emerald-600" />
+                    <div className="w-24 h-24 rounded-full bg-white/20 flex items-center justify-center border-4 border-white shadow-lg">
+                      <User size={42} className="text-white" />
                     </div>
                   )}
-                </div>
 
-                {/* NAME */}
-
-                <div className="text-center">
-                  <h3 className="text-lg font-bold text-gray-800">
+                  <h3 className="mt-3 text-xl font-bold text-white text-center">
                     {getUserDisplayName(selectedUser)}
                   </h3>
+
+                  {selectedUser.isVerified !== undefined && (
+                    <span
+                      className={`mt-1.5 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
+                        selectedUser.isVerified
+                          ? "bg-white/25 text-white"
+                          : "bg-amber-400/80 text-white"
+                      }`}
+                    >
+                      {selectedUser.isVerified ? (
+                        <ShieldCheck size={12} />
+                      ) : (
+                        <ShieldAlert size={12} />
+                      )}
+                      {selectedUser.isVerified
+                        ? "सत्यापित"
+                        : "अनुसत्यापित"}
+                    </span>
+                  )}
                 </div>
 
                 {/* DETAILS */}
 
-                <div className="space-y-2">
+                <div className="p-5 space-y-3 overflow-y-auto">
                   {selectedUser.phoneNumber && (
-                    <div className="flex justify-between gap-3 border-b pb-2">
-                      <span className="text-sm text-gray-500">Phone</span>
-
-                      <span className="text-sm font-semibold text-gray-800">
-                        {selectedUser.phoneNumber}
-                      </span>
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+                        <Phone size={16} className="text-emerald-600" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide">
+                          मोबाइल नंबर
+                        </p>
+                        <p className="text-sm font-semibold text-gray-800 truncate">
+                          {selectedUser.phoneNumber}
+                        </p>
+                      </div>
+                      <a
+                        href={`tel:${selectedUser.phoneNumber}`}
+                        className="w-9 h-9 rounded-xl bg-emerald-600 hover:bg-emerald-700 flex items-center justify-center shrink-0 transition"
+                        title="कॉल करें"
+                      >
+                        <Phone size={16} className="text-white" />
+                      </a>
                     </div>
                   )}
 
-                  {selectedUser.email && (
-                    <div className="flex justify-between gap-3 border-b pb-2">
-                      <span className="text-sm text-gray-500">Email</span>
-
-                      <span className="text-sm font-semibold text-gray-800 truncate">
-                        {selectedUser.email}
-                      </span>
+                  {selectedUser.gender && (
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-pink-50 flex items-center justify-center shrink-0">
+                        <User size={16} className="text-pink-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide">
+                          लिंग
+                        </p>
+                        <p className="text-sm font-semibold text-gray-800">
+                          {getGenderLabel(selectedUser.gender)}
+                        </p>
+                      </div>
                     </div>
                   )}
 
                   {selectedUser.address && (
-                    <div className="border-b pb-2">
-                      <p className="text-sm text-gray-500 mb-1">Address</p>
-
-                      <p className="text-sm font-semibold text-gray-800">
-                        {selectedUser.address}
-                      </p>
+                    <div className="flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center shrink-0 mt-0.5">
+                        <MapPin size={16} className="text-blue-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide">
+                          पता
+                        </p>
+                        <p className="text-sm font-semibold text-gray-800 leading-snug">
+                          {[
+                            selectedUser.address,
+                            selectedUser.place,
+                            selectedUser.zipCode,
+                          ]
+                            .filter(Boolean)
+                            .join(", ")}
+                        </p>
+                      </div>
                     </div>
                   )}
 
                   {selectedUser.shopName && (
-                    <div className="flex justify-between gap-3 border-b pb-2">
-                      <span className="text-sm text-gray-500">Shop</span>
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+                        <Store size={16} className="text-amber-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide">
+                          दुकान
+                        </p>
+                        <p className="text-sm font-semibold text-gray-800 truncate">
+                          {selectedUser.shopName}
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
-                      <span className="text-sm font-semibold text-gray-800">
-                        {selectedUser.shopName}
-                      </span>
+                  {selectedUser.role && (
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-purple-50 flex items-center justify-center shrink-0">
+                        {selectedUser.role === "supplier" ? (
+                          <Store size={16} className="text-purple-600" />
+                        ) : (
+                          <User size={16} className="text-purple-600" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide">
+                          भूमिका
+                        </p>
+                        <p className="text-sm font-semibold text-gray-800">
+                          {selectedUser.role === "supplier"
+                            ? "आपूर्तिकर्ता"
+                            : "उपयोगकर्ता"}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedUser.createdAt && (
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center shrink-0">
+                        <Calendar size={16} className="text-gray-500" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] text-gray-400 uppercase tracking-wide">
+                          सदस्यता तिथि
+                        </p>
+                        <p className="text-sm font-semibold text-gray-800">
+                          {formatMemberSince(selectedUser.createdAt)}
+                        </p>
+                      </div>
                     </div>
                   )}
                 </div>
-              </div>
+              </>
             ) : null}
           </div>
         </div>
