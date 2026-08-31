@@ -892,13 +892,6 @@ export const removeOrderItem = async (req, res) => {
       });
     }
 
-    if (isCutoffPassed(order.cutoffTime)) {
-      return res.status(400).json({
-        success: false,
-        message: "समय बीत चुका है।",
-      });
-    }
-
     const item = order.items.id(itemId);
 
     if (!item) {
@@ -932,6 +925,154 @@ export const removeOrderItem = async (req, res) => {
     });
   } catch (error) {
     console.error(error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+/* ============================================================
+   UPDATE MY ORDER ITEMS (USER)
+============================================================ */
+
+/*
+  Allows the logged-in user to edit their own today's order
+  (change quantity / remove items) while the order is still
+  Pending, regardless of whether the cutoff time has passed.
+  Approved / declined / cancelled orders are locked.
+*/
+
+export const updateMyOrderItems = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { items } = req.body;
+
+    if (!orderId) {
+      return res.status(400).json({
+        success: false,
+        message: "Order ID is required.",
+      });
+    }
+
+    if (!Array.isArray(items)) {
+      return res.status(400).json({
+        success: false,
+        message: "Items must be an array.",
+      });
+    }
+
+    const order = await Order.findById(orderId);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: "Order not found.",
+      });
+    }
+
+    if (order.userId.toString() !== req.userId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: "Unauthorized.",
+      });
+    }
+
+    if (order.status !== "Pending") {
+      return res.status(400).json({
+        success: false,
+        message: "ऑर्डर पहले ही लॉक हो चुका है।",
+      });
+    }
+
+    /* ========================================================
+       BUILD UPDATED ITEMS
+    ======================================================== */
+
+    const updatedItems = [];
+
+    for (const item of items) {
+      const qty = Number(item.qty);
+      const price = Number(item.price);
+
+      /*
+       * qty 0 means remove item
+       */
+
+      if (!Number.isFinite(qty) || qty <= 0) {
+        continue;
+      }
+
+      if (!Number.isFinite(price) || price < 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid price for ${item.name || "product"}.`,
+        });
+      }
+
+      updatedItems.push({
+        productId: item.productId,
+
+        name: item.name || "",
+
+        hinglishName: item.hinglishName || "",
+
+        image: item.image || "",
+
+        companyId: item.companyId || null,
+
+        companyName: item.companyName || "",
+
+        categoryId: item.categoryId || null,
+
+        categoryName: item.categoryName || "",
+
+        measurement: item.measurement || "",
+
+        qty,
+
+        price,
+
+        total: qty * price,
+      });
+    }
+
+    if (updatedItems.length === 0) {
+      await Order.findByIdAndDelete(orderId);
+
+      return res.status(200).json({
+        success: true,
+        deleted: true,
+        message: "Order deleted because it became empty.",
+      });
+    }
+
+    /* ========================================================
+       SAVE
+    ======================================================== */
+
+    order.items = updatedItems;
+
+    order.totalAmount = calculateOrderTotal(updatedItems);
+
+    await order.save();
+
+    const updatedOrder = await Order.findById(order._id)
+      .populate(
+        "userId",
+        "firstName lastName phoneNumber address place zipCode profilePic oneSignalSubscriptionId",
+      )
+      .lean();
+
+    return res.status(200).json({
+      success: true,
+      message: "Order updated successfully.",
+      deleted: false,
+      order: updatedOrder,
+    });
+  } catch (error) {
+    console.log("UPDATE MY ORDER ITEMS ERROR:", error);
 
     return res.status(500).json({
       success: false,

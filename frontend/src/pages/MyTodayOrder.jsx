@@ -4,7 +4,18 @@ import { useDispatch, useSelector } from "react-redux";
 import { toast } from "sonner";
 import { FaClock } from "react-icons/fa";
 import { MdDeleteOutline } from "react-icons/md";
-import { Loader2, ReceiptText, X } from "lucide-react";
+import {
+  Check,
+  IndianRupee,
+  Loader2,
+  Minus,
+  Pencil,
+  Plus,
+  ReceiptText,
+  ShoppingBag,
+  Trash2,
+  X,
+} from "lucide-react";
 
 import { API_BASE_URL } from "../lib/constants";
 
@@ -45,6 +56,9 @@ const MyTodayOrder = () => {
   const [removingId, setRemovingId] = useState(null);
 
   const [downloadingReceiptId, setDownloadingReceiptId] = useState(null);
+
+  const [editingOrder, setEditingOrder] = useState(null);
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const token = localStorage.getItem("token");
 
@@ -387,6 +401,124 @@ const MyTodayOrder = () => {
   }, [confirmRemoveItem, removeItem]);
 
   // ==========================================================
+  // EDIT ORDER SHEET
+  // ==========================================================
+
+  const openEditSheet = useCallback(
+    (order) => {
+      if (savingEdit) return;
+
+      const orderInList = todayOrders.find((o) => o._id === order._id);
+
+      if (!orderInList || orderInList.status !== "Pending") return;
+
+      setEditingOrder(JSON.parse(JSON.stringify(orderInList)));
+    },
+    [savingEdit, todayOrders],
+  );
+
+  const closeEditSheet = useCallback(() => {
+    if (savingEdit) return;
+
+    setEditingOrder(null);
+  }, [savingEdit]);
+
+  const changeQty = useCallback((itemId, change) => {
+    setEditingOrder((prev) => {
+      if (!prev) return prev;
+
+      return {
+        ...prev,
+        items: prev.items.map((item) => {
+          if (item._id !== itemId) return item;
+
+          const newQty = Math.max(0, Number(item.qty || 0) + change);
+
+          return {
+            ...item,
+            qty: newQty,
+            total: newQty * Number(item.price || 0),
+          };
+        }),
+      };
+    });
+  }, []);
+
+  const removeItemFromEdit = useCallback((itemId) => {
+    setEditingOrder((prev) => {
+      if (!prev) return prev;
+
+      return {
+        ...prev,
+        items: prev.items.filter((item) => item._id !== itemId),
+      };
+    });
+  }, []);
+
+  const editingTotal = useCallback(() => {
+    if (!editingOrder) return 0;
+
+    return (
+      editingOrder.items?.reduce(
+        (sum, item) => sum + Number(item.qty || 0) * Number(item.price || 0),
+        0,
+      ) || 0
+    );
+  }, [editingOrder]);
+
+  const saveOrderEdit = useCallback(async () => {
+    if (!editingOrder || savingEdit) return;
+
+    try {
+      setSavingEdit(true);
+
+      const items = editingOrder.items.map((item) => ({
+        originalItemId: item._id,
+        productId: item.productId,
+        name: item.name,
+        hinglishName: item.hinglishName || "",
+        image: item.image || "",
+        companyId: item.companyId || null,
+        companyName: item.companyName || "",
+        categoryId: item.categoryId || null,
+        categoryName: item.categoryName || "",
+        measurement: item.measurement,
+        qty: Number(item.qty),
+        price: Number(item.price),
+      }));
+
+      const res = await axios.put(
+        `${API_BASE_URL}/api/v1/order/user/update-items/${editingOrder._id}`,
+        { items },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          timeout: 8000,
+        },
+      );
+
+      if (res.data?.success) {
+        if (res.data.deleted) {
+          dispatch(removeOrder(editingOrder._id));
+        } else if (res.data.order) {
+          dispatch(updateOrderItems(res.data.order));
+        }
+
+        setEditingOrder(null);
+
+        toast.success("ऑर्डर अपडेट हो गया।", { duration: 1000 });
+      }
+    } catch (error) {
+      console.error("Edit order error:", error);
+
+      toast.error(error.response?.data?.message || "ऑर्डर अपडेट नहीं हो सका।");
+    } finally {
+      setSavingEdit(false);
+    }
+  }, [editingOrder, savingEdit, todayOrders, token, dispatch]);
+
+  // ==========================================================
   // INITIAL LOADING ONLY
   // ==========================================================
 
@@ -690,44 +822,65 @@ const MyTodayOrder = () => {
                 </div>
 
                 {/* ==========================================
-                    CUTOFF
+                    CUTOFF (edit allowed only while Pending)
                 ========================================== */}
 
-                <div
-                  className="
-                    flex
-                    items-center
-                    gap-2
-                    border-b
-                    bg-orange-50
-                    px-5
-                    py-3
-                  "
-                >
-                  <FaClock className="text-orange-600" />
-
-                  <p
+                {order.status === "Pending" && (
+                  <div
                     className="
-                      text-sm
-                      font-medium
-                      text-orange-700
+                      flex
+                      items-center
+                      justify-between
+                      gap-2
+                      border-b
+                      bg-orange-50
+                      px-5
+                      py-3
                     "
                   >
-                    <span
-                      className="
-                        ml-2
-                        mr-[5px]
-                        font-bold
+                    <div className="flex items-center gap-1">
+                      <FaClock className="text-orange-600" />
+
+                      <p
+                        className="
+                        text-sm
+                        font-medium
+                        text-orange-700
                       "
+                      >
+                        Approve होने तक एडिट करें!
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={savingEdit}
+                      onClick={() => openEditSheet(order)}
+                      className="
+                          
+                          flex
+                          w-[130px]
+                          items-center
+                          justify-center
+                          gap-2
+                          rounded-2xl
+                          bg-red-600
+                          px-3
+                          py-2
+                          text-sm
+                          font-bold
+                          text-white
+                          transition
+                          hover:bg-slate-800
+                          active:scale-[0.99]
+                          disabled:cursor-not-allowed
+                          disabled:opacity-50
+                        "
                     >
-                      {new Date(order.cutoffTime).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                    तक एडिट करें!
-                  </p>
-                </div>
+                      <Pencil size={16} />
+                      एडिट करें
+                    </button>
+                  </div>
+                )}
 
                 {/* ==========================================
                     ITEMS
@@ -833,42 +986,6 @@ const MyTodayOrder = () => {
                           </div>
 
                           {/* REMOVE */}
-
-                          {order.status === "Pending" && (
-                            <button
-                              type="button"
-                              disabled={removingId === item._id}
-                              onClick={() =>
-                                openRemoveConfirmation(order._id, item._id)
-                              }
-                              className="
-                                flex
-                                items-center
-                                gap-2
-                                rounded-xl
-                                bg-red-50
-                                px-4
-                                py-2
-                                text-red-600
-                                transition-all
-                                hover:bg-red-100
-                                disabled:cursor-not-allowed
-                                disabled:opacity-60
-                              "
-                            >
-                              {removingId === item._id ? (
-                                <>
-                                  <Loader2 size={18} className="animate-spin" />
-                                  Removing...
-                                </>
-                              ) : (
-                                <>
-                                  <MdDeleteOutline size={20} />
-                                  Remove
-                                </>
-                              )}
-                            </button>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -1054,8 +1171,8 @@ const MyTodayOrder = () => {
                           text-yellow-700
                         "
                       >
-                        आपका ऑर्डर अभी Pending है। Admin के approve करने तक या
-                        तय समय तक आप items remove कर सकते हैं।
+                        आपका ऑर्डर अभी Pending है। Admin के approve करने तक आप
+                        items बदल सकते हैं।
                       </p>
                     </div>
                   )}
@@ -1246,6 +1363,364 @@ const MyTodayOrder = () => {
           </div>
         )}
       </div>
+
+      {/* ======================================================
+          EDIT ORDER BOTTOM SHEET
+      ====================================================== */}
+
+      {editingOrder && (
+        <div className="fixed inset-0 z-[110]">
+          {/* BACKDROP */}
+
+          <button
+            aria-label="Close"
+            onClick={closeEditSheet}
+            disabled={savingEdit}
+            className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+          />
+
+          {/* SHEET */}
+
+          <div
+            className="
+              absolute
+              bottom-0
+              left-0
+              right-0
+              mx-auto
+              flex
+              h-[88vh]
+              max-h-[88vh]
+              w-full
+              max-w-2xl
+              flex-col
+              overflow-hidden
+              rounded-t-[30px]
+              bg-white
+              shadow-2xl
+            "
+          >
+            {/* HANDLE */}
+
+            <div className="flex shrink-0 justify-center pt-3">
+              <div className="h-1.5 w-12 rounded-full bg-slate-200" />
+            </div>
+
+            {/* HEADER */}
+
+            <div
+              className="
+                flex
+                shrink-0
+                items-center
+                justify-between
+                border-b
+                border-slate-100
+                px-5
+                py-4
+              "
+            >
+              <div className="min-w-0">
+                <p className="truncate text-xl font-black text-slate-900">
+                  ऑर्डर एडिट करें
+                </p>
+
+                <p className="mt-1 text-xs font-semibold text-slate-400">
+                  Order #{editingOrder._id?.slice(-6)}
+                </p>
+              </div>
+
+              <button
+                onClick={closeEditSheet}
+                disabled={savingEdit}
+                className="
+                  flex
+                  h-10
+                  w-10
+                  shrink-0
+                  items-center
+                  justify-center
+                  rounded-xl
+                  bg-slate-100
+                  disabled:opacity-50
+                "
+              >
+                <X className="h-5 w-5 text-slate-600" />
+              </button>
+            </div>
+
+            {/* SCROLLABLE ITEMS */}
+
+            <div
+              className="
+                min-h-0
+                flex-1
+                overflow-y-auto
+                overscroll-contain
+                px-4
+                py-4
+              "
+            >
+              <div className="space-y-3">
+                {editingOrder.items?.map((item) => (
+                  <div
+                    key={item._id}
+                    className="rounded-[22px] border border-slate-200 bg-white p-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      {/* IMAGE */}
+
+                      <div
+                        className="
+                          flex
+                          h-14
+                          w-14
+                          shrink-0
+                          items-center
+                          justify-center
+                          overflow-hidden
+                          rounded-2xl
+                          bg-slate-100
+                        "
+                      >
+                        {item.image ? (
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <ShoppingBag className="h-5 w-5 text-slate-400" />
+                        )}
+                      </div>
+
+                      {/* INFO */}
+
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-base font-black text-slate-900">
+                          {item.name}
+                        </p>
+
+                        {item.companyName && (
+                          <p className="mt-0.5 text-xs font-semibold text-slate-500">
+                            {item.companyName}
+                          </p>
+                        )}
+
+                        <p className="mt-1 text-xs font-semibold text-slate-400">
+                          {item.measurement} • ₹
+                          {Number(item.price || 0).toLocaleString("en-IN")}
+                        </p>
+                      </div>
+
+                      {/* QTY CONTROLS */}
+
+                      <div
+                        className="
+                          flex
+                          shrink-0
+                          items-center
+                          gap-1
+                          rounded-xl
+                          bg-slate-100
+                          p-1
+                        "
+                      >
+                        <button
+                          type="button"
+                          onClick={() => changeQty(item._id, -1)}
+                          className="
+                            flex
+                            h-8
+                            w-8
+                            items-center
+                            justify-center
+                            rounded-lg
+                            bg-white
+                            shadow-sm
+                            active:scale-95
+                          "
+                        >
+                          <Minus className="h-4 w-4" />
+                        </button>
+
+                        <span
+                          className="
+                            w-7
+                            text-center
+                            text-sm
+                            font-black
+                          "
+                        >
+                          {item.qty}
+                        </span>
+
+                        <button
+                          type="button"
+                          onClick={() => changeQty(item._id, 1)}
+                          className="
+                            flex
+                            h-8
+                            w-8
+                            items-center
+                            justify-center
+                            rounded-lg
+                            bg-white
+                            shadow-sm
+                            active:scale-95
+                          "
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      </div>
+
+                      {/* REMOVE */}
+
+                      <button
+                        type="button"
+                        onClick={() => removeItemFromEdit(item._id)}
+                        className="
+                          flex
+                          h-9
+                          w-9
+                          shrink-0
+                          items-center
+                          justify-center
+                          rounded-xl
+                          bg-red-50
+                          text-red-500
+                          active:scale-95
+                        "
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* EMPTY STATE */}
+
+                {editingOrder.items?.length === 0 && (
+                  <div
+                    className="
+                      rounded-[22px]
+                      border
+                      border-dashed
+                      border-slate-200
+                      bg-slate-50
+                      py-10
+                      text-center
+                    "
+                  >
+                    <ShoppingBag className="mx-auto h-8 w-8 text-slate-300" />
+                    <p className="mt-2 text-sm font-bold text-slate-400">
+                      कोई सामान नहीं बचा
+                    </p>
+                  </div>
+                )}
+
+                {/* NEW TOTAL */}
+
+                <div
+                  className="
+                    mt-4
+                    rounded-[22px]
+                    bg-slate-900
+                    p-4
+                    text-white
+                  "
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-bold text-white/60">
+                      नया बिल
+                    </span>
+
+                    <span
+                      className="
+                        flex
+                        items-center
+                        text-2xl
+                        font-black
+                      "
+                    >
+                      <IndianRupee className="h-5 w-5" />
+                      {editingTotal().toLocaleString("en-IN")}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* BOTTOM ACTIONS */}
+
+            <div
+              className="
+                shrink-0
+                border-t
+                border-slate-100
+                bg-white
+                px-4
+                pb-[max(1rem,env(safe-area-inset-bottom))]
+                pt-3
+              "
+            >
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={closeEditSheet}
+                  disabled={savingEdit}
+                  className="
+                    h-12
+                    flex-1
+                    rounded-2xl
+                    bg-slate-100
+                    text-sm
+                    font-black
+                    text-slate-700
+                    disabled:opacity-50
+                  "
+                >
+                  रद्द करें
+                </button>
+
+                <button
+                  type="button"
+                  onClick={saveOrderEdit}
+                  disabled={savingEdit}
+                  className="
+                    flex
+                    h-12
+                    flex-[1.5]
+                    items-center
+                    justify-center
+                    gap-2
+                    rounded-2xl
+                    bg-emerald-500
+                    text-sm
+                    font-black
+                    text-white
+                    shadow-lg
+                    shadow-emerald-500/20
+                    disabled:opacity-50
+                  "
+                >
+                  {savingEdit ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      सेव हो रहा...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-4 w-4" />
+                      सेव करें
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ======================================================
           REMOVE CONFIRMATION MODAL

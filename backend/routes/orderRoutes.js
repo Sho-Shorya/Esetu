@@ -8,6 +8,7 @@ import {
   setOrderCutoffTime,
   getOrderHistory,
   removeOrderItem,
+  updateMyOrderItems,
   updateOrderStatus,
   updateOrderItems,
   markOrderPaymentPaid,
@@ -37,6 +38,12 @@ router.delete(
   "/remove-item/:orderId/:itemId",
   isAuthenticated,
   removeOrderItem,
+);
+
+router.put(
+  "/user/update-items/:orderId",
+  isAuthenticated,
+  updateMyOrderItems,
 );
 
 /* ============================================================
