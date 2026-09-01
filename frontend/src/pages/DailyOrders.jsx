@@ -861,7 +861,7 @@ const DailyOrders = () => {
                 </th>
 
                 <th className="w-[35%] px-2 sm:px-3 py-3 text-left text-[13px] sm:text-xs font-bold text-gray-700">
-                  Product
+                  प्रोडक्ट
                 </th>
 
                 <th className="w-[20%] px-2 sm:px-3 py-3 text-left text-[13px] sm:text-xs font-bold text-gray-700">
@@ -977,42 +977,42 @@ const DailyOrders = () => {
                           >
                             <div className="bg-white rounded-xl border border-emerald-100 shadow-sm p-2.5">
                               {item.orderedBy?.length > 0 ? (
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    {item.orderedBy.map((user, userIndex) => (
-                                      <button
-                                        key={user.userId || userIndex}
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          openUserProfile(user.userId);
-                                        }}
-                                        className="relative group shrink-0"
-                                      >
-                                        <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center overflow-hidden border-2 border-emerald-200 group-hover:border-emerald-400 transition">
-                                          {user.profilePic ? (
-                                            <img
-                                              src={user.profilePic}
-                                              alt=""
-                                              className="w-full h-full rounded-full object-cover"
-                                            />
-                                          ) : (
-                                            <User
-                                              size={24}
-                                              className="text-emerald-600"
-                                            />
-                                          )}
-                                        </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                  {item.orderedBy.map((user, userIndex) => (
+                                    <button
+                                      key={user.userId || userIndex}
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openUserProfile(user.userId);
+                                      }}
+                                      className="relative group shrink-0"
+                                    >
+                                      <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center overflow-hidden border-2 border-emerald-200 group-hover:border-emerald-400 transition">
+                                        {user.profilePic ? (
+                                          <img
+                                            src={user.profilePic}
+                                            alt=""
+                                            className="w-full h-full rounded-full object-cover"
+                                          />
+                                        ) : (
+                                          <User
+                                            size={24}
+                                            className="text-emerald-600"
+                                          />
+                                        )}
+                                      </div>
 
-                                        <span className="absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] px-1 flex items-center justify-center rounded-full bg-emerald-600 text-white text-[12px] font-extrabold border-2 border-white shadow-sm leading-none">
-                                          {user.quantity || 0}
-                                        </span>
+                                      <span className="absolute -top-1.5 -right-1.5 min-w-[22px] h-[22px] px-1 flex items-center justify-center rounded-full bg-emerald-600 text-white text-[12px] font-extrabold border-2 border-white shadow-sm leading-none">
+                                        {user.quantity || 0}
+                                      </span>
 
-                                        <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap bg-gray-800 text-white text-[10px] font-medium px-2 py-0.5 rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition z-10">
-                                          {getUserDisplayName(user)}
-                                        </span>
-                                      </button>
-                                    ))}
-                                  </div>
+                                      <span className="absolute -bottom-6 left-1/2 -translate-x-1/2 whitespace-nowrap bg-gray-800 text-white text-[10px] font-medium px-2 py-0.5 rounded-md opacity-0 group-hover:opacity-100 pointer-events-none transition z-10">
+                                        {getUserDisplayName(user)}
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
                               ) : (
                                 <p className="text-center text-sm text-gray-500 py-2">
                                   User details उपलब्ध नहीं हैं।
@@ -1092,9 +1092,7 @@ const DailyOrders = () => {
                       ) : (
                         <ShieldAlert size={12} />
                       )}
-                      {selectedUser.isVerified
-                        ? "सत्यापित"
-                        : "अनुसत्यापित"}
+                      {selectedUser.isVerified ? "सत्यापित" : "अनुसत्यापित"}
                     </span>
                   )}
                 </div>
