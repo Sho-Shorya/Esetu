@@ -39,6 +39,12 @@ app.get("/", (req, res) => {
   });
 });
 
+// Lightweight health check — no DB, no auth, no logic.
+// Used by external keep-alive pinger (e.g. cron-job.org every 14 min).
+app.get("/api/health", (_req, res) => {
+  res.status(200).json({ status: "ok" });
+});
+
 app.use("/api/v1/user", userRoute);
 app.use("/api/v1/product", productRoute);
 app.use("/api/v1/cart", cartRoute);
