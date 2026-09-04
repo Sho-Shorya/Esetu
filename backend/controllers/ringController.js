@@ -83,37 +83,3 @@ export const pollRings = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
-
-export const ringHistory = async (req, res) => {
-  try {
-    const rings = await Ring.find()
-      .sort({ createdAt: -1 })
-      .limit(50)
-      .select("recipientType recipientUsers message createdAt");
-
-    const enriched = await Promise.all(
-      rings.map(async (r) => {
-        let recipientCount = r.recipientUsers?.length || 0;
-
-        if (r.recipientType === "all") {
-          recipientCount = await User.countDocuments({ role: "user" });
-        }
-
-        return {
-          _id: r._id,
-          recipientType: r.recipientType,
-          recipientCount,
-          message: r.message,
-          createdAt: r.createdAt,
-        };
-      }),
-    );
-
-    return res.status(200).json({
-      success: true,
-      rings: enriched,
-    });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-};

@@ -12,7 +12,6 @@ import {
   Users,
   UserRound,
   Clock,
-  ChevronRight,
   Check,
   X,
   PhoneCall,
@@ -32,61 +31,38 @@ const AdminRingsPage = () => {
   const [sending, setSending] = useState(false);
   const [sentCount, setSentCount] = useState(0);
 
-  const [history, setHistory] = useState([]);
-
   const [searchQuery, setSearchQuery] = useState("");
 
   const token = localStorage.getItem("token");
 
-  /* =========================================================
-     FETCH
-  ========================================================= */
-
-  const fetchAll = async () => {
-    if (!token) return;
-    try {
-      setLoading(true);
-      const [usersRes, shiftsRes] = await Promise.all([
-        axios.get(`${API_BASE_URL}/api/v1/ring/users`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        axios.get(`${API_BASE_URL}/api/v1/ring/shifts`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ]);
-
-      if (usersRes.data.success) setAllUsers(usersRes.data.users || []);
-      if (shiftsRes.data.success) {
-        setMorningUsers(shiftsRes.data.morning || []);
-        setEveningUsers(shiftsRes.data.evening || []);
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchHistory = async () => {
-    if (!token) return;
-    try {
-      const res = await axios.get(`${API_BASE_URL}/api/v1/ring/history`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (res.data.success) setHistory(res.data.rings || []);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   useEffect(() => {
-    fetchAll();
-    fetchHistory();
-  }, []);
+    const fetchAll = async () => {
+      if (!token) return;
+      try {
+        setLoading(true);
+        const [usersRes, shiftsRes] = await Promise.all([
+          axios.get(`${API_BASE_URL}/api/v1/ring/users`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+          axios.get(`${API_BASE_URL}/api/v1/ring/shifts`, {
+            headers: { Authorization: `Bearer ${token}` },
+          }),
+        ]);
 
-  /* =========================================================
-     USERS NOT IN ANY SHIFT
-  ========================================================= */
+        if (usersRes.data.success) setAllUsers(usersRes.data.users || []);
+        if (shiftsRes.data.success) {
+          setMorningUsers(shiftsRes.data.morning || []);
+          setEveningUsers(shiftsRes.data.evening || []);
+        }
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAll();
+  }, [token]);
 
   const unassignedUsers = useMemo(() => {
     const assignedIds = new Set([
@@ -95,10 +71,6 @@ const AdminRingsPage = () => {
     ]);
     return allUsers.filter((u) => !assignedIds.has(u._id));
   }, [allUsers, morningUsers, eveningUsers]);
-
-  /* =========================================================
-     SEARCH
-  ========================================================= */
 
   const filteredUsers = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -110,10 +82,6 @@ const AdminRingsPage = () => {
         String(u.phoneNumber).includes(q),
     );
   }, [unassignedUsers, searchQuery]);
-
-  /* =========================================================
-     SHIFT MANAGEMENT
-  ========================================================= */
 
   const moveToMorning = (userId) => {
     setEveningUsers((prev) => prev.filter((u) => u._id !== userId));
@@ -148,10 +116,6 @@ const AdminRingsPage = () => {
     }
   };
 
-  /* =========================================================
-     SEND RING
-  ========================================================= */
-
   const handleSendRing = async () => {
     if (target === "custom" && selectedUsers.length === 0) {
       toast.error("कम से कम एक उपयोगकर्ता चुनें।");
@@ -174,7 +138,6 @@ const AdminRingsPage = () => {
         setSentCount(res.data.sentTo || 0);
         toast.success(res.data.message);
         setSelectedUsers([]);
-        fetchHistory();
         setTimeout(() => setSentCount(0), 3000);
       }
     } catch (e) {
@@ -190,34 +153,10 @@ const AdminRingsPage = () => {
     );
   };
 
-  /* =========================================================
-     FORMAT
-  ========================================================= */
-
-  const formatTime = (dateStr) => {
-    return new Date(dateStr).toLocaleString("en-IN", {
-      day: "numeric",
-      month: "short",
-      hour: "numeric",
-      minute: "2-digit",
-      hour12: true,
-    });
-  };
-
-  const shiftLabel = (type) => {
-    const map = { all: "सभी", morning: "मॉर्निंग", evening: "इवनिंग", custom: "कस्टम" };
-    return map[type] || type;
-  };
-
-  /* =========================================================
-     RENDER
-  ========================================================= */
-
   return (
     <div className="min-h-screen bg-[#f5f7f6] pt-16">
       <main className="mx-auto max-w-5xl px-3 pb-32 pt-4 sm:px-5 sm:pt-6 lg:px-6">
         {/* BACK */}
-
         <div
           onClick={() => window.history.back()}
           className="mb-3 flex w-[80px] cursor-pointer items-center gap-1 rounded-full border border-emerald-300 px-3 py-2 text-xs font-bold text-emerald-700 transition hover:bg-emerald-50"
@@ -226,13 +165,9 @@ const AdminRingsPage = () => {
           पीछे
         </div>
 
-        {/* =====================================================
-            HEADER
-        ====================================================== */}
-
+        {/* HEADER */}
         <section className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-rose-700 via-rose-600 to-orange-500 text-white shadow-xl">
           <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/10" />
-
           <div className="relative flex items-center justify-between px-5 py-5 sm:px-7 sm:py-6">
             <div className="flex items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 backdrop-blur">
@@ -250,15 +185,11 @@ const AdminRingsPage = () => {
           </div>
         </section>
 
-        {/* =====================================================
-            TABS
-        ====================================================== */}
-
+        {/* TABS */}
         <div className="mt-3 flex gap-2">
           {[
             { id: "send", label: "रिंग भेजें", icon: Send },
             { id: "shifts", label: "शिफ्ट", icon: Clock },
-            { id: "history", label: "हिस्ट्री", icon: Phone },
           ].map((t) => (
             <button
               key={t.id}
@@ -275,14 +206,10 @@ const AdminRingsPage = () => {
           ))}
         </div>
 
-        {/* =====================================================
-            SEND RING TAB
-        ====================================================== */}
-
+        {/* SEND RING TAB */}
         {tab === "send" && (
           <div className="mt-3 space-y-3">
             {/* TARGET SELECT */}
-
             <section className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
               <h3 className="mb-3 text-sm font-black text-slate-900">
                 किसे भेजना है?
@@ -290,10 +217,10 @@ const AdminRingsPage = () => {
 
               <div className="grid grid-cols-2 gap-2">
                 {[
-                  { id: "all", label: "सभी को", icon: Users, color: "rose" },
-                  { id: "morning", label: "मॉर्निंग", icon: Sun, color: "amber" },
-                  { id: "evening", label: "इवनिंग", icon: Moon, color: "indigo" },
-                  { id: "custom", label: "चुनें", icon: UserRound, color: "emerald" },
+                  { id: "all", label: "सभी को", icon: Users },
+                  { id: "morning", label: "मॉर्निंग", icon: Sun },
+                  { id: "evening", label: "इवनिंग", icon: Moon },
+                  { id: "custom", label: "चुनें", icon: UserRound },
                 ].map((opt) => (
                   <button
                     key={opt.id}
@@ -314,7 +241,6 @@ const AdminRingsPage = () => {
               </div>
 
               {/* SHIFT COUNTS */}
-
               <div className="mt-3 flex gap-2">
                 <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700">
                   <Sun className="h-3 w-3" />
@@ -331,7 +257,6 @@ const AdminRingsPage = () => {
               </div>
 
               {/* CUSTOM USER SELECT */}
-
               {target === "custom" && (
                 <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
                   <input
@@ -374,7 +299,6 @@ const AdminRingsPage = () => {
             </section>
 
             {/* MESSAGE + SEND */}
-
             <section className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
               <label className="mb-1 block text-[11px] font-bold text-slate-500">
                 मैसेज
@@ -414,10 +338,7 @@ const AdminRingsPage = () => {
           </div>
         )}
 
-        {/* =====================================================
-            SHIFTS TAB
-        ====================================================== */}
-
+        {/* SHIFTS TAB */}
         {tab === "shifts" && (
           <div className="mt-3 space-y-3">
             {loading ? (
@@ -427,7 +348,6 @@ const AdminRingsPage = () => {
             ) : (
               <>
                 {/* MORNING */}
-
                 <section className="rounded-[24px] border border-amber-200 bg-white p-4 shadow-sm">
                   <div className="mb-3 flex items-center justify-between">
                     <h3 className="flex items-center gap-2 text-sm font-black text-amber-700">
@@ -479,7 +399,6 @@ const AdminRingsPage = () => {
                 </section>
 
                 {/* EVENING */}
-
                 <section className="rounded-[24px] border border-indigo-200 bg-white p-4 shadow-sm">
                   <div className="mb-3 flex items-center justify-between">
                     <h3 className="flex items-center gap-2 text-sm font-black text-indigo-700">
@@ -531,7 +450,6 @@ const AdminRingsPage = () => {
                 </section>
 
                 {/* UNASSIGNED */}
-
                 {filteredUsers.length > 0 && (
                   <section className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
                     <h3 className="mb-2 flex items-center gap-2 text-sm font-black text-slate-600">
@@ -585,7 +503,6 @@ const AdminRingsPage = () => {
                 )}
 
                 {/* SAVE */}
-
                 <button
                   type="button"
                   onClick={saveShifts}
@@ -595,54 +512,6 @@ const AdminRingsPage = () => {
                   शिफ्ट सेव करें
                 </button>
               </>
-            )}
-          </div>
-        )}
-
-        {/* =====================================================
-            HISTORY TAB
-        ====================================================== */}
-
-        {tab === "history" && (
-          <div className="mt-3">
-            {history.length === 0 ? (
-              <div className="flex min-h-[200px] flex-col items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-white">
-                <Phone className="h-10 w-10 text-slate-300" />
-                <p className="mt-3 text-sm font-bold text-slate-500">
-                  कोई रिंग हिस्ट्री नहीं
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {history.map((r) => (
-                  <div
-                    key={r._id}
-                    className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm"
-                  >
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-100 text-rose-600">
-                      <Phone className="h-4 w-4" />
-                    </div>
-
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-xs font-bold text-slate-900">
-                        {r.message}
-                      </p>
-                      <div className="mt-1 flex items-center gap-2">
-                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-600">
-                          {shiftLabel(r.recipientType)}
-                        </span>
-                        <span className="text-[10px] text-slate-400">
-                          {r.recipientCount} यूज़र
-                        </span>
-                      </div>
-                    </div>
-
-                    <span className="shrink-0 text-[10px] font-medium text-slate-400">
-                      {formatTime(r.createdAt)}
-                    </span>
-                  </div>
-                ))}
-              </div>
             )}
           </div>
         )}
