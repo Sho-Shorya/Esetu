@@ -83,6 +83,17 @@ const AdminRingsPage = () => {
     );
   }, [unassignedUsers, searchQuery]);
 
+  const customFilteredUsers = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return allUsers;
+    return allUsers.filter(
+      (u) =>
+        u.firstName?.toLowerCase().includes(q) ||
+        u.lastName?.toLowerCase().includes(q) ||
+        String(u.phoneNumber).includes(q),
+    );
+  }, [allUsers, searchQuery]);
+
   const moveToMorning = (userId) => {
     setEveningUsers((prev) => prev.filter((u) => u._id !== userId));
     const user = allUsers.find((u) => u._id === userId);
@@ -153,32 +164,35 @@ const AdminRingsPage = () => {
     );
   };
 
+  const userName = (u) => [u?.firstName, u?.lastName].filter(Boolean).join(" ");
+
   return (
     <div className="min-h-screen bg-[#f5f7f6] pt-16">
       <main className="mx-auto max-w-5xl px-3 pb-32 pt-4 sm:px-5 sm:pt-6 lg:px-6">
         {/* BACK */}
-        <div
+        <button
+          type="button"
           onClick={() => window.history.back()}
-          className="mb-3 flex w-[80px] cursor-pointer items-center gap-1 rounded-full border border-emerald-300 px-3 py-2 text-xs font-bold text-emerald-700 transition hover:bg-emerald-50"
+          className="mb-4 flex h-12 w-[110px] cursor-pointer items-center gap-1.5 rounded-full border border-emerald-300 px-4 text-base font-bold text-emerald-700 transition hover:bg-emerald-50"
         >
-          <ChevronLeft className="h-3.5 w-3.5" />
+          <ChevronLeft className="h-5 w-5" />
           पीछे
-        </div>
+        </button>
 
         {/* HEADER */}
         <section className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-rose-700 via-rose-600 to-orange-500 text-white shadow-xl">
           <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/10" />
-          <div className="relative flex items-center justify-between px-5 py-5 sm:px-7 sm:py-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/15 backdrop-blur">
-                <PhoneCall className="h-5 w-5" />
+          <div className="relative flex items-center justify-between px-5 py-6 sm:px-7 sm:py-7">
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/15 backdrop-blur">
+                <PhoneCall className="h-7 w-7" />
               </div>
               <div>
-                <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
+                <h1 className="text-3xl font-black tracking-tight sm:text-4xl">
                   Order Ring
                 </h1>
-                <p className="text-xs font-medium text-rose-100">
-                  यूज़र को ऑर्डर के लए अलर्ट करें
+                <p className="mt-0.5 text-sm font-medium text-rose-100">
+                  यूज़र को ऑर्डर के लिए अलर्ट करें
                 </p>
               </div>
             </div>
@@ -186,7 +200,7 @@ const AdminRingsPage = () => {
         </section>
 
         {/* TABS */}
-        <div className="mt-3 flex gap-2">
+        <div className="mt-4 flex gap-2">
           {[
             { id: "send", label: "रिंग भेजें", icon: Send },
             { id: "shifts", label: "शिफ्ट", icon: Clock },
@@ -194,13 +208,13 @@ const AdminRingsPage = () => {
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`flex flex-1 items-center justify-center gap-1.5 rounded-2xl py-2.5 text-xs font-black transition ${
+              className={`flex flex-1 items-center justify-center gap-2 rounded-2xl py-4 text-lg font-black transition ${
                 tab === t.id
                   ? "bg-rose-600 text-white shadow-lg shadow-rose-500/25"
                   : "bg-white text-slate-600 border border-slate-200"
               }`}
             >
-              <t.icon className="h-3.5 w-3.5" />
+              <t.icon className="h-6 w-6" />
               {t.label}
             </button>
           ))}
@@ -208,14 +222,14 @@ const AdminRingsPage = () => {
 
         {/* SEND RING TAB */}
         {tab === "send" && (
-          <div className="mt-3 space-y-3">
+          <div className="mt-4 space-y-4">
             {/* TARGET SELECT */}
-            <section className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-              <h3 className="mb-3 text-sm font-black text-slate-900">
+            <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+              <h3 className="mb-4 text-xl font-black text-slate-900">
                 किसे भेजना है?
               </h3>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 {[
                   { id: "all", label: "सभी को", icon: Users },
                   { id: "morning", label: "मॉर्निंग", icon: Sun },
@@ -228,69 +242,72 @@ const AdminRingsPage = () => {
                       setTarget(opt.id);
                       setSelectedUsers([]);
                     }}
-                    className={`flex items-center justify-center gap-2 rounded-2xl border px-3 py-3 text-xs font-bold transition ${
+                    className={`flex items-center justify-center gap-2.5 rounded-2xl border px-3 py-5 text-lg font-bold transition ${
                       target === opt.id
                         ? "border-rose-400 bg-rose-50 text-rose-700 ring-4 ring-rose-500/10"
                         : "border-slate-200 bg-white text-slate-500 hover:border-slate-300"
                     }`}
                   >
-                    <opt.icon className="h-4 w-4" />
+                    <opt.icon className="h-7 w-7" />
                     {opt.label}
                   </button>
                 ))}
               </div>
 
               {/* SHIFT COUNTS */}
-              <div className="mt-3 flex gap-2">
-                <span className="flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700">
-                  <Sun className="h-3 w-3" />
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span className="flex items-center gap-1.5 rounded-full bg-amber-50 px-3.5 py-2 text-sm font-bold text-amber-700">
+                  <Sun className="h-4 w-4" />
                   मॉर्निंग: {morningUsers.length}
                 </span>
-                <span className="flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-700">
-                  <Moon className="h-3 w-3" />
+                <span className="flex items-center gap-1.5 rounded-full bg-indigo-50 px-3.5 py-2 text-sm font-bold text-indigo-700">
+                  <Moon className="h-4 w-4" />
                   इवनिंग: {eveningUsers.length}
                 </span>
-                <span className="flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-bold text-slate-600">
-                  <Users className="h-3 w-3" />
+                <span className="flex items-center gap-1.5 rounded-full bg-slate-100 px-3.5 py-2 text-sm font-bold text-slate-600">
+                  <Users className="h-4 w-4" />
                   कुल: {allUsers.length}
                 </span>
               </div>
 
               {/* CUSTOM USER SELECT */}
               {target === "custom" && (
-                <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="नाम या मोबाइल खोजें..."
-                    className="mb-2 h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium outline-none focus:border-rose-400"
+                    className="mb-3 h-12 w-full rounded-xl border border-slate-200 bg-white px-4 text-base font-medium outline-none focus:border-rose-400"
                   />
 
-                  <div className="max-h-40 space-y-1 overflow-y-auto">
-                    {allUsers.map((u) => {
+                  <div className="max-h-52 space-y-1.5 overflow-y-auto">
+                    {customFilteredUsers.map((u) => {
                       const sel = selectedUsers.includes(u._id);
-                      const name = [u.firstName, u.lastName].filter(Boolean).join(" ");
                       return (
                         <label
                           key={u._id}
-                          className={`flex cursor-pointer items-center gap-2 rounded-xl px-2 py-1.5 text-xs transition ${sel ? "bg-rose-50" : "hover:bg-white"}`}
+                          className={`flex cursor-pointer items-center gap-3 rounded-xl px-3 py-3 text-base transition ${sel ? "bg-rose-50" : "hover:bg-white"}`}
                         >
                           <input
                             type="checkbox"
                             checked={sel}
                             onChange={() => toggleSelectUser(u._id)}
-                            className="accent-rose-600"
+                            className="h-5 w-5 accent-rose-600"
                           />
-                          <span className="font-semibold text-slate-800">{name}</span>
-                          <span className="ml-auto text-[10px] text-slate-400">{u.phoneNumber}</span>
+                          <span className="font-semibold text-slate-800">
+                            {userName(u)}
+                          </span>
+                          <span className="ml-auto text-sm text-slate-400">
+                            {u.phoneNumber}
+                          </span>
                         </label>
                       );
                     })}
                   </div>
 
                   {selectedUsers.length > 0 && (
-                    <p className="mt-2 text-center text-[10px] font-bold text-rose-600">
+                    <p className="mt-3 text-center text-base font-bold text-rose-600">
                       {selectedUsers.length} चुने गए
                     </p>
                   )}
@@ -299,8 +316,8 @@ const AdminRingsPage = () => {
             </section>
 
             {/* MESSAGE + SEND */}
-            <section className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
-              <label className="mb-1 block text-[11px] font-bold text-slate-500">
+            <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+              <label className="mb-2 block text-base font-bold text-slate-500">
                 मैसेज
               </label>
 
@@ -310,27 +327,30 @@ const AdminRingsPage = () => {
                 onChange={(e) => setRingMessage(e.target.value)}
                 placeholder="अभी ऑर्डर करें!"
                 maxLength={80}
-                className="h-11 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-900 outline-none transition focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-500/10"
+                className="h-14 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-lg font-semibold text-slate-900 outline-none transition focus:border-rose-400 focus:bg-white focus:ring-4 focus:ring-rose-500/10"
               />
 
               <button
                 type="button"
                 onClick={handleSendRing}
                 disabled={sending}
-                className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-rose-600 to-orange-500 text-sm font-black text-white shadow-lg shadow-rose-500/30 transition hover:from-rose-700 hover:to-orange-600 active:scale-[0.97] disabled:opacity-50"
+                className="mt-5 flex h-16 w-full items-center justify-center gap-2.5 rounded-2xl bg-gradient-to-r from-rose-600 to-orange-500 text-xl font-black text-white shadow-lg shadow-rose-500/30 transition hover:from-rose-700 hover:to-orange-600 active:scale-[0.97] disabled:opacity-50"
               >
                 {sending ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <>
+                    <Loader2 className="h-7 w-7 animate-spin" />
+                    भेज रहे हैं...
+                  </>
                 ) : (
                   <>
-                    <Phone className="h-5 w-5" />
+                    <Phone className="h-7 w-7" />
                     रिंग भेजें
                   </>
                 )}
               </button>
 
               {sentCount > 0 && (
-                <p className="mt-2 text-center text-xs font-bold text-emerald-600">
+                <p className="mt-3 text-center text-base font-bold text-emerald-600">
                   {sentCount} उपयोगकर्ताओं को रिंग भेजी गई
                 </p>
               )}
@@ -340,56 +360,56 @@ const AdminRingsPage = () => {
 
         {/* SHIFTS TAB */}
         {tab === "shifts" && (
-          <div className="mt-3 space-y-3">
+          <div className="mt-4 space-y-4">
             {loading ? (
-              <div className="flex justify-center py-10">
-                <Loader2 className="h-7 w-7 animate-spin text-rose-500" />
+              <div className="flex justify-center py-12">
+                <Loader2 className="h-9 w-9 animate-spin text-rose-500" />
               </div>
             ) : (
               <>
                 {/* MORNING */}
-                <section className="rounded-[24px] border border-amber-200 bg-white p-4 shadow-sm">
+                <section className="rounded-[24px] border border-amber-200 bg-white p-5 shadow-sm">
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className="flex items-center gap-2 text-sm font-black text-amber-700">
-                      <Sun className="h-4 w-4" />
+                    <h3 className="flex items-center gap-2 text-lg font-black text-amber-700">
+                      <Sun className="h-6 w-6" />
                       मॉर्निंग शिफ्ट
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px]">
+                      <span className="rounded-full bg-amber-100 px-2.5 py-1 text-sm">
                         {morningUsers.length}
                       </span>
                     </h3>
                   </div>
 
                   {morningUsers.length === 0 ? (
-                    <p className="py-3 text-center text-xs text-slate-400">
+                    <p className="py-4 text-center text-base text-slate-400">
                       कोई उपयोगकर्ता नहीं
                     </p>
                   ) : (
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
                       {morningUsers.map((u) => (
                         <div
                           key={u._id}
-                          className="flex items-center gap-2 rounded-xl bg-amber-50 px-3 py-2"
+                          className="flex items-center gap-3 rounded-xl bg-amber-50 px-3 py-3"
                         >
-                          <span className="text-xs font-bold text-slate-800">
-                            {[u.firstName, u.lastName].filter(Boolean).join(" ")}
+                          <span className="text-base font-bold text-slate-800">
+                            {userName(u)}
                           </span>
-                          <span className="text-[10px] text-slate-400">
+                          <span className="text-sm text-slate-400">
                             {u.phoneNumber}
                           </span>
-                          <div className="ml-auto flex gap-1">
+                          <div className="ml-auto flex gap-2">
                             <button
                               onClick={() => moveToEvening(u._id)}
-                              className="rounded-lg bg-indigo-100 p-1 text-indigo-600 transition hover:bg-indigo-200"
+                              className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600 transition hover:bg-indigo-200"
                               title="इवनिंग में भेजें"
                             >
-                              <Moon className="h-3 w-3" />
+                              <Moon className="h-5 w-5" />
                             </button>
                             <button
                               onClick={() => removeFromShift(u._id)}
-                              className="rounded-lg bg-red-100 p-1 text-red-500 transition hover:bg-red-200"
+                              className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-100 text-red-500 transition hover:bg-red-200"
                               title="हटाएँ"
                             >
-                              <X className="h-3 w-3" />
+                              <X className="h-5 w-5" />
                             </button>
                           </div>
                         </div>
@@ -399,48 +419,48 @@ const AdminRingsPage = () => {
                 </section>
 
                 {/* EVENING */}
-                <section className="rounded-[24px] border border-indigo-200 bg-white p-4 shadow-sm">
+                <section className="rounded-[24px] border border-indigo-200 bg-white p-5 shadow-sm">
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className="flex items-center gap-2 text-sm font-black text-indigo-700">
-                      <Moon className="h-4 w-4" />
+                    <h3 className="flex items-center gap-2 text-lg font-black text-indigo-700">
+                      <Moon className="h-6 w-6" />
                       इवनिंग शिफ्ट
-                      <span className="rounded-full bg-indigo-100 px-2 py-0.5 text-[10px]">
+                      <span className="rounded-full bg-indigo-100 px-2.5 py-1 text-sm">
                         {eveningUsers.length}
                       </span>
                     </h3>
                   </div>
 
                   {eveningUsers.length === 0 ? (
-                    <p className="py-3 text-center text-xs text-slate-400">
+                    <p className="py-4 text-center text-base text-slate-400">
                       कोई उपयोगकर्ता नहीं
                     </p>
                   ) : (
-                    <div className="space-y-1">
+                    <div className="space-y-1.5">
                       {eveningUsers.map((u) => (
                         <div
                           key={u._id}
-                          className="flex items-center gap-2 rounded-xl bg-indigo-50 px-3 py-2"
+                          className="flex items-center gap-3 rounded-xl bg-indigo-50 px-3 py-3"
                         >
-                          <span className="text-xs font-bold text-slate-800">
-                            {[u.firstName, u.lastName].filter(Boolean).join(" ")}
+                          <span className="text-base font-bold text-slate-800">
+                            {userName(u)}
                           </span>
-                          <span className="text-[10px] text-slate-400">
+                          <span className="text-sm text-slate-400">
                             {u.phoneNumber}
                           </span>
-                          <div className="ml-auto flex gap-1">
+                          <div className="ml-auto flex gap-2">
                             <button
                               onClick={() => moveToMorning(u._id)}
-                              className="rounded-lg bg-amber-100 p-1 text-amber-600 transition hover:bg-amber-200"
+                              className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-600 transition hover:bg-amber-200"
                               title="मॉर्निंग में भेजें"
                             >
-                              <Sun className="h-3 w-3" />
+                              <Sun className="h-5 w-5" />
                             </button>
                             <button
                               onClick={() => removeFromShift(u._id)}
-                              className="rounded-lg bg-red-100 p-1 text-red-500 transition hover:bg-red-200"
+                              className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-100 text-red-500 transition hover:bg-red-200"
                               title="हटाएँ"
                             >
-                              <X className="h-3 w-3" />
+                              <X className="h-5 w-5" />
                             </button>
                           </div>
                         </div>
@@ -451,11 +471,11 @@ const AdminRingsPage = () => {
 
                 {/* UNASSIGNED */}
                 {filteredUsers.length > 0 && (
-                  <section className="rounded-[24px] border border-slate-200 bg-white p-4 shadow-sm">
-                    <h3 className="mb-2 flex items-center gap-2 text-sm font-black text-slate-600">
-                      <Users className="h-4 w-4" />
+                  <section className="rounded-[24px] border border-slate-200 bg-white p-5 shadow-sm">
+                    <h3 className="mb-3 flex items-center gap-2 text-lg font-black text-slate-600">
+                      <Users className="h-6 w-6" />
                       बिना शिफ्ट
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px]">
+                      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-sm">
                         {filteredUsers.length}
                       </span>
                     </h3>
@@ -465,35 +485,35 @@ const AdminRingsPage = () => {
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="खोजें..."
-                      className="mb-2 h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-medium outline-none focus:border-rose-400"
+                      className="mb-3 h-12 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 text-base font-medium outline-none focus:border-rose-400"
                     />
 
-                    <div className="max-h-48 space-y-1 overflow-y-auto">
+                    <div className="max-h-60 space-y-1.5 overflow-y-auto">
                       {filteredUsers.map((u) => (
                         <div
                           key={u._id}
-                          className="flex items-center gap-2 rounded-xl px-2 py-1.5 transition hover:bg-slate-50"
+                          className="flex items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-slate-50"
                         >
-                          <span className="text-xs font-bold text-slate-800">
-                            {[u.firstName, u.lastName].filter(Boolean).join(" ")}
+                          <span className="text-base font-bold text-slate-800">
+                            {userName(u)}
                           </span>
-                          <span className="text-[10px] text-slate-400">
+                          <span className="text-sm text-slate-400">
                             {u.phoneNumber}
                           </span>
-                          <div className="ml-auto flex gap-1">
+                          <div className="ml-auto flex gap-2">
                             <button
                               onClick={() => moveToMorning(u._id)}
-                              className="rounded-lg bg-amber-100 p-1 text-amber-600 transition hover:bg-amber-200"
+                              className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-600 transition hover:bg-amber-200"
                               title="मॉर्निंग"
                             >
-                              <Sun className="h-3 w-3" />
+                              <Sun className="h-5 w-5" />
                             </button>
                             <button
                               onClick={() => moveToEvening(u._id)}
-                              className="rounded-lg bg-indigo-100 p-1 text-indigo-600 transition hover:bg-indigo-200"
+                              className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-100 text-indigo-600 transition hover:bg-indigo-200"
                               title="इवनिंग"
                             >
-                              <Moon className="h-3 w-3" />
+                              <Moon className="h-5 w-5" />
                             </button>
                           </div>
                         </div>
@@ -506,9 +526,9 @@ const AdminRingsPage = () => {
                 <button
                   type="button"
                   onClick={saveShifts}
-                  className="flex h-12 w-full items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-sm font-black text-white shadow-lg transition hover:bg-emerald-700 active:scale-[0.97]"
+                  className="flex h-16 w-full items-center justify-center gap-2.5 rounded-2xl bg-emerald-600 text-xl font-black text-white shadow-lg transition hover:bg-emerald-700 active:scale-[0.97]"
                 >
-                  <Check className="h-4 w-4" />
+                  <Check className="h-6 w-6" />
                   शिफ्ट सेव करें
                 </button>
               </>
