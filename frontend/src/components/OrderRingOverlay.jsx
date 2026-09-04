@@ -1,17 +1,13 @@
 import { useEffect, useState } from "react";
 import { onRing, stopRing, isRinging } from "../lib/ringManager";
 
-/* Top bar shown while the phone is ringing (app open).
-   Ok → stops the sound / dismisses. Cancel → stops sound + dismisses.
-   The bar appears over the whole app, fixed at the top, like an
-   incoming-call notification. */
+/* Incoming-call style top bar while the phone rings (app open).
+   OK / Cancel both stop the sound and dismiss the bar. */
 export default function OrderRingOverlay() {
   const [visible, setVisible] = useState(isRinging());
 
   useEffect(() => {
-    const unsub = onRing((state) => {
-      setVisible(state.type === "start");
-    });
+    const unsub = onRing((state) => setVisible(state.type === "start"));
     return unsub;
   }, []);
 
@@ -23,89 +19,90 @@ export default function OrderRingOverlay() {
 
   return (
     <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        zIndex: 9999,
-        background:
-          "linear-gradient(90deg, #DC2626 0%, #B91C1C 60%, #991B1B 100%)",
-        color: "#fff",
-        boxShadow: "0 4px 16px rgba(0,0,0,0.35)",
-        fontFamily: "inherit",
-        paddingTop: "calc(env(safe-area-inset-top, 0px) + 8px)",
-        paddingBottom: "10px",
-        paddingLeft: "14px",
-        paddingRight: "14px",
-      }}
+      className="fixed inset-x-0 top-0 z-[9999] px-3"
+      style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "12px",
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 }}>
-          {/* ringing icon */}
-          <span
-            style={{
-              width: 12,
-              height: 12,
-              borderRadius: "50%",
-              background: "#FDE047",
-              animation: "ringblink 0.9s infinite",
-              flexShrink: 0,
-            }}
-          />
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, lineHeight: 1.2 }}>
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-red-600 via-red-700 to-rose-900 text-white shadow-2xl shadow-red-900/50 ring-1 ring-white/20 backdrop-blur-xl animate-in slide-in-from-top-4 fade-in duration-300">
+        {/* soft glow */}
+        <div className="pointer-events-none absolute -top-12 -right-10 h-44 w-44 rounded-full bg-white/10 blur-2xl" />
+        <div className="pointer-events-none absolute -bottom-16 -left-8 h-40 w-40 rounded-full bg-rose-400/20 blur-2xl" />
+
+        <div className="relative flex items-center gap-3 p-4 pl-5">
+          {/* pulsing phone icon */}
+          <div className="relative flex h-12 w-12 shrink-0 items-center justify-center">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white/25" />
+            <span className="relative flex h-12 w-12 items-center justify-center rounded-full bg-white/20 ring-2 ring-white/40">
+              <svg
+                viewBox="0 0 24 24"
+                width="22"
+                height="22"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+              </svg>
+            </span>
+          </div>
+
+          {/* text */}
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-red-100">
+              Incoming Order Ring
+            </p>
+            <p className="truncate text-base font-extrabold leading-tight">
               अभी ऑर्डर करें!
-            </div>
-            <div style={{ fontSize: 12, opacity: 0.9, marginTop: 2 }}>
+            </p>
+            <p className="truncate text-xs font-medium text-red-100/90">
               ऑर्डर का समय है — जल्दी करें
-            </div>
+            </p>
+          </div>
+
+          {/* actions */}
+          <div className="flex shrink-0 items-center gap-2">
+            <button
+              onClick={dismiss}
+              aria-label="Cancel"
+              className="flex h-10 w-14 items-center justify-center gap-1.5 rounded-full border border-white/30 bg-white/10 text-sm font-bold tracking-wide transition active:scale-95 hover:bg-white/20"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+              Cancel
+            </button>
+            <button
+              onClick={dismiss}
+              aria-label="OK"
+              className="flex h-10 items-center justify-center gap-1.5 rounded-full bg-white px-5 text-sm font-extrabold tracking-wide text-red-700 shadow-lg shadow-black/20 transition active:scale-95 hover:bg-red-50"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="14"
+                height="14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20 6 9 17l-5-5" />
+              </svg>
+              OK
+            </button>
           </div>
         </div>
-
-        <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
-          <button
-            onClick={dismiss}
-            style={{
-              background: "#fff",
-              color: "#991B1B",
-              border: "none",
-              fontWeight: 700,
-              fontSize: 14,
-              padding: "7px 18px",
-              borderRadius: "999px",
-              cursor: "pointer",
-            }}
-          >
-            OK
-          </button>
-          <button
-            onClick={dismiss}
-            style={{
-              background: "rgba(255,255,255,0.2)",
-              color: "#fff",
-              border: "1px solid rgba(255,255,255,0.7)",
-              fontWeight: 700,
-              fontSize: 14,
-              padding: "7px 18px",
-              borderRadius: "999px",
-              cursor: "pointer",
-            }}
-          >
-            Cancel
-          </button>
-        </div>
       </div>
-
-      {/* blink keyframes */}
-      <style>{`@keyframes ringblink { 0%,100%{opacity:1} 50%{opacity:.25} }`}</style>
     </div>
   );
 }
