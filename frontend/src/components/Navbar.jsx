@@ -236,6 +236,7 @@ const Navbar = () => {
 
   return (
     <header
+      style={{ paddingTop: "env(safe-area-inset-top)" }}
       className="
         fixed
         left-0
