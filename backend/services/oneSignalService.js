@@ -162,7 +162,10 @@ export const sendOrderRing = async ({
     .filter(Boolean);
 
   if (subscriptionIds.length === 0) {
-    throw new Error("No OneSignal subscribers found");
+    throw new Error(
+      "इन यूज़र के फ़ोन पर push notification सक्षम नहीं है — " +
+        "उन्होंने browser में notification permission नहीं दी है या iOS पर Home Screen से app install नहीं की है।",
+    );
   }
 
   const body = {
@@ -174,6 +177,17 @@ export const sendOrderRing = async ({
     url: url || process.env.RING_TAP_URL || "https://esetu.vercel.app/products",
 
     include_subscription_ids: subscriptionIds,
+
+    // Custom data — the app listens for type === "order-ring"
+    // and plays /orderRing.mp3 when the app is open.
+    data: { type: "order-ring" },
+
+    chrome_web_icon:
+      process.env.RING_ICON_URL || "https://esetu.vercel.app/logo2.png",
+    firefox_icon:
+      process.env.RING_ICON_URL || "https://esetu.vercel.app/logo2.png",
+    big_picture:
+      process.env.RING_ICON_URL || "https://esetu.vercel.app/logo2.png",
 
     // ── Call-like behaviour ─────────────────────────────
     priority: 10, //          Android: heads-up, like a call
