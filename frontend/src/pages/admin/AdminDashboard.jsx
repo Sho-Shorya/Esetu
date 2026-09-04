@@ -1,5 +1,6 @@
 import Features from "@/components/Features";
 import Hero from "@/components/Hero";
+import AdminNotificationPanel from "@/components/AdminNotificationPanel";
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useSelector } from "react-redux";
@@ -836,6 +837,12 @@ const AdminDashboard = () => {
           </div>
         </section>
         <div className="h-5" />
+
+        {/* =====================================================
+            NOTIFICATION PANEL
+        ===================================================== */}
+
+        <AdminNotificationPanel />
       </main>
     </div>
   );

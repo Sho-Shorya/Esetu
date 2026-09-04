@@ -111,12 +111,12 @@ export const getCompanyById = async (req, res) => {
 
 export const updateCompany = async (req, res) => {
   try {
-    const { companyId } = req.params;
+    const { id } = req.params;
     const { name } = req.body;
 
     let { categories } = req.body;
 
-    const company = await Company.findById(companyId);
+    const company = await Company.findById(id);
 
     if (!company) {
       return res.status(404).json({
@@ -132,7 +132,7 @@ export const updateCompany = async (req, res) => {
     let logo = company.logo;
 
     if (req.file) {
-      const uploaded = await uploadOnCloudinary(req.file.path);
+      const uploaded = await uploadOnCloudinary(req.file.buffer);
       logo = uploaded?.secure_url || company.logo;
     }
 
@@ -161,9 +161,9 @@ export const updateCompany = async (req, res) => {
 
 export const deleteCompany = async (req, res) => {
   try {
-    const { companyId } = req.params;
+    const { id } = req.params;
 
-    const company = await Company.findById(companyId);
+    const company = await Company.findById(id);
 
     if (!company) {
       return res.status(404).json({
@@ -172,7 +172,7 @@ export const deleteCompany = async (req, res) => {
       });
     }
 
-    await Company.findByIdAndDelete(companyId);
+    await Company.findByIdAndDelete(id);
 
     return res.status(200).json({
       success: true,

@@ -18,6 +18,10 @@ import AdminTodayOrders from "./pages/admin/AdminTodayOrders";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminUserProfile from "./pages/admin/AdminUserProfile";
 import AdminMoneyControl from "./pages/admin/AdminMoneyControl";
+import AdminCompanyPage from "./pages/admin/AdminCompanyPage";
+import AdminCategoryPage from "./pages/admin/AdminCategoryPage";
+import AdminRingsPage from "./pages/admin/AdminRingsPage";
+import RingsOverlay from "./components/RingsOverlay";
 import AdminProductView from "./components/AdminProductView";
 import AddProduct from "./components/AddProduct";
 import Cart from "./pages/Cart";
@@ -59,6 +63,8 @@ function App() {
     return <SplashScreen />;
   }
   return (
+    <>
+    {userData && <RingsOverlay />}
     <Routes>
       <Route
         path="/login"
@@ -245,6 +251,34 @@ function App() {
         }
       />
       <Route
+        path="/admin-companies"
+        element={
+          supplierData ? (
+            <>
+              <Nav />
+              <Navbar />
+              <AdminCompanyPage />
+            </>
+          ) : (
+            <Navigate to={"/admin-login"} />
+          )
+        }
+      />
+      <Route
+        path="/admin-categories"
+        element={
+          supplierData ? (
+            <>
+              <Nav />
+              <Navbar />
+              <AdminCategoryPage />
+            </>
+          ) : (
+            <Navigate to={"/admin-login"} />
+          )
+        }
+      />
+      <Route
         path="/profile/:userName"
         element={
           userData || supplierData ? (
@@ -358,7 +392,22 @@ function App() {
       <Route path="/T&C" element={<TermsAndConditions />} />
       <Route path="/refund-policy" element={<RefundCancellation />} />
       <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+      <Route
+        path="/admin-rings"
+        element={
+          supplierData ? (
+            <>
+              <Nav />
+              <Navbar />
+              <AdminRingsPage />
+            </>
+          ) : (
+            <Navigate to="/admin-login" replace />
+          )
+        }
+      />
     </Routes>
+    </>
   );
 }
 

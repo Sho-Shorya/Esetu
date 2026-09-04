@@ -11,6 +11,10 @@ import {
   TrendingUp,
   LayoutDashboard,
   Table,
+  BellRing,
+  Building2,
+  Layers3,
+  PhoneCall,
 } from "lucide-react";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
@@ -404,13 +408,15 @@ const Navbar = () => {
 
           <div className="flex items-center gap-2.5">
             {supplierData && (
-              <div
-                onClick={() => navigate("/daily-orders")}
-                className=" px-2 py-2 rounded-full border-2 border-spin border-emerald-400 border-dashed bg-emerald-100 gap-2 flex items-center"
-              >
-                <Table className="h-6 w-6 " />
-                {/* <p>ऑर्डर</p> */}
-              </div>
+              <>
+                <div
+                  onClick={() => navigate("/daily-orders")}
+                  className=" px-2 py-2 rounded-full border-2 border-spin border-emerald-400 border-dashed bg-emerald-100 gap-2 flex items-center"
+                >
+                  <Table className="h-6 w-6 " />
+                  {/* <p>ऑर्डर</p> */}
+                </div>
+              </>
             )}
 
             {userData && (
@@ -665,27 +671,95 @@ const Navbar = () => {
                       )}
 
                       {supplierData && (
-                        <Link
-                          to="/admin-dashboard"
-                          onClick={() => setShowUserMenu(false)}
-                          className="
-                            flex
-                            items-center
-                            gap-3
-                            rounded-xl
-                            px-3
-                            py-2.5
-                            text-sm
-                            font-semibold
-                            text-neutral-700
-                            transition
-                            hover:bg-emerald-50
-                            hover:text-emerald-600
-                          "
-                        >
-                          <LayoutDashboard className="h-4 w-4" />
-                          डैशबोर्ड
-                        </Link>
+                        <>
+                          <Link
+                            to="/admin-dashboard"
+                            onClick={() => setShowUserMenu(false)}
+                            className="
+                              flex
+                              items-center
+                              gap-3
+                              rounded-xl
+                              px-3
+                              py-2.5
+                              text-sm
+                              font-semibold
+                              text-neutral-700
+                              transition
+                              hover:bg-emerald-50
+                              hover:text-emerald-600
+                            "
+                          >
+                            <LayoutDashboard className="h-4 w-4" />
+                            डैशबोर्ड
+                          </Link>
+
+                          <Link
+                            to="/admin-companies"
+                            onClick={() => setShowUserMenu(false)}
+                            className="
+                              flex
+                              items-center
+                              gap-3
+                              rounded-xl
+                              px-3
+                              py-2.5
+                              text-sm
+                              font-semibold
+                              text-neutral-700
+                              transition
+                              hover:bg-emerald-50
+                              hover:text-emerald-600
+                            "
+                          >
+                            <Building2 className="h-4 w-4" />
+                            कंपनियाँ
+                          </Link>
+
+                          <Link
+                            to="/admin-categories"
+                            onClick={() => setShowUserMenu(false)}
+                            className="
+                              flex
+                              items-center
+                              gap-3
+                              rounded-xl
+                              px-3
+                              py-2.5
+                              text-sm
+                              font-semibold
+                              text-neutral-700
+                              transition
+                              hover:bg-emerald-50
+                              hover:text-emerald-600
+                            "
+                          >
+                            <Layers3 className="h-4 w-4" />
+                            कैटेगरी
+                          </Link>
+
+                          <Link
+                            to="/admin-rings"
+                            onClick={() => setShowUserMenu(false)}
+                            className="
+                              flex
+                              items-center
+                              gap-3
+                              rounded-xl
+                              px-3
+                              py-2.5
+                              text-sm
+                              font-semibold
+                              text-neutral-700
+                              transition
+                              hover:bg-red-50
+                              hover:text-red-600
+                            "
+                          >
+                            <PhoneCall className="h-4 w-4" />
+                            Order Ring
+                          </Link>
+                        </>
                       )}
                     </nav>
 
@@ -902,6 +976,73 @@ const Navbar = () => {
               <TrendingUp className="h-5 w-5" />
               प्रोडक्ट्स
             </Link>
+
+            {supplierData && (
+              <>
+                <Link
+                  to="/admin-companies"
+                  onClick={() => setSlideBar(false)}
+                  className="
+                    flex
+                    items-center
+                    gap-3
+                    rounded-xl
+                    px-3
+                    py-3
+                    text-base
+                    font-semibold
+                    text-neutral-700
+                    hover:bg-emerald-50
+                    hover:text-emerald-600
+                  "
+                >
+                  <Building2 className="h-5 w-5" />
+                  कंपनियाँ
+                </Link>
+
+                <Link
+                  to="/admin-categories"
+                  onClick={() => setSlideBar(false)}
+                  className="
+                    flex
+                    items-center
+                    gap-3
+                    rounded-xl
+                    px-3
+                    py-3
+                    text-base
+                    font-semibold
+                    text-neutral-700
+                    hover:bg-emerald-50
+                    hover:text-emerald-600
+                  "
+                >
+                  <Layers3 className="h-5 w-5" />
+                  कैटेगरी
+                </Link>
+
+                <Link
+                  to="/admin-rings"
+                  onClick={() => setSlideBar(false)}
+                  className="
+                    flex
+                    items-center
+                    gap-3
+                    rounded-xl
+                    px-3
+                    py-3
+                    text-base
+                    font-semibold
+                    text-neutral-700
+                    hover:bg-red-50
+                    hover:text-red-600
+                  "
+                >
+                  <PhoneCall className="h-5 w-5" />
+                  Order Ring
+                </Link>
+              </>
+            )}
 
             {!supplierData && userData && (
               <Link
