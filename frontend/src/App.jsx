@@ -21,7 +21,6 @@ import AdminMoneyControl from "./pages/admin/AdminMoneyControl";
 import AdminCompanyPage from "./pages/admin/AdminCompanyPage";
 import AdminCategoryPage from "./pages/admin/AdminCategoryPage";
 import AdminRingsPage from "./pages/admin/AdminRingsPage";
-import RingsOverlay from "./components/RingsOverlay";
 import AdminProductView from "./components/AdminProductView";
 import AddProduct from "./components/AddProduct";
 import Cart from "./pages/Cart";
@@ -63,8 +62,6 @@ function App() {
     return <SplashScreen />;
   }
   return (
-    <>
-    {userData && <RingsOverlay />}
     <Routes>
       <Route
         path="/login"
@@ -407,7 +404,6 @@ function App() {
         }
       />
     </Routes>
-    </>
   );
 }
 

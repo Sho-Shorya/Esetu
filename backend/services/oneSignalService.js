@@ -135,3 +135,69 @@ export const sendToUsers = async ({
     console.error("❌ OneSignal Targeted Error:", err.response?.data || err.message);
   }
 };
+
+/**
+ * "Order Ring" — push notification that behaves like an incoming call.
+ * High priority so Android shows it immediately as a heads-up notification,
+ * wakes the app in the background, and tapping it opens the app (products page).
+ * No DB storage, no polling, no in-app overlay.
+ */
+export const sendOrderRing = async ({
+  userIds = [],
+  title = "अभी ऑर्डर करें!",
+  message = "ऑर्डर का समय है!",
+  url = undefined,
+}) => {
+  if (!userIds || userIds.length === 0) {
+    throw new Error("No target users provided");
+  }
+
+  const users = await User.find({
+    _id: { $in: userIds },
+    oneSignalSubscriptionId: { $exists: true, $ne: null },
+  });
+
+  const subscriptionIds = users
+    .map((user) => user.oneSignalSubscriptionId)
+    .filter(Boolean);
+
+  if (subscriptionIds.length === 0) {
+    throw new Error("No OneSignal subscribers found");
+  }
+
+  const body = {
+    app_id: process.env.ONESIGNAL_APP_ID,
+    headings: { en: title, hi: title },
+    contents: { en: message, hi: message },
+
+    // Tap "Order Kare" → opens the app
+    url: url || process.env.RING_TAP_URL || "https://esetu.vercel.app/products",
+
+    include_subscription_ids: subscriptionIds,
+
+    // ── Call-like behaviour ─────────────────────────────
+    priority: 10, //          Android: heads-up, like a call
+    content_available: true, // Wake app in background
+    android_visibility: 1, //  Show full content on lock screen
+    android_accent_color: "#DC2626",
+    android_led_color: "#DC2626",
+    // ─────────────────────────────────────────────────────
+  };
+
+  const response = await axios.post(
+    "https://api.onesignal.com/notifications",
+    body,
+    {
+      headers: {
+        Authorization: `Key ${process.env.ONESIGNAL_REST_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+    },
+  );
+
+  console.log("🔔 Order Ring sent");
+  console.log("👥 Recipients:", subscriptionIds.length);
+  console.log("📨 OneSignal:", response.data?.id || response.data);
+
+  return { sentTo: subscriptionIds.length };
+};
