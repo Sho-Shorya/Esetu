@@ -1,11 +1,10 @@
 import OneSignal from "react-onesignal";
 import axios from "axios";
+import { playRing, stopRing } from "./lib/ringManager";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL;
 
 let initialized = false;
-
-const RING_MP3 = "/orderRing.mp3";
 
 /* =========================================================
    Helpers
@@ -69,34 +68,6 @@ const installAudioUnlock = () => {
 };
 
 /* =========================================================
-   Ring sound — plays /orderRing.mp3 for ~15s + vibration
-   ========================================================= */
-
-let audio = null;
-
-const playOrderRingSound = () => {
-  try {
-    if (!audio) {
-      audio = new Audio(RING_MP3);
-      audio.loop = true;
-    }
-    audio.currentTime = 0;
-    const p = audio.play();
-    if (p) p.catch(() => {});
-    setTimeout(() => {
-      try {
-        audio.pause();
-        audio.currentTime = 0;
-      } catch {}
-    }, 15000);
-  } catch {}
-
-  if (navigator.vibrate) {
-    navigator.vibrate([300, 120, 300, 120, 300, 120, 300, 120, 300, 120, 300]);
-  }
-};
-
-/* =========================================================
    Init
    ========================================================= */
 
@@ -122,12 +93,13 @@ export async function initOneSignal() {
 
     installAudioUnlock();
 
-    /* Foreground ring — plays orderRing.mp3 when an Order Ring
-       push is received while the app is open. */
+    /* Foreground ring — shows the top bar + plays orderRing.mp3 when
+       an Order Ring push is received while the app is open. */
     OneSignal.Notifications.addEventListener("foregroundWillDisplay", (event) => {
       const data = event?.notification?.additionalData || {};
       if (data?.type === "order-ring") {
-        playOrderRingSound();
+        stopRing();
+        playRing();
       }
     });
 

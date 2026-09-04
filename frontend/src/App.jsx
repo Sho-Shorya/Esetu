@@ -43,6 +43,7 @@ import ReturnPolicy from "./pages/ReturnPolicy";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import PaymentStatus from "./components/PaymentStatus";
 import DailyOrders from "./pages/DailyOrders";
+import OrderRingOverlay from "./components/OrderRingOverlay";
 function App() {
   const token = localStorage.getItem("token");
 
@@ -62,7 +63,9 @@ function App() {
     return <SplashScreen />;
   }
   return (
-    <Routes>
+    <>
+      <OrderRingOverlay />
+      <Routes>
       <Route
         path="/login"
         element={userData ? <Navigate to="/" replace /> : <Login />}
@@ -404,6 +407,7 @@ function App() {
         }
       />
     </Routes>
+    </>
   );
 }
 
