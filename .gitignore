@@ -1,2 +1,6 @@
 node_modules
 .env
+backend/pilot-audio/
+backend/.env.p1backup
+backend/pilot-evals/_*
+backend/_*.mjs

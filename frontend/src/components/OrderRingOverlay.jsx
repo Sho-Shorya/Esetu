@@ -49,10 +49,7 @@ export default function OrderRingOverlay() {
 
           {/* text */}
           <div className="min-w-0 flex-1">
-            <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-red-100">
-              Incoming Order Ring
-            </p>
-            <p className="truncate text-base font-extrabold leading-tight">
+            <p className="text-[10px] uppercase text-red-100 truncate text-base font-extrabold leading-tight">
               अभी ऑर्डर करें!
             </p>
             <p className="truncate text-xs font-medium text-red-100/90">
@@ -62,25 +59,6 @@ export default function OrderRingOverlay() {
 
           {/* actions */}
           <div className="flex shrink-0 items-center gap-2">
-            <button
-              onClick={dismiss}
-              aria-label="Cancel"
-              className="flex h-10 w-14 items-center justify-center gap-1.5 rounded-full border border-white/30 bg-white/10 text-sm font-bold tracking-wide transition active:scale-95 hover:bg-white/20"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                width="14"
-                height="14"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
-              Cancel
-            </button>
             <button
               onClick={dismiss}
               aria-label="OK"

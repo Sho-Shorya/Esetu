@@ -44,6 +44,9 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import PaymentStatus from "./components/PaymentStatus";
 import DailyOrders from "./pages/DailyOrders";
 import OrderRingOverlay from "./components/OrderRingOverlay";
+import PhoneOrderPilot from "./pages/pilot/PhoneOrderPilot";
+import Calling from "./pages/Calling";
+import SupplierPhone from "./pages/SupplierPhone";
 function App() {
   const token = localStorage.getItem("token");
 
@@ -66,347 +69,389 @@ function App() {
     <>
       <OrderRingOverlay />
       <Routes>
-      <Route
-        path="/login"
-        element={userData ? <Navigate to="/" replace /> : <Login />}
-      />
+        <Route
+          path="/login"
+          element={userData ? <Navigate to="/" replace /> : <Login />}
+        />
 
-      <Route
-        path="/signup"
-        element={userData ? <Navigate to="/" replace /> : <SignUp />}
-      />
-      <Route path="/verify-otp" element={<VerifyOtp />} />
-      <Route
-        path="/admin-login"
-        element={
-          supplierData ? (
-            <Navigate to="/admin-dashboard" replace />
-          ) : (
-            <AdminLogin />
-          )
-        }
-      />
+        <Route
+          path="/signup"
+          element={userData ? <Navigate to="/" replace /> : <SignUp />}
+        />
+        <Route path="/verify-otp" element={<VerifyOtp />} />
+        <Route
+          path="/admin-login"
+          element={
+            supplierData ? (
+              <Navigate to="/admin-dashboard" replace />
+            ) : (
+              <AdminLogin />
+            )
+          }
+        />
 
-      <Route
-        path="/admin-signup"
-        element={
-          supplierData ? (
-            <Navigate to="/admin-dashboard" replace />
-          ) : (
-            <AdminSignup />
-          )
-        }
-      />
-      <Route
-        path="/"
-        element={
-          userData ? (
-            <>
-              <Nav />
-              <Home />
-              <Navbar />
-              <Footer />
-            </>
-          ) : supplierData ? (
-            <Navigate to="/admin-login" replace />
-          ) : (
-            <Navigate to="/login" replace />
-          )
-        }
-      />
-      <Route
-        path="/products"
-        element={
-          userData ? (
-            <>
-              <Nav />
-              <Navbar />
-              <div className="mt-16">
-                <ProductsList />
-              </div>
-            </>
-          ) : (
-            <Navigate to="/login" replace />
-          )
-        }
-      />
-      <Route
-        path="/admin-dashboard"
-        element={
-          supplierData ? (
-            <>
-              <Nav />
-              <Navbar />
-              <AdminDashboard />
-            </>
-          ) : (
-            <Navigate to="/admin-login" replace />
-          )
-        }
-      />
-      <Route path="/order-success" element={<OrderSuccess />} />
-      <Route
-        path="/product-page"
-        element={
-          supplierData ? (
-            <>
-              <Nav />
-              <Navbar />
-              <AdminProductPage />
-              <Footer />
-            </>
-          ) : (
-            <Navigate to={"/admin-login"} />
-          )
-        }
-      />
-      <Route
-        path="/product-view"
-        element={
-          supplierData ? (
-            <>
-              <Nav />
-              <Navbar />
-              <div className="pb-20">
-                <AdminProductView />
-              </div>
+        <Route
+          path="/admin-signup"
+          element={
+            supplierData ? (
+              <Navigate to="/admin-dashboard" replace />
+            ) : (
+              <AdminSignup />
+            )
+          }
+        />
+        <Route
+          path="/"
+          element={
+            userData ? (
+              <>
+                <Nav />
+                <Home />
+                <Navbar />
+                <Footer />
+              </>
+            ) : supplierData ? (
+              <Navigate to="/admin-login" replace />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/calling"
+          element={
+            userData ? (
+              <>
+                <Nav />
+                <Calling />
+                <Navbar />
+              </>
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/supplier-phone"
+          element={
+            supplierData ? (
+              <>
+                <Nav />
+                <SupplierPhone />
+                <Navbar />
+              </>
+            ) : (
+              <Navigate to="/admin-login" replace />
+            )
+          }
+        />
+        <Route
+          path="/products"
+          element={
+            userData ? (
+              <>
+                <Nav />
+                <Navbar />
+                <div className="mt-16">
+                  <ProductsList />
+                </div>
+              </>
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/admin-dashboard"
+          element={
+            supplierData ? (
+              <>
+                <Nav />
+                <Navbar />
+                <AdminDashboard />
+              </>
+            ) : (
+              <Navigate to="/admin-login" replace />
+            )
+          }
+        />
+        <Route path="/order-success" element={<OrderSuccess />} />
+        <Route
+          path="/product-page"
+          element={
+            supplierData ? (
+              <>
+                <Nav />
+                <Navbar />
+                <AdminProductPage />
+                <Footer />
+              </>
+            ) : (
+              <Navigate to={"/admin-login"} />
+            )
+          }
+        />
+        <Route
+          path="/product-view"
+          element={
+            supplierData ? (
+              <>
+                <Nav />
+                <Navbar />
+                <div className="pb-20">
+                  <AdminProductView />
+                </div>
 
+                <Footer />
+              </>
+            ) : (
+              <Navigate to={"/admin-login"} />
+            )
+          }
+        />
+        <Route
+          path="/add-product"
+          element={
+            supplierData ? (
+              <>
+                <Nav />
+                <AddProduct />
+                <Navbar />
+              </>
+            ) : (
+              <Navigate to={"/admin-login"} />
+            )
+          }
+        />
+        <Route
+          path="/today-orders"
+          element={
+            supplierData ? (
+              <>
+                <Nav />
+                <div className="mx-5 mt-18 mb-20">
+                  <AdminTodayOrders />
+                </div>
+                <Navbar />
+              </>
+            ) : (
+              <Navigate to={"/admin-login"} />
+            )
+          }
+        />
+        <Route
+          path="/admin-users"
+          element={
+            supplierData ? (
+              <>
+                <Nav />
+                <AdminUsers />
+                <Navbar />
+              </>
+            ) : (
+              <Navigate to={"/admin-login"} />
+            )
+          }
+        />
+        <Route
+          path="/admin/user/:userId"
+          element={
+            supplierData ? (
+              <>
+                <Nav />
+                <AdminUserProfile />
+                <Navbar />
+              </>
+            ) : (
+              <Navigate to={"/admin-login"} />
+            )
+          }
+        />
+        <Route
+          path="/money-control"
+          element={
+            supplierData ? (
+              <>
+                <Nav />
+                <AdminMoneyControl />
+                <Navbar />
+              </>
+            ) : (
+              <Navigate to={"/admin-login"} />
+            )
+          }
+        />
+        <Route
+          path="/admin-companies"
+          element={
+            supplierData ? (
+              <>
+                <Nav />
+                <Navbar />
+                <AdminCompanyPage />
+              </>
+            ) : (
+              <Navigate to={"/admin-login"} />
+            )
+          }
+        />
+        <Route
+          path="/admin-categories"
+          element={
+            supplierData ? (
+              <>
+                <Nav />
+                <Navbar />
+                <AdminCategoryPage />
+              </>
+            ) : (
+              <Navigate to={"/admin-login"} />
+            )
+          }
+        />
+        <Route
+          path="/profile/:userName"
+          element={
+            userData || supplierData ? (
+              <>
+                <Navbar />
+                <Profile />
+              </>
+            ) : (
+              <Navigate to={"/login"} />
+            )
+          }
+        />
+        <Route
+          path="/editprofile"
+          element={
+            userData || supplierData ? (
+              <EditProfile />
+            ) : (
+              <Navigate to={"/login"} />
+            )
+          }
+        />
+        <Route
+          path="/cart"
+          element={
+            userData ? (
+              <>
+                {" "}
+                <Cart />
+                <Nav />
+                <Navbar />
+              </>
+            ) : (
+              <Navigate to={"/login"} />
+            )
+          }
+        />
+        <Route
+          path="/my-orders"
+          element={
+            userData ? (
+              <>
+                <Nav />
+                <Navbar />
+                <MyTodayOrder />
+              </>
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/order-history"
+          element={
+            userData ? (
+              <>
+                <Nav />
+                <Navbar />
+                <OrderHistory />
+              </>
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/orders"
+          element={
+            userData ? (
+              <>
+                <Nav />
+                <Navbar />
+                <OrderHistory />
+              </>
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
+        <Route
+          path="/edit-product/:id"
+          element={
+            <>
+              <Navbar />
+              <EditProduct />
+            </>
+          }
+        />
+        <Route path="/tracking/:supplierId" element={<LiveTracking />} />
+        <Route
+          path="/invoice-history"
+          element={
+            <>
+              <InvoiceHistory />
+              <Nav />
               <Footer />
-            </>
-          ) : (
-            <Navigate to={"/admin-login"} />
-          )
-        }
-      />
-      <Route
-        path="/add-product"
-        element={
-          supplierData ? (
-            <>
-              <Nav />
-              <AddProduct />
               <Navbar />
             </>
-          ) : (
-            <Navigate to={"/admin-login"} />
-          )
-        }
-      />
-      <Route
-        path="/today-orders"
-        element={
-          supplierData ? (
-            <>
-              <Nav />
-              <div className="mx-5 mt-18 mb-20">
-                <AdminTodayOrders />
-              </div>
-              <Navbar />
-            </>
-          ) : (
-            <Navigate to={"/admin-login"} />
-          )
-        }
-      />
-      <Route
-        path="/admin-users"
-        element={
-          supplierData ? (
-            <>
-              <Nav />
-              <AdminUsers />
-              <Navbar />
-            </>
-          ) : (
-            <Navigate to={"/admin-login"} />
-          )
-        }
-      />
-      <Route
-        path="/admin/user/:userId"
-        element={
-          supplierData ? (
-            <>
-              <Nav />
-              <AdminUserProfile />
-              <Navbar />
-            </>
-          ) : (
-            <Navigate to={"/admin-login"} />
-          )
-        }
-      />
-      <Route
-        path="/money-control"
-        element={
-          supplierData ? (
-            <>
-              <Nav />
-              <AdminMoneyControl />
-              <Navbar />
-            </>
-          ) : (
-            <Navigate to={"/admin-login"} />
-          )
-        }
-      />
-      <Route
-        path="/admin-companies"
-        element={
-          supplierData ? (
-            <>
-              <Nav />
-              <Navbar />
-              <AdminCompanyPage />
-            </>
-          ) : (
-            <Navigate to={"/admin-login"} />
-          )
-        }
-      />
-      <Route
-        path="/admin-categories"
-        element={
-          supplierData ? (
-            <>
-              <Nav />
-              <Navbar />
-              <AdminCategoryPage />
-            </>
-          ) : (
-            <Navigate to={"/admin-login"} />
-          )
-        }
-      />
-      <Route
-        path="/profile/:userName"
-        element={
-          userData || supplierData ? (
+          }
+        />
+        <Route
+          path="/daily-orders"
+          element={
             <>
               <Navbar />
-              <Profile />
+              <DailyOrders />
             </>
-          ) : (
-            <Navigate to={"/login"} />
-          )
-        }
-      />
-      <Route
-        path="/editprofile"
-        element={
-          userData || supplierData ? (
-            <EditProfile />
-          ) : (
-            <Navigate to={"/login"} />
-          )
-        }
-      />
-      <Route
-        path="/cart"
-        element={
-          userData ? (
-            <>
-              {" "}
-              <Cart />
-              <Nav />
-              <Navbar />
-            </>
-          ) : (
-            <Navigate to={"/login"} />
-          )
-        }
-      />
-      <Route
-        path="/my-orders"
-        element={
-          userData ? (
-            <>
-              <Nav />
-              <Navbar />
-              <MyTodayOrder />
-            </>
-          ) : (
-            <Navigate to="/login" replace />
-          )
-        }
-      />
-      <Route
-        path="/order-history"
-        element={
-          userData ? (
-            <>
-              <Nav />
-              <Navbar />
-              <OrderHistory />
-            </>
-          ) : (
-            <Navigate to="/login" replace />
-          )
-        }
-      />
-      <Route
-        path="/orders"
-        element={
-          userData ? (
-            <>
-              <Nav />
-              <Navbar />
-              <OrderHistory />
-            </>
-          ) : (
-            <Navigate to="/login" replace />
-          )
-        }
-      />
-      <Route
-        path="/edit-product/:id"
-        element={
-          <>
-            <Navbar />
-            <EditProduct />
-          </>
-        }
-      />
-      <Route path="/tracking/:supplierId" element={<LiveTracking />} />
-      <Route
-        path="/invoice-history"
-        element={
-          <>
-            <InvoiceHistory />
-            <Nav />
-            <Footer />
-            <Navbar />
-          </>
-        }
-      />
-      <Route
-        path="/daily-orders"
-        element={
-          <>
-            <Navbar />
-            <DailyOrders />
-          </>
-        }
-      />
-      <Route path="/payment/status" element={<PaymentStatus />} />
-      <Route path="/T&C" element={<TermsAndConditions />} />
-      <Route path="/refund-policy" element={<RefundCancellation />} />
-      <Route path="/privacy-policy" element={<PrivacyPolicy />} />
-      <Route
-        path="/admin-rings"
-        element={
-          supplierData ? (
-            <>
-              <Nav />
-              <Navbar />
-              <AdminRingsPage />
-            </>
-          ) : (
-            <Navigate to="/admin-login" replace />
-          )
-        }
-      />
-    </Routes>
+          }
+        />
+        <Route path="/payment/status" element={<PaymentStatus />} />
+        <Route path="/T&C" element={<TermsAndConditions />} />
+        <Route path="/refund-policy" element={<RefundCancellation />} />
+        <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+        <Route
+          path="/admin-rings"
+          element={
+            supplierData ? (
+              <>
+                <Nav />
+                <Navbar />
+                <AdminRingsPage />
+              </>
+            ) : (
+              <Navigate to="/admin-login" replace />
+            )
+          }
+        />
+        <Route
+          path="/pilot/phone-orders"
+          element={
+            supplierData ? (
+              <>
+                <Nav />
+                <PhoneOrderPilot />
+                <Navbar />
+              </>
+            ) : (
+              <Navigate to="/admin-login" replace />
+            )
+          }
+        />
+      </Routes>
     </>
   );
 }

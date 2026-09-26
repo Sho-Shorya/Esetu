@@ -1,9 +1,14 @@
-import { Home, History, ShoppingBag, IndianRupee } from "lucide-react";
+import { Home, History, ShoppingBag, IndianRupee, Phone } from "lucide-react";
 import { motion } from "framer-motion";
 import { NavLink } from "react-router-dom";
 import { useSelector } from "react-redux";
 
 const userLinks = [
+  {
+    to: "/calling",
+    label: "कॉल",
+    icon: Phone,
+  },
   {
     to: "/",
     label: "नया ऑर्डर",
@@ -22,6 +27,11 @@ const userLinks = [
 ];
 
 const supplierLinks = [
+  {
+    to: "/supplier-phone",
+    label: "फोन",
+    icon: Phone,
+  },
   {
     to: "/admin-dashboard",
     label: "डैशबोर्ड",

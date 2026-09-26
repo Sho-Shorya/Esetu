@@ -1,110 +1,19 @@
 import { Order } from "../models/orderModel.js";
 import { Cart } from "../models/cartModel.js";
 import { User } from "../models/userModel.js";
-import AppSetting from "../models/appSettingModel.js";
 import { OrderReceipt } from "../models/orderReceiptModel.js";
 import { sendNotification } from "../services/oneSignalService.js";
 import { generateOrderReceiptPDF } from "../services/orderReceiptPdfService.js";
-
-const DEFAULT_ORDER_CUTOFF = "12:00";
-
-/* ============================================================
-   SETTINGS
-============================================================ */
-
-const getAppSetting = async (key) => {
-  const record = await AppSetting.findOne({ key });
-  return record?.value ?? null;
-};
-
-const parseCutoffValue = (value) => {
-  const [hour = "12", minute = "00"] = String(value).split(":");
-
-  const cutoff = new Date();
-
-  cutoff.setHours(Number.parseInt(hour, 10) || 12);
-  cutoff.setMinutes(Number.parseInt(minute, 10) || 0);
-  cutoff.setSeconds(0);
-  cutoff.setMilliseconds(0);
-
-  return cutoff;
-};
-
-const getTodayCutoff = async () => {
-  const settingValue = await getAppSetting("dailyOrderCutoff");
-
-  return parseCutoffValue(settingValue || DEFAULT_ORDER_CUTOFF);
-};
-
-/* ============================================================
-   DATE HELPERS
-============================================================ */
-
-/*
-  Your users/admin are in India.
-
-  We explicitly use +05:30 here so date filtering doesn't
-  accidentally shift when Railway/server is running in UTC.
-*/
-
-const getIndiaDateRange = (dateString) => {
-  let dateKey = dateString;
-
-  if (!dateKey) {
-    const now = new Date();
-
-    const indiaString = now.toLocaleDateString("en-CA", {
-      timeZone: "Asia/Kolkata",
-    });
-
-    dateKey = indiaString;
-  }
-
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
-    throw new Error("Invalid date. Use YYYY-MM-DD.");
-  }
-
-  const start = new Date(`${dateKey}T00:00:00+05:30`);
-
-  const nextDay = new Date(start);
-  nextDay.setUTCDate(nextDay.getUTCDate() + 1);
-
-  return {
-    start,
-    end: new Date(nextDay.getTime() - 1),
-    dateKey,
-  };
-};
-
-const getTodayDateRange = () => {
-  return getIndiaDateRange();
-};
-
-/* ============================================================
-   ORDER HELPERS
-============================================================ */
-
-const isCutoffPassed = (cutoffTime) => {
-  if (!cutoffTime) return false;
-
-  return new Date() > new Date(cutoffTime);
-};
-
-const isWithinOrderingWindow = async () => {
-  const cutoffTime = await getTodayCutoff();
-
-  return new Date() <= cutoffTime;
-};
-
-const calculateOrderTotal = (items = []) => {
-  return items.reduce((sum, item) => {
-    return sum + Number(item.total || 0);
-  }, 0);
-};
-
-const getOrderItemCount = (items = []) => {
-  return items.reduce((sum, item) => sum + Number(item.qty || 0), 0);
-};
+import {
+  calculateOrderTotal,
+  getIndiaDateRange,
+  getTodayCutoff,
+  getTodayDateRange,
+  isCutoffPassed,
+  isWithinOrderingWindow,
+  sendOrderNotifications,
+  withUserOrderLock,
+} from "../services/orderCommonService.js";
 
 /* ============================================================
    POPULATED ORDER
@@ -158,47 +67,6 @@ export const syncTodayOrderFlags = async () => {
 /* ============================================================
    ADD ORDER
 ============================================================ */
-
-/*
- * Serializes order placement per user so simultaneous
- * requests (double-tap, deadline burst) cannot create
- * duplicate "today's" orders.
- */
-
-const userOrderLocks = new Map();
-
-const withUserOrderLock = async (userId, task) => {
-  const previous = userOrderLocks.get(userId) ?? Promise.resolve();
-
-  let release;
-  const gate = new Promise((resolve) => {
-    release = resolve;
-  });
-
-  const current = previous
-    .catch(() => {})
-    .then(task)
-    .then(
-      (value) => {
-        release();
-        return value;
-      },
-      (error) => {
-        release();
-        throw error;
-      },
-    );
-
-  userOrderLocks.set(userId, current);
-
-  try {
-    return await current;
-  } finally {
-    if (userOrderLocks.get(userId) === current) {
-      userOrderLocks.delete(userId);
-    }
-  }
-};
 
 export const addOrder = async (req, res) => {
   try {
@@ -525,72 +393,6 @@ export const addOrder = async (req, res) => {
   }
 };
 
-/* ============================================================
-   ORDER NOTIFICATIONS
-============================================================ */
-
-const sendOrderNotifications = async ({ user }) => {
-  try {
-    if (user.oneSignalSubscriptionId) {
-      setTimeout(async () => {
-        try {
-          await sendNotification({
-            subscriptionId: user.oneSignalSubscriptionId,
-
-            title: "🟠 ऑर्डर सफल",
-
-            message: "आपका ऑर्डर सफलतापूर्वक प्राप्त हो गया है।",
-
-            sendToAll: false,
-          });
-        } catch (error) {
-          console.error("Customer notification error:", error);
-        }
-      }, 3000);
-    }
-
-    const suppliers = await User.find({
-      role: "supplier",
-
-      oneSignalSubscriptionId: {
-        $exists: true,
-        $nin: [null, ""],
-      },
-    }).select("firstName lastName oneSignalSubscriptionId");
-
-    if (!suppliers.length) {
-      return;
-    }
-
-    const customerName =
-      [user.firstName, user.lastName].filter(Boolean).join(" ").trim() ||
-      "एक ग्राहक";
-
-    await Promise.allSettled(
-      suppliers.map(async (supplier) => {
-        if (!supplier.oneSignalSubscriptionId) {
-          return;
-        }
-
-        try {
-          await sendNotification({
-            subscriptionId: supplier.oneSignalSubscriptionId,
-
-            title: `🟢 ${customerName} का ऑर्डर आया है`,
-
-            message: "कृपया चेक करके, मंज़ूर या अस्वीकार करें।",
-
-            sendToAll: false,
-          });
-        } catch (error) {
-          console.error("Supplier notification failed:", error);
-        }
-      }),
-    );
-  } catch (error) {
-    console.error("sendOrderNotifications error:", error);
-  }
-};
 
 /* ============================================================
    GET TODAY ORDERS - USER

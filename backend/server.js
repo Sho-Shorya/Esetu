@@ -22,6 +22,10 @@ import routeRoute from "./routes/routeRoute.js";
 import paymentRouter from "./routes/paymentRouter.js";
 import notificationRouter from "./routes/notificationRoutes.js";
 import ringRouter from "./routes/ringRoutes.js";
+import phoneCallPilotRoute from "./routes/phoneCallPilotRoutes.js";
+import phoneCallRoute from "./routes/phoneCallRoutes.js";
+import pilotAnalyticsRoutes from "./routes/pilotAnalyticsRoutes.js";
+import { startPilotAudioRetention } from "./services/pilotAudioRetentionService.js";
 
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
 const app = express();
@@ -60,6 +64,16 @@ app.use("/api/v1/payment", paymentRouter);
 app.use("/api/v1/notify", notificationRouter);
 app.use("/api/v1/ring", ringRouter);
 
+/*
+ * e-Setu calling: the shopkeeper's 📞 कॉल tab and the supplier's 📞 फोन section,
+ * plus the controlled bridge from a confirmed phone-call draft to a real Order.
+ */
+app.use("/api/v1/phone-call", phoneCallRoute);
+/* Phone-call audio -> STT -> AI draft -> supplier review. */
+app.use("/api/v1/pilot/phone-call", phoneCallPilotRoute);
+/* Pilot accuracy analytics. */
+app.use("/api/v1/pilot", pilotAnalyticsRoutes);
+
 const scheduleMidnightSync = () => {
   const now = new Date();
   const nextMidnight = new Date(now);
@@ -91,6 +105,8 @@ app.listen(PORT, async () => {
 
     // ✅ Start scheduled notification cron
     startScheduledNotificationCron();
+
+    startPilotAudioRetention();
 
     console.log(`🚀 Server running on port ${PORT}`);
   } catch (err) {

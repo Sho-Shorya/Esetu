@@ -1,0 +1,4 @@
+backend/.env.p1backup
+backend/pilot-evals/_*.txt
+backend/pilot-evals/_*.log
+backend/pilot-evals/_*.err

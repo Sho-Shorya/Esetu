@@ -337,6 +337,128 @@ const orderSchema = new mongoose.Schema(
 
       default: null,
     },
+
+    /* ========================================================
+       SUPPLIER
+       ======================================================== */
+
+    /*
+     * Which supplier this order belongs to.
+     *
+     * Nullable on purpose: every existing order was created before this field
+     * existed, and addOrder() still does not set it. Callers must treat null as
+     * "not recorded", never as "no supplier".
+     */
+
+    supplierId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+
+      default: null,
+
+      index: true,
+    },
+
+    /* ========================================================
+       ORDER SOURCE / PROVENANCE
+       ======================================================== */
+
+    /*
+     * Which flow produced this order. "cart" is the historical default so every
+     * pre-existing order and the normal customer flow are unchanged.
+     */
+
+    source: {
+      type: String,
+
+      enum: ["cart", "phone-call", "manual"],
+
+      default: "cart",
+
+      index: true,
+    },
+
+    /*
+     * The PhoneCall this order came from, when source is "phone-call".
+     */
+
+    phoneCallId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "PhoneCall",
+
+      default: null,
+
+      index: true,
+    },
+
+    /*
+     * Every phone call that contributed to this order.
+     *
+     * A confirmed call that arrives while the customer already has a pending
+     * "today" order is merged into it, the same way the cart flow merges, so one
+     * order can end up carrying more than one call. This array keeps that full
+     * trail; the single `phoneCallPilotId` below only records the call that
+     * created the order.
+     */
+
+    phoneCallIds: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "PhoneCall" }],
+      default: [],
+    },
+
+    phoneCallPilotIds: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: "PhoneCallPilot" }],
+      default: [],
+    },
+
+    /*
+     * The confirmed phone-call draft this order was built from.
+     *
+     * This is the hard duplicate guard: the unique sparse index at the bottom
+     * of this file means MongoDB itself refuses a second order for the same
+     * confirmed call, even if two requests race.
+     */
+
+    phoneCallPilotId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "PhoneCallPilot",
+
+      default: null,
+
+      index: true,
+
+      unique: true,
+
+      sparse: true,
+    },
+
+    /* ========================================================
+       PHONE-CALL AUDIT
+       ======================================================== */
+
+    /*
+     * Frozen copy of the audit trail at the moment the order was created. The
+     * live call record keeps being updated, so the order carries its own copy
+     * of what was actually ordered and why.
+     */
+
+    phoneCallAudit: {
+      callerNumber: { type: String, default: null },
+      callAt: { type: Date, default: null },
+      transcript: { type: String, default: "" },
+      aiDraft: { type: mongoose.Schema.Types.Mixed, default: null },
+      aiConfidence: { type: mongoose.Schema.Types.Mixed, default: null },
+      confirmedAt: { type: Date, default: null },
+      confirmedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        default: null,
+      },
+      corrections: { type: [mongoose.Schema.Types.Mixed], default: [] },
+      removedItems: { type: [mongoose.Schema.Types.Mixed], default: [] },
+      addedItems: { type: [mongoose.Schema.Types.Mixed], default: [] },
+      finalItems: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    },
   },
 
   {
