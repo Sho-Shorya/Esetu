@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { toast } from "sonner";
 import Fuse from "fuse.js";
+import { Link } from "react-router-dom";
 import {
   AlertTriangle,
   Check,
@@ -41,8 +42,10 @@ import {
  *
  * One screen, no wizard, no extra navigation: the distributor reads the draft,
  * fixes the flagged lines and confirms. Every edit is autosaved to the pilot
- * record only. "Confirm Draft" writes a confirmed pilot draft and never
- * creates an e-Setu order.
+ * record only. The confirm tap also asks the backend bridge to write the real
+ * e-Setu order, so reviewing and ordering happen in one action — the supplier
+ * still reads every line first, and the bridge still revalidates each item
+ * against the live catalog before anything is written.
  */
 
 const AUTOSAVE_MS = 900;
@@ -639,10 +642,93 @@ const AddItemPanel = ({ catalog, onAdd, busy }) => {
   );
 };
 
+/* ------------------------------- order summary ------------------------------ */
+
+/**
+ * What the supplier's single tap actually produced.
+ *
+ * Read straight off the Order the backend returned, so it can never disagree
+ * with what was written: no second fetch, no re-derived totals.
+ */
+const OrderSummary = ({ order, orderId }) => {
+  const items = Array.isArray(order?.items) ? order.items : [];
+  const total = Number(order?.totalAmount);
+
+  return (
+    <div className="mt-3 space-y-2 rounded-2xl border border-emerald-200 bg-white p-3">
+      <p className="flex flex-wrap items-center gap-x-2 text-sm font-black text-emerald-900">
+        <CheckCheck className="h-4 w-4" />
+        ऑर्डर बन गया ✓
+        <span className="font-mono text-xs font-bold text-slate-500">
+          #{String(order?._id || orderId || "")}
+        </span>
+      </p>
+
+      {order?.createdAt && (
+        <p className="text-xs font-semibold text-slate-500">
+          {new Date(order.createdAt).toLocaleString("hi-IN", {
+            dateStyle: "medium",
+            timeStyle: "short",
+          })}
+        </p>
+      )}
+
+      {items.length > 0 && (
+        <ul className="space-y-1">
+          {items.map((item, index) => (
+            <li
+              key={`${item.productId}-${index}`}
+              className="flex items-baseline justify-between gap-2 text-sm text-slate-800"
+            >
+              <span className="min-w-0">
+                <span className="font-bold">{item.qty}</span> × {item.name}
+                {item.measurement ? (
+                  <span className="text-xs text-slate-500">
+                    {" "}
+                    ({item.measurement}
+                    {item.companyName ? `, ${item.companyName}` : ""})
+                  </span>
+                ) : null}
+              </span>
+              <span className="shrink-0 font-mono text-xs font-bold text-slate-600">
+                ₹{Number(item.total || 0).toFixed(2)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {Number.isFinite(total) && (
+        <p className="flex items-baseline justify-between border-t border-emerald-200 pt-2 text-sm font-black text-emerald-900">
+          <span>कुल</span>
+          <span className="font-mono">₹{total.toFixed(2)}</span>
+        </p>
+      )}
+
+      <Link
+        to="/today-orders"
+        className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-emerald-700 text-sm font-black text-emerald-800 transition hover:bg-emerald-50"
+      >
+        <ClipboardList className="h-4 w-4" />
+        ऑर्डर देखें
+      </Link>
+    </div>
+  );
+};
+
 /* -------------------------------- confirmed -------------------------------- */
 
-const ConfirmedPanel = ({ confirmed, onReopen, reopening }) => {
+const ConfirmedPanel = ({
+  confirmed,
+  order,
+  orderError,
+  creating,
+  onCreateOrder,
+  onReopen,
+  reopening,
+}) => {
   const [open, setOpen] = useState(false);
+  const hasOrder = Boolean(order?.order) || order?.alreadyCreated === true;
 
   return (
     <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50 p-4">
@@ -657,11 +743,46 @@ const ConfirmedPanel = ({ confirmed, onReopen, reopening }) => {
           <p className="text-xs font-semibold text-emerald-800">
             {new Date(confirmed.at).toLocaleString("en-IN")}
           </p>
-          <p className="mt-2 rounded-xl bg-white/70 p-2.5 text-xs font-bold text-emerald-900">
-            ड्राफ्ट सहेजा गया। अभी असली ऑर्डर नहीं बना है।
+          <p
+            className={`mt-2 rounded-xl p-2.5 text-xs font-bold ${
+              hasOrder
+                ? "bg-white/70 text-emerald-900"
+                : "bg-amber-100 text-amber-900"
+            }`}
+          >
+            {hasOrder
+              ? `ऑर्डर बन गया${order.merged ? " और आज के ऑर्डर में जोड़ा गया" : ""}।`
+              : "ड्राफ्ट पक्का है, पर अभी असली ऑर्डर नहीं बना है।"}
           </p>
         </div>
       </div>
+
+      {orderError && (
+        <p
+          role="alert"
+          className="mt-3 rounded-xl bg-red-100 p-2.5 text-xs font-bold text-red-800"
+        >
+          {orderError}
+        </p>
+      )}
+
+      {!hasOrder && (
+        <button
+          type="button"
+          disabled={creating}
+          onClick={onCreateOrder}
+          className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 text-sm font-black text-white transition hover:bg-emerald-800 disabled:opacity-40"
+        >
+          {creating ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <CheckCheck className="h-4 w-4" />
+          )}
+          {creating ? "ऑर्डर बन रहा है..." : "अब ऑर्डर बनाएँ"}
+        </button>
+      )}
+
+      {hasOrder && <OrderSummary order={order?.order} orderId={order?.orderId} />}
 
       <button
         type="button"
@@ -742,6 +863,11 @@ const PilotOrderReview = ({ call, onChanged }) => {
   const [confirming, setConfirming] = useState(false);
   const [reopening, setReopening] = useState(false);
   const [adding, setAdding] = useState(false);
+  // The real order this confirm produced, or null while it does not exist yet.
+  // Kept separate from the review payload so the panel can tell "confirmed" and
+  // "ordered" apart, which are two different facts.
+  const [order, setOrder] = useState(null);
+  const [orderError, setOrderError] = useState("");
 
   const dirtyRef = useRef(false);
   const timerRef = useRef(null);
@@ -766,6 +892,24 @@ const PilotOrderReview = ({ call, onChanged }) => {
         clarificationQuestion: reviewData.clarificationQuestion || "",
       });
       setLines((reviewData.review?.lines || []).map((line) => ({ ...line })));
+      // A draft confirmed earlier may already have produced an order, so the
+      // panel is seeded from the stored snapshot rather than assuming a page
+      // load means "not ordered yet".
+      const confirmed = reviewData.review?.confirmed;
+      setOrder(
+        confirmed?.orderCreated === true
+          ? {
+              orderId: confirmed.orderId || null,
+              merged: false,
+              alreadyCreated: true,
+              // The stored snapshot proves an order exists but carries no
+              // order body, so the panel shows the fact without inventing
+              // line items it would have to re-derive.
+              order: null,
+            }
+          : null,
+      );
+      setOrderError("");
       dirtyRef.current = false;
     } catch (error) {
       toast.error(
@@ -901,19 +1045,33 @@ const PilotOrderReview = ({ call, onChanged }) => {
   const handleConfirm = useCallback(async () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     setConfirming(true);
+    setOrderError("");
     try {
-      const data = await confirmPilotDraft(pilotCallId);
+      // One tap: the supplier has just read every line, so the same action
+      // confirms the draft and asks the bridge for the real order.
+      const data = await confirmPilotDraft(pilotCallId, { createOrder: true });
       setReview(data.review);
       setLines(data.review.lines.map((line) => ({ ...line })));
+      setOrder({
+        orderId: data.orderId || null,
+        merged: data.merged === true,
+        alreadyCreated: data.alreadyCreated === true,
+        order: data.order || null,
+      });
       onChanged?.();
-      toast.success(data.message || "Draft confirmed. No order was created.");
+      toast.success(data.message || "ऑर्डर बन गया।");
     } catch (error) {
       const payload = error.response?.data;
       if (payload?.review) {
         setReview(payload.review);
         setLines(payload.review.lines.map((line) => ({ ...line })));
       }
-      toast.error(payload?.message || "Could not confirm the draft.");
+      // A refused order still leaves a confirmed draft behind, so the supplier
+      // keeps their work and can see exactly what stopped it.
+      const message =
+        payload?.message || "ऑर्डर नहीं बन सका। जाँचकर दोबारा कोशिश करें।";
+      setOrderError(message);
+      toast.error(message);
     } finally {
       setConfirming(false);
     }
@@ -959,6 +1117,9 @@ const PilotOrderReview = ({ call, onChanged }) => {
     kept.some((line) => line.key === blocker.key),
   );
   const isConfirmed = review.status === "confirmed";
+  // The bridge refuses to attach an order to a customer it cannot identify, so
+  // saying so before the tap is kinder than a refusal after it.
+  const customerMatched = call.customer?.matched === true;
 
   return (
     <section className="rounded-[24px] border border-slate-200 bg-white p-4">
@@ -982,8 +1143,12 @@ const PilotOrderReview = ({ call, onChanged }) => {
         <div className="mt-3">
           <ConfirmedPanel
             confirmed={review.confirmed}
-            reopening={reopening}
+            order={order}
+            orderError={orderError}
+            creating={confirming}
+            onCreateOrder={handleConfirm}
             onReopen={handleReopen}
+            reopening={reopening}
           />
         </div>
       ) : (
@@ -1076,14 +1241,22 @@ const PilotOrderReview = ({ call, onChanged }) => {
               ) : (
                 <CheckCheck className="h-5 w-5" />
               )}
-              ड्राफ्ट पक्का करें
+              {confirming ? "ऑर्डर बन रहा है..." : "ऑर्डर पक्का करें"}
             </button>
 
             {review.report?.confirmable ? (
-              <p className="mt-2 flex items-start gap-1.5 text-xs font-semibold text-slate-500">
-                <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                सामान की जाँच सहेजी जाएगी। अभी असली ऑर्डर नहीं बनेगा।
-              </p>
+              customerMatched ? (
+                <p className="mt-2 flex items-start gap-1.5 text-xs font-semibold text-slate-500">
+                  <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  एक ही टैप में ड्राफ्ट पक्का होगा और e-Setu में असली ऑर्डर बनेगा।
+                </p>
+              ) : (
+                <p className="mt-2 flex items-start gap-1.5 text-xs font-bold text-amber-700">
+                  <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  ग्राहक का नंबर मैच नहीं हुआ। ऑर्डर तभी बनेगा जब ग्राहक पहचान
+                  जाए, इसलिए पहले ग्राहक चुनें।
+                </p>
+              )
             ) : (
               <p className="mt-2 flex items-start gap-1.5 text-xs font-bold text-amber-700">
                 <X className="mt-0.5 h-3.5 w-3.5 shrink-0" />

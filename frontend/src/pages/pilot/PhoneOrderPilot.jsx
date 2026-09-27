@@ -8,9 +8,10 @@ import {
   Loader2,
   Mic,
   Pause,
+  Phone,
   Play,
   RefreshCw,
-  Upload,
+  RotateCcw,
   UserCheck,
   UserX,
 } from "lucide-react";
@@ -19,10 +20,11 @@ import {
   fetchPilotCalls,
   fetchPilotCapability,
   createOrderFromConfirmedPilotCall,
+  retryPilotProcessing,
   uploadTestAudio,
 } from "@/services/phoneOrderPilotApi";
 import PilotOrderReview from "./PilotOrderReview";
-import PilotAccuracyDashboard from "./PilotAccuracyDashboard";
+import { Link } from "react-router-dom";
 
 const ACTIVE_STAGES = [
   "new",
@@ -36,22 +38,27 @@ const ACTIVE_STAGES = [
 ];
 
 const STAGE_LABELS = {
-  new: "Queued",
-  call_answered: "Call answered",
-  call_ended: "Call ended",
-  recording_ready: "Recording ready",
-  processing_recording: "Fetching recording",
-  downloading_recording: "Downloading audio",
-  transcribing: "Transcribing",
-  extracting: "Extracting items",
-  completed: "Ready for review",
-  failed: "Failed",
+  new: "कतार में",
+  call_answered: "कॉल पर बात हुई",
+  call_ended: "कॉल पूरी हुई",
+  recording_ready: "रिकॉर्डिंग तैयार",
+  processing_recording: "रिकॉर्डिंग लाई जा रही है",
+  downloading_recording: "ऑडियो आ रहा है",
+  transcribing: "आवाज़ लिखी जा रही है",
+  extracting: "सामान जुदा किए जा रहे हैं",
+  completed: "जाँच के लिए तैयार",
+  failed: "जाँच नहीं हो पाई",
 };
 
 const PIPELINE_POLL_MS = 15000;
 
 const formatDate = (value) =>
-  value ? new Date(value).toLocaleString("en-IN") : "—";
+  value
+    ? new Date(value).toLocaleString("hi-IN", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
+    : "—";
 
 const formatDuration = (seconds) => {
   const total = Number(seconds);
@@ -61,12 +68,12 @@ const formatDuration = (seconds) => {
   return `${mins}:${String(secs).padStart(2, "0")}`;
 };
 
-const formatBytes = (bytes) => {
+export const formatBytes = (bytes) => {
   const value = Number(bytes);
   if (!Number.isFinite(value) || value <= 0) return "—";
-  if (value < 1024) return `${value} B`;
-  if (value < 1024 * 1024) return `${(value / 1024).toFixed(0)} KB`;
-  return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  if (value < 1024) return `${value} बाइट`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(0)} केबी`;
+  return `${(value / (1024 * 1024)).toFixed(1)} एमबी`;
 };
 
 const stageBadgeClass = (stage) => {
@@ -76,7 +83,7 @@ const stageBadgeClass = (stage) => {
   return "bg-slate-100 text-slate-600";
 };
 
-/** Lazily pulls the private recording and plays it from a blob URL. */
+/** निजी रिकॉर्डिंग को खींचकर ब्लॉब URL से चलाता है। */
 const AudioPlayer = ({ pilotCallId }) => {
   const [objectUrl, setObjectUrl] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -96,7 +103,7 @@ const AudioPlayer = ({ pilotCallId }) => {
       setLoading(true);
       setObjectUrl(await fetchPilotAudioObjectUrl(pilotCallId));
     } catch {
-      toast.error("Recording could not be loaded.");
+      toast.error("रिकॉर्डिंग नहीं खुल सकी।");
     } finally {
       setLoading(false);
     }
@@ -107,7 +114,9 @@ const AudioPlayer = ({ pilotCallId }) => {
     const node = audioRef.current;
     if (!node) return;
     if (node.paused) {
-      await node.play().catch(() => toast.error("Playback was blocked."));
+      await node
+        .play()
+        .catch(() => toast.error("ऑडियो चलाने की इजाज़त नहीं मिली।"));
     } else {
       node.pause();
     }
@@ -120,7 +129,7 @@ const AudioPlayer = ({ pilotCallId }) => {
         onClick={toggle}
         disabled={loading}
         className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-slate-900 text-white transition hover:bg-slate-700 disabled:opacity-50"
-        title={playing ? "Pause" : "Play"}
+        title={playing ? "रोकें" : "चलाएँ"}
       >
         {loading ? (
           <Loader2 className="h-5 w-5 animate-spin" />
@@ -166,82 +175,38 @@ const SpeakerSegments = ({ speakers }) => {
   );
 };
 
-const TestAudioPanel = ({ capability, onUploaded }) => {
-  const inputRef = useRef(null);
-  const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
+/**
+ * Re-runs a failed pipeline from the recording the backend already holds, so
+ * the supplier never has to find and re-upload the file by hand.
+ */
+const RetryProcessingButton = ({ pilotCallId, onRetried }) => {
+  const [busy, setBusy] = useState(false);
 
-  if (!capability?.testAudioEnabled) {
-    return (
-      <section className="rounded-[24px] border border-dashed border-slate-300 bg-white p-5">
-        <h3 className="flex items-center gap-2 text-lg font-black text-slate-700">
-          <FlaskConical className="h-5 w-5" />
-          Test audio
-        </h3>
-        <p className="mt-2 text-sm text-slate-500">
-          Disabled. Set <code>PILOT_TEST_AUDIO_ENABLED=true</code> in a
-          non-production backend to upload a real recording and exercise the
-          pipeline.
-        </p>
-      </section>
-    );
-  }
-
-  const handleFile = async (event) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
+  const run = async () => {
+    setBusy(true);
     try {
-      setUploading(true);
-      setProgress(0);
-      await uploadTestAudio(file, (event) => {
-        if (event.total) {
-          setProgress(Math.round((event.loaded * 100) / event.total));
-        }
-      });
-      toast.success("Recording uploaded. Transcription started.");
-      onUploaded();
+      const data = await retryPilotProcessing(pilotCallId);
+      toast.success(data.message || "प्रोसेसिंग फिर से शुरू हो गई।");
+      onRetried?.();
     } catch (error) {
       toast.error(
-        error.response?.data?.message || "Upload failed. Is it really audio?",
+        error.response?.data?.message || "फिर कोशिश नहीं हो पाई।",
       );
     } finally {
-      setUploading(false);
-      if (inputRef.current) inputRef.current.value = "";
+      setBusy(false);
     }
   };
 
   return (
-    <section className="rounded-[24px] border border-violet-200 bg-violet-50/60 p-5">
-      <h3 className="flex items-center gap-2 text-lg font-black text-violet-800">
-        <FlaskConical className="h-5 w-5" />
-        Test audio
-      </h3>
-      <p className="mt-1 text-sm text-violet-700">
-        Upload a real recording of an order call. Transcription is never faked —
-        if the audio is unusable, the run fails.
-      </p>
-
-      <label className="mt-3 flex h-14 cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-violet-300 bg-white text-base font-bold text-violet-700 transition hover:bg-violet-50">
-        {uploading ? (
-          <Loader2 className="h-5 w-5 animate-spin" />
-        ) : (
-          <Upload className="h-5 w-5" />
-        )}
-        {uploading ? `Uploading ${progress}%` : "Choose audio file"}
-        <input
-          ref={inputRef}
-          type="file"
-          accept="audio/*"
-          onChange={handleFile}
-          className="hidden"
-        />
-      </label>
-
-      <p className="mt-2 text-xs text-violet-500">
-        Max {formatBytes(capability.maxAudioBytes)} per file.
-      </p>
-    </section>
+    <button
+      type="button"
+      disabled={busy}
+      onClick={run}
+      className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-red-700 text-sm font-black text-white transition hover:bg-red-800 disabled:opacity-50"
+    >
+      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
+      {busy ? "प्रोसेस हो रहा है..." : "फिर कोशिश करें"}
+    </button>
   );
 };
 
@@ -278,18 +243,20 @@ const CallDetail = ({ call, onReviewChanged }) => {
         <section className="rounded-[24px] border border-slate-200 bg-white p-5">
           <h4 className="mb-3 flex items-center gap-2 text-base font-black text-slate-800">
             <Mic className="h-5 w-5" />
-            Recording
+            कॉल रिकॉर्डिंग
           </h4>
           <AudioPlayer pilotCallId={call._id} />
           <p className="mt-2 text-xs text-slate-400">
-            {formatBytes(call.audio.bytes)} · {call.audio.contentType} · stored
-            privately, streamed only to suppliers
+            {formatBytes(call.audio.bytes)} · {call.audio.contentType} · निजी
+            तौर पर सहेजी गई, सिर्फ़ सप्लायर को दिखती है
           </p>
         </section>
       )}
 
       <section className="rounded-[24px] border border-slate-200 bg-white p-5">
-        <h4 className="mb-2 text-base font-black text-slate-800">Transcript</h4>
+        <h4 className="mb-2 text-base font-black text-slate-800">
+          कॉल की लिखावट
+        </h4>
 
         {stt.status === "completed" && stt.transcript ? (
           <>
@@ -302,9 +269,11 @@ const CallDetail = ({ call, onReviewChanged }) => {
                   {stt.languageCode}
                 </span>
               )}
-              <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">
-                channels merged
-              </span>
+              {stt.channelsMerged && (
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">
+                  चैनल जोड़े गए
+                </span>
+              )}
               <span
                 className={`rounded-full px-2.5 py-1 ${
                   stt.speakerAttributionAvailable
@@ -313,8 +282,8 @@ const CallDetail = ({ call, onReviewChanged }) => {
                 }`}
               >
                 {stt.speakerAttributionAvailable
-                  ? "diarized"
-                  : "no speaker data"}
+                  ? "आवाज़ें अलग पहचानी गईं"
+                  : "आवाज़ की जानकारी नहीं"}
               </span>
             </div>
 
@@ -325,7 +294,7 @@ const CallDetail = ({ call, onReviewChanged }) => {
             {Array.isArray(stt.speakers) && stt.speakers.length > 0 && (
               <div className="mt-3">
                 <p className="mb-1 text-xs font-bold uppercase tracking-wide text-slate-400">
-                  Speaker segments
+                  आवाज़ के हिस्से
                 </p>
                 <SpeakerSegments speakers={stt.speakers} />
               </div>
@@ -334,7 +303,7 @@ const CallDetail = ({ call, onReviewChanged }) => {
             {stt.timestamps?.chunks?.length > 0 && (
               <details className="mt-3">
                 <summary className="cursor-pointer text-sm font-bold text-slate-600">
-                  Timestamps ({stt.timestamps.chunks.length} chunks)
+                  समय के हिस्से ({stt.timestamps.chunks.length})
                 </summary>
                 <div className="mt-2 max-h-48 space-y-1 overflow-y-auto">
                   {stt.timestamps.chunks.map((chunk, index) => (
@@ -351,11 +320,11 @@ const CallDetail = ({ call, onReviewChanged }) => {
           </>
         ) : stt.status === "failed" ? (
           <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">
-            {stt.error || "Transcription failed."}
+            {stt.error || "आवाज़ नहीं लिखी जा सकी।"}
           </p>
         ) : (
           <p className="text-sm text-slate-400">
-            Waiting for transcription… ({STAGE_LABELS[stage] || stage})
+            आवाज़ लिखी जा रही है… ({STAGE_LABELS[stage] || stage})
           </p>
         )}
       </section>
@@ -364,17 +333,17 @@ const CallDetail = ({ call, onReviewChanged }) => {
         <div className="mb-2 flex items-center justify-between">
           <h4 className="flex items-center gap-2 text-base font-black text-slate-800">
             <ClipboardList className="h-5 w-5" />
-            Order draft
+            ऑर्डर ड्राफ्ट
           </h4>
           {call.extraction?.needsReview &&
             call.review?.status !== "confirmed" && (
               <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700">
-                needs human review
+                इंसानी जाँच बाकी
               </span>
             )}
           {call.review?.status === "confirmed" && (
             <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">
-              draft confirmed
+              ड्राफ्ट पक्का हुआ
             </span>
           )}
         </div>
@@ -384,7 +353,7 @@ const CallDetail = ({ call, onReviewChanged }) => {
             {call.extraction.validationErrors?.length > 0 && (
               <details className="mb-3">
                 <summary className="cursor-pointer text-sm font-bold text-slate-600">
-                  Catalog validation ({call.extraction.validationErrors.length})
+                  कैटलॉग जाँच ({call.extraction.validationErrors.length})
                 </summary>
                 <ul className="mt-1 space-y-0.5 text-xs text-slate-500">
                   {call.extraction.validationErrors.map((message, index) => (
@@ -399,12 +368,12 @@ const CallDetail = ({ call, onReviewChanged }) => {
             ) : (
               <>
                 <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-600">
-                  No order intent detected in this call.
+                  इस कॉल में ऑर्डर का इरादा नहीं मिला।
                 </p>
                 {draft.unresolved?.length > 0 && (
                   <div className="mt-3 rounded-xl bg-amber-50 p-3">
                     <p className="text-sm font-black text-amber-800">
-                      Unresolved ({draft.unresolved.length})
+                      अनसुलझे सामान ({draft.unresolved.length})
                     </p>
                     <ul className="mt-1 space-y-0.5 text-sm text-amber-900">
                       {draft.unresolved.map((entry, index) => (
@@ -427,8 +396,8 @@ const CallDetail = ({ call, onReviewChanged }) => {
                 ) : (
                   <>
                     <p className="text-sm font-bold text-emerald-900">
-                      जाँचा हुआ ऑर्डर तैयार है। पक्का करने पर e-Setu में असली
-                      ऑर्डर बनेगा।
+                      ड्राफ्ट पक्का है पर इस कॉल का ऑर्डर अभी नहीं बना। यहाँ से
+                      बनाया जा सकता है।
                     </p>
                     <button
                       type="button"
@@ -441,7 +410,7 @@ const CallDetail = ({ call, onReviewChanged }) => {
                       ) : null}
                       {creatingOrder
                         ? "ऑर्डर बन रहा है..."
-                        : "ऑर्डर पक्का करें"}
+                        : "इस कॉल से ऑर्डर बनाएँ"}
                     </button>
                     {orderError && (
                       <p
@@ -458,32 +427,33 @@ const CallDetail = ({ call, onReviewChanged }) => {
           </>
         ) : call.extraction?.status === "failed" ? (
           <p className="rounded-xl bg-red-50 p-3 text-sm text-red-700">
-            {call.extraction.error || "Extraction failed."}
+            {call.extraction.error || "सामान जुदा नहीं हो सके।"}
           </p>
         ) : (
-          <p className="text-sm text-slate-400">Extraction pending…</p>
+          <p className="text-sm text-slate-400">सामान जुदा हो रहे हैं…</p>
         )}
       </section>
 
       <section className="rounded-[24px] border border-slate-200 bg-white p-5">
-        <h4 className="mb-2 text-base font-black text-slate-800">Caller</h4>
+        <h4 className="mb-2 text-base font-black text-slate-800">
+          कॉल करने वाला
+        </h4>
         <p className="text-sm text-slate-600">
-          <span className="font-bold">Raw:</span> {caller.raw || "—"}
+          <span className="font-bold">कच्चा नंबर:</span> {caller.raw || "—"}
         </p>
         <p className="text-sm text-slate-600">
-          <span className="font-bold">Normalized:</span>{" "}
-          {caller.normalized || "not recognised"}
+          <span className="font-bold">पहचाना गया:</span>{" "}
+          {caller.normalized || "नहीं पहचाना गया"}
           {caller.method ? ` (${caller.method})` : ""}
         </p>
         <p className="mt-2 flex items-center gap-2 text-sm font-bold">
           {customer.matched ? (
             <span className="flex items-center gap-1.5 text-emerald-700">
-              <UserCheck className="h-4 w-4" /> exact match to an existing
-              customer
+              <UserCheck className="h-4 w-4" /> मौजूदा ग्राहक से पूरा मैच
             </span>
           ) : (
             <span className="flex items-center gap-1.5 text-amber-700">
-              <UserX className="h-4 w-4" /> no exact customer match
+              <UserX className="h-4 w-4" /> कोई ग्राहक मैच नहीं हुआ
             </span>
           )}
         </p>
@@ -493,11 +463,16 @@ const CallDetail = ({ call, onReviewChanged }) => {
         <section className="rounded-[24px] border border-red-200 bg-red-50 p-5">
           <h4 className="flex items-center gap-2 text-base font-black text-red-800">
             <AlertTriangle className="h-5 w-5" />
-            Pipeline error
+            ऑर्डर तैयार नहीं हो पाया
           </h4>
           <p className="mt-1 text-sm text-red-700">
             {call.pipeline.error.message}
           </p>
+          <p className="mt-1 text-sm text-red-700">
+            रिकॉर्डिंग सुरक्षित है। दोबारा कोशिश करने पर वही रिकॉर्डिंग फिर से
+            पढ़ी जाएगी।
+          </p>
+          <RetryProcessingButton pilotCallId={call._id} onRetried={onReviewChanged} />
         </section>
       )}
     </div>
@@ -512,18 +487,31 @@ const PhoneOrderPilot = () => {
   const [capability, setCapability] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const firstLoadRef = useRef(true);
 
   const loadCalls = useCallback(async ({ quiet = false } = {}) => {
     try {
       const data = await fetchPilotCalls(50);
       setCalls(data.calls || []);
       setError(null);
+      // Set loading to false after the first successful load
+      if (firstLoadRef.current) {
+        firstLoadRef.current = false;
+        setLoading(false);
+      }
     } catch (err) {
-      setError(err.response?.data?.message || "Could not load pilot calls.");
+      setError(
+        err.response?.data?.message ||
+          "कॉल्स नहीं खुल सकीं। दोबारा कोशिश करें।",
+      );
+      if (firstLoadRef.current) {
+        firstLoadRef.current = false;
+        setLoading(false);
+      }
     } finally {
       // The first render is already the loading state, so a quiet reload never
       // blanks the list the supplier is working in.
-      if (!quiet) setLoading(false);
+      if (!quiet && !firstLoadRef.current) setLoading(false);
     }
   }, []);
 
@@ -560,37 +548,76 @@ const PhoneOrderPilot = () => {
         </button>
 
         <section className="relative overflow-hidden rounded-[28px] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700 p-6 text-white shadow-xl">
-          <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10">
-              <Mic className="h-7 w-7" />
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10">
+                <Phone className="h-7 w-7" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-black tracking-tight sm:text-3xl">
+                  फोन ऑर्डर जाँच
+                </h1>
+                <p className="text-[10px] font-medium text-slate-300">
+                  कॉल सुनें · ऑर्डर ड्राफ्ट जाँचें
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-3xl font-black tracking-tight sm:text-4xl">
-                Phone Order Pilot
-              </h1>
-              <p className="text-sm font-medium text-slate-300">
-                Phase 1 · calls → transcript → draft items
-              </p>
-            </div>
+            <Link
+              to="/pilot/test-audio"
+              className="flex h-10 items-center gap-2 rounded-full bg-white/10 px-4 text-sm font-bold text-white transition hover:bg-white/20"
+            >
+              <FlaskConical className="h-4 w-4" />
+              टेस्ट
+            </Link>
           </div>
-
-          <p className="mt-4 flex items-start gap-2 rounded-2xl bg-amber-400/15 p-3 text-sm font-bold text-amber-200">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            Pilot only. This screen creates no orders, touches no carts and
-            changes no customers. Every result needs human review.
-          </p>
         </section>
 
-        <div className="mt-4">
-          <TestAudioPanel
-            capability={capability}
-            onUploaded={() => loadCalls({ quiet: true })}
-          />
-        </div>
+        {/* <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+          {[
+            {
+              label: "कुल कॉल्स",
+              value: calls.length,
+              className: "bg-white text-slate-900 border-slate-200",
+            },
+            {
+              label: "जाँच बाकी",
+              value: calls.filter(
+                (call) =>
+                  call.pipeline?.stage === "completed" &&
+                  call.review?.status !== "confirmed",
+              ).length,
+              className: "bg-violet-50 text-violet-700 border-violet-200",
+            },
+            {
+              label: "ड्राफ्ट पक्का",
+              value: calls.filter(
+                (call) => call.review?.status === "confirmed",
+              ).length,
+              className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+            },
+            {
+              label: "अनसुलझे सामान",
+              value: calls.reduce(
+                (sum, call) =>
+                  sum + (call.extraction?.draft?.unresolved?.length || 0),
+                0,
+              ),
+              className: "bg-amber-50 text-amber-700 border-amber-200",
+            },
+          ].map((stat) => (
+            <div
+              key={stat.label}
+              className={`rounded-2xl border p-3 text-center ${stat.className}`}
+            >
+              <p className="text-2xl font-black leading-none">{stat.value}</p>
+              <p className="mt-1.5 text-xs font-bold">{stat.label}</p>
+            </div>
+          ))}
+        </div> */}
 
         <div className="mt-4 flex items-center justify-between">
           <h2 className="text-xl font-black text-slate-900">
-            Calls ({calls.length})
+            कॉल्स ({calls.length})
           </h2>
           <button
             type="button"
@@ -598,7 +625,7 @@ const PhoneOrderPilot = () => {
             className="flex h-10 items-center gap-1.5 rounded-full border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 transition hover:bg-slate-50"
           >
             <RefreshCw className="h-4 w-4" />
-            Refresh
+            रिफ्रेश
           </button>
         </div>
 
@@ -614,7 +641,7 @@ const PhoneOrderPilot = () => {
           </div>
         ) : calls.length === 0 ? (
           <p className="mt-4 rounded-[24px] border border-dashed border-slate-300 bg-white p-8 text-center text-base text-slate-400">
-            No pilot calls yet.
+            अभी कोई कॉल नहीं आई। जब ग्राहक फ़ोन पर ऑर्डर देगा, तब यहाँ दिखेगी।
           </p>
         ) : (
           <div className="mt-3 space-y-3">
@@ -636,11 +663,11 @@ const PhoneOrderPilot = () => {
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
                         <p className="truncate text-lg font-black text-slate-900">
-                          {call.caller?.raw || "unknown caller"}
+                          {call.caller?.raw || "अनजान नंबर"}
                         </p>
                         <p className="text-sm text-slate-500">
                           {formatDate(call.createdAt)} ·{" "}
-                          {call.source === "test" ? "test audio" : "live call"}{" "}
+                          {call.source === "test" ? "टेस्ट ऑडियो" : "असली कॉल"}{" "}
                           · {formatDuration(call.provider?.durationSeconds)}
                         </p>
                       </div>
@@ -654,32 +681,32 @@ const PhoneOrderPilot = () => {
                     <div className="mt-2 flex flex-wrap gap-1.5 text-xs font-bold">
                       {call.customer?.matched ? (
                         <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-700">
-                          customer matched
+                          ग्राहक पहचाना गया
                         </span>
                       ) : (
                         <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-700">
-                          customer unknown
+                          ग्राहक अनजान
                         </span>
                       )}
                       {call.extraction?.draft?.itemCount > 0 && (
                         <span className="rounded-full bg-sky-100 px-2.5 py-1 text-sky-700">
-                          {call.extraction.draft.itemCount} item(s)
+                          {call.extraction.draft.itemCount} सामान
                         </span>
                       )}
                       {call.extraction?.draft?.unresolved?.length > 0 && (
                         <span className="rounded-full bg-orange-100 px-2.5 py-1 text-orange-700">
-                          {call.extraction.draft.unresolved.length} unresolved
+                          {call.extraction.draft.unresolved.length} अनसुलझे
                         </span>
                       )}
                       {call.audio?.available && (
                         <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">
-                          audio stored
+                          ऑडियो सहेजा
                         </span>
                       )}
                       {stage === "completed" &&
                         call.review?.status === "confirmed" && (
                           <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-700">
-                            draft confirmed
+                            ड्राफ्ट पक्का
                           </span>
                         )}
                       {stage === "completed" &&
@@ -687,8 +714,8 @@ const PhoneOrderPilot = () => {
                         call.extraction?.draft?.isOrderIntent && (
                           <span className="rounded-full bg-violet-100 px-2.5 py-1 text-violet-700">
                             {call.review?.blocking > 0
-                              ? `${call.review.blocking} to review`
-                              : "awaiting review"}
+                              ? `${call.review.blocking} जाँच बाकी`
+                              : "जाँच बाकी"}
                           </span>
                         )}
                     </div>
@@ -706,20 +733,90 @@ const PhoneOrderPilot = () => {
           </div>
         )}
 
-        {/*
-          Accuracy sits below the call list on purpose: the daily job is working
-          through calls, and the dashboard is for looking at the trend afterwards.
-          Clicking a caller reopens that call's existing detail above.
-        */}
-        <div className="mt-8 rounded-[24px] border border-slate-200 bg-slate-50 p-4 sm:p-5">
-          <PilotAccuracyDashboard
-            onOpenCall={(pilotCallId) => {
-              setSelectedId(pilotCallId);
-              loadCalls({ quiet: true });
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-          />
-        </div>
+        {/* Real Orders Section */}
+        {calls.some((call) => call.review?.status === "confirmed") && (
+          <section className="mt-8">
+            <h2 className="text-xl font-black text-slate-900 mb-4">
+              असली ऑर्डर (
+              {calls.filter((c) => c.review?.status === "confirmed").length})
+            </h2>
+            <div className="space-y-3">
+              {calls
+                .filter((call) => call.review?.status === "confirmed")
+                .map((call) => (
+                  <div
+                    key={call._id}
+                    className="rounded-[24px] border border-emerald-200 bg-emerald-50 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-lg font-black text-slate-900">
+                          {call.caller?.raw || "अनजान नंबर"}
+                        </p>
+                        <p className="text-sm text-slate-500">
+                          {formatDate(call.createdAt)} ·{" "}
+                          {call.review?.orderCreated
+                            ? "ऑर्डर बन चुका है"
+                            : "ड्राफ्ट पक्का हुआ"}
+                          · {call.extraction?.draft?.itemCount || 0} सामान
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {call.review?.orderCreated ? (
+                          <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
+                            ऑर्डर पूरा
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedId(call._id)}
+                            className="flex h-9 items-center gap-1.5 rounded-full bg-emerald-600 px-3 text-xs font-bold text-white transition hover:bg-emerald-700"
+                          >
+                            <ClipboardList className="h-3.5 w-3.5" />
+                            जाँचें
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="flex h-9 items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 text-xs font-bold text-slate-700 transition hover:bg-slate-50"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          दोहराएँ
+                        </button>
+                        <button
+                          type="button"
+                          className="flex h-9 items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-3 text-xs font-bold text-amber-700 transition hover:bg-amber-100"
+                        >
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                          संशोधित करें
+                        </button>
+                      </div>
+                    </div>
+                    {call.extraction?.draft?.items?.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {call.extraction.draft.items
+                          .slice(0, 5)
+                          .map((item, idx) => (
+                            <span
+                              key={idx}
+                              className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-slate-700 border border-slate-200"
+                            >
+                              {item.productName || item.spokenName} ×{" "}
+                              {item.quantity} {item.unit || ""}
+                            </span>
+                          ))}
+                        {call.extraction.draft.items.length > 5 && (
+                          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-500">
+                            +{call.extraction.draft.items.length - 5} और
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+            </div>
+          </section>
+        )}
       </main>
     </div>
   );

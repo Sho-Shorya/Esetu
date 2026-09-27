@@ -13,6 +13,7 @@ import {
   sendOrderNotifications,
   withUserOrderLock,
 } from "./orderCommonService.js";
+import { hasAudioRecord } from "./pilotAudioStorage.js";
 
 /**
  * The controlled bridge from a confirmed phone call to a real e-Setu Order.
@@ -54,7 +55,10 @@ const isObjectId = (value) =>
 
 const audioAuditReference = (pilotDoc) => ({
   pilotCallId: String(pilotDoc?._id || ""),
-  available: Boolean(pilotDoc?.audio?.fileName),
+  // Presence of the stored record, not of a local file, so a durable recording
+  // is audited as available. Reference only: it never gates the order, and it
+  // deliberately carries no storage identifier.
+  available: hasAudioRecord(pilotDoc?.audio),
   source: pilotDoc?.audio?.source || null,
   contentType: pilotDoc?.audio?.contentType || null,
   bytes: pilotDoc?.audio?.bytes ?? null,
@@ -65,7 +69,13 @@ const audioAuditReference = (pilotDoc) => ({
  * A claim older than this is assumed dead. A crashed request must not lock a
  * call out of ordering forever.
  */
-const CLAIM_TIMEOUT_MS = Number(
+/**
+ * How long an order-creation claim is honoured before it is treated as dead.
+ * Exported because the audio retention sweep asks the same question when
+ * deciding whether a recording is still wanted by an order being created right
+ * now, and two copies of this number would eventually disagree.
+ */
+export const PHONE_ORDER_CLAIM_TIMEOUT_MS = Number(
   process.env.PHONE_ORDER_CLAIM_TIMEOUT_MS || 5 * 60 * 1000,
 );
 
@@ -284,7 +294,7 @@ export const revalidateConfirmedItems = async (items = []) => {
  */
 export const claimOrderCreation = async ({ pilotCallId, userId, now } = {}) => {
   const at = now || new Date();
-  const staleBefore = new Date(at.getTime() - CLAIM_TIMEOUT_MS);
+  const staleBefore = new Date(at.getTime() - PHONE_ORDER_CLAIM_TIMEOUT_MS);
 
   return PhoneCallPilot.findOneAndUpdate(
     {

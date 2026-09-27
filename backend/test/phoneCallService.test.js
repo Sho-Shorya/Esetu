@@ -270,6 +270,71 @@ test("a supplier can never be attached as the customer", async () => {
   }
 });
 
+test("identifying a supplier-dialled call writes the customer to the other side", async () => {
+  // The supplier placed this call, so the supplier is on "from" and the
+  // shopkeeper is on "to". Writing the customer to "from" here would overwrite
+  // the supplier with the customer and lose the real caller, which then also
+  // makes the order resolve to the wrong party.
+  PhoneCall.findById = async () => ({
+    _id: OBJECT_IDS.call,
+    direction: "outgoing",
+    initiatedByRole: "supplier",
+    from: { userId: OBJECT_IDS.supplier, matched: true, name: "Supplier" },
+    to: { matched: false, phoneNumber: "9000000000" },
+    pilotCallId: null,
+    async save() {},
+  });
+
+  try {
+    const result = await withUsers(() =>
+      identifyCallCustomer({
+        callId: OBJECT_IDS.call,
+        customerUserId: OBJECT_IDS.shopkeeper,
+        byUserId: OBJECT_IDS.supplier,
+      }),
+    );
+
+    assert.equal(result.ok, true);
+    assert.equal(String(result.call.to.userId), OBJECT_IDS.shopkeeper);
+    assert.equal(result.call.to.matchMethod, "manual");
+    assert.equal(
+      String(result.call.from.userId),
+      OBJECT_IDS.supplier,
+      "the real caller is left alone",
+    );
+  } finally {
+    restore();
+  }
+});
+
+test("a shopkeeper-dialled call still records the customer as the caller", async () => {
+  PhoneCall.findById = async () => ({
+    _id: OBJECT_IDS.call,
+    direction: "incoming",
+    initiatedByRole: "shopkeeper",
+    from: { matched: false, phoneNumber: "9000000000" },
+    to: { userId: OBJECT_IDS.supplier },
+    pilotCallId: null,
+    async save() {},
+  });
+
+  try {
+    const result = await withUsers(() =>
+      identifyCallCustomer({
+        callId: OBJECT_IDS.call,
+        customerUserId: OBJECT_IDS.shopkeeper,
+        byUserId: OBJECT_IDS.supplier,
+      }),
+    );
+
+    assert.equal(result.ok, true);
+    assert.equal(String(result.call.from.userId), OBJECT_IDS.shopkeeper);
+    assert.equal(String(result.call.to.userId), OBJECT_IDS.supplier);
+  } finally {
+    restore();
+  }
+});
+
 /* =============================== call writing ============================== */
 
 test("a dialled call is recorded with the real supplier, not a guess", async () => {

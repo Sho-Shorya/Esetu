@@ -435,11 +435,15 @@ export const identifyCallCustomer = async ({
     };
   }
 
-  // The customer is the caller. The shopkeeper dials the supplier, so on both an
-  // outgoing call and an incoming one the customer is the "from" side.
-  const callerSide = "from";
+  // Which side of the call holds the customer depends on who dialled. When the
+  // supplier placed the call the supplier is on "from" and the shopkeeper is on
+  // "to" (see logSupplierOutgoingCall), so writing "from" here would overwrite
+  // the supplier with the customer and lose the real caller. Any other call
+  // reached this app as the shopkeeper dialling the supplier, so the customer
+  // is "from".
+  const customerSide = call.initiatedByRole === "supplier" ? "to" : "from";
 
-  call[callerSide] = {
+  call[customerSide] = {
     userId: user._id,
     phoneNumber: String(user.phoneNumber),
     name: displayName(user),
@@ -514,7 +518,15 @@ export const toPublicCall = (doc) => {
     durationSeconds: plain.durationSeconds ?? null,
     pilotCallId: plain.pilotCallId || null,
     orderId: plain.orderId || null,
-    hasAudio: Boolean(plain.recording?.fileName || plain.pilotCallId),
+    // A durable recording has no file name, so presence is decided by the
+    // stored record rather than by a path. No storage identifier is ever sent
+    // to a client: the audio itself is only reachable through the authenticated
+    // pilot routes.
+    hasAudio: Boolean(
+      plain.recording?.fileName ||
+        plain.recording?.publicId ||
+        plain.pilotCallId,
+    ),
     lastError: plain.lastError?.message || null,
     waitUntil: plain.waitUntil || null,
     waitNoticeSentAt: plain.waitNoticeSentAt || null,
@@ -551,8 +563,20 @@ export const listCallsForUser = async ({ userId, limit = 30 } = {}) => {
 };
 
 /** The supplier's phone section: recent calls, newest first. */
-export const listCallsForSupplier = async ({ supplierId, limit = 30 } = {}) => {
-  const calls = await PhoneCall.find({ supplierId })
+export const listCallsForSupplier = async ({
+  supplierId,
+  limit = 30,
+  date,
+} = {}) => {
+  const query = { supplierId };
+  if (date) {
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(date);
+    end.setHours(23, 59, 59, 999);
+    query.callAt = { $gte: start, $lte: end };
+  }
+  const calls = await PhoneCall.find(query)
     .sort({ callAt: -1, createdAt: -1 })
     .limit(Math.min(Number(limit) || 30, 100))
     .lean();
@@ -568,11 +592,20 @@ export const listCallsForSupplier = async ({ supplierId, limit = 30 } = {}) => {
 export const listCallsNeedingReview = async ({
   supplierId,
   limit = 30,
+  date,
 } = {}) => {
-  const calls = await PhoneCall.find({
+  const query = {
     supplierId,
     processingStatus: { $in: ["draft_ready", "needs_review", "confirmed"] },
-  })
+  };
+  if (date) {
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(date);
+    end.setHours(23, 59, 59, 999);
+    query.callAt = { $gte: start, $lte: end };
+  }
+  const calls = await PhoneCall.find(query)
     .sort({ callAt: 1 })
     .limit(Math.min(Number(limit) || 30, 100))
     .lean();
@@ -581,14 +614,26 @@ export const listCallsNeedingReview = async ({
 };
 
 /** Calls the supplier has not picked up, or that produced no audio. */
-export const listIncomingCalls = async ({ supplierId, limit = 30 } = {}) => {
-  const calls = await PhoneCall.find({
+export const listIncomingCalls = async ({
+  supplierId,
+  limit = 30,
+  date,
+} = {}) => {
+  const query = {
     supplierId,
     $or: [
       { direction: "incoming" },
       { status: { $in: ["missed", "no_answer"] } },
     ],
-  })
+  };
+  if (date) {
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(date);
+    end.setHours(23, 59, 59, 999);
+    query.callAt = { $gte: start, $lte: end };
+  }
+  const calls = await PhoneCall.find(query)
     .sort({ callAt: -1, createdAt: -1 })
     .limit(Math.min(Number(limit) || 30, 100))
     .lean();

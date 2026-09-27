@@ -3,14 +3,29 @@ import fsp from "fs/promises";
 import path from "path";
 import crypto from "crypto";
 import { fileURLToPath } from "url";
+import {
+  deleteAudioFromCloud,
+  describeAudioStorage,
+  downloadAudioFromCloud,
+  getAudioBackend,
+  isCloudAudioConfigured,
+  uploadAudioToCloud,
+} from "./pilotAudioCloud.js";
 
 /**
- * Phase 1 pilot private audio storage.
+ * Recording storage for the phone-order flow.
  *
- * Audio never gets a public URL. It is written to a directory that is not
- * tracked by git and is only reachable through an authenticated backend route.
- * On Railway this filesystem is ephemeral, which is acceptable for a pilot and
- * must not be treated as durable production storage.
+ * Audio never gets a public URL. It is written either to durable cloud storage
+ * (the production path, see `pilotAudioCloud.js`) or to a directory that is not
+ * tracked by git, and is only ever reachable through an authenticated backend
+ * route.
+ *
+ * The local disk backend is kept because it is the only thing that works without
+ * cloud credentials, it is what the developer tooling and the existing tests
+ * use, and it still holds every recording taken before the move to durable
+ * storage. Callers never need to know which backend a given recording is on:
+ * they save a buffer, or hand back the record they stored, and the helpers
+ * below do the right thing for either.
  */
 
 const SERVICE_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -80,6 +95,20 @@ export const ensureAudioDir = async () => {
   return dir;
 };
 
+/**
+ * Scratch space for recordings pulled back out of durable storage. It sits
+ * inside the audio directory so the same volume is used, but in a subdirectory
+ * so the retention sweep, which only reads files in the top level, never treats
+ * a short-lived working copy as a stored recording.
+ */
+const getAudioTempDir = () => path.join(getAudioDir(), "tmp");
+
+const ensureAudioTempDir = async () => {
+  const dir = getAudioTempDir();
+  await fsp.mkdir(dir, { recursive: true });
+  return dir;
+};
+
 const safeSegment = (value) =>
   String(value || "")
     .replace(/[^a-zA-Z0-9_-]+/g, "-")
@@ -89,6 +118,11 @@ const safeSegment = (value) =>
 /**
  * Persists an in-memory audio payload. Throws on empty, oversized or
  * obviously non-audio input so nothing bogus reaches the STT step.
+ *
+ * The returned record is what gets stored on the pilot document, and it is what
+ * every later read, retry and delete goes through. `storage` says which backend
+ * holds the bytes: a local recording has `fileName` and no `publicId`, a durable
+ * one has `publicId` and no `fileName`.
  */
 export const saveAudioBuffer = async ({
   buffer,
@@ -117,6 +151,31 @@ export const saveAudioBuffer = async ({
     throw error;
   }
 
+  const descriptor = {
+    contentType: String(contentType || "application/octet-stream"),
+    bytes: buffer.length,
+    sha256: getAudioDigest(buffer),
+    originalName: originalName ? path.basename(String(originalName)) : null,
+  };
+
+  if (getAudioBackend() === "cloud") {
+    // Durable storage is written before anything else happens, so a failure
+    // here is a failed upload and never a "processing started" response. The
+    // prefix is only used for local file names, never for a stored asset path.
+    const stored = await uploadAudioToCloud({
+      buffer,
+      contentType: descriptor.contentType,
+    });
+
+    return {
+      ...descriptor,
+      storage: "cloud",
+      publicId: stored.publicId,
+      format: stored.format || null,
+      fileName: null,
+    };
+  }
+
   await ensureAudioDir();
 
   const fileName = `${safeSegment(prefix)}-${Date.now()}-${crypto.randomBytes(4).toString("hex")}${extensionFor(contentType, originalName)}`;
@@ -125,12 +184,137 @@ export const saveAudioBuffer = async ({
   await fsp.writeFile(filePath, buffer);
 
   return {
+    ...descriptor,
+    storage: "local",
+    publicId: null,
+    format: null,
     fileName,
-    contentType: String(contentType || "application/octet-stream"),
-    bytes: buffer.length,
-    sha256: getAudioDigest(buffer),
-    originalName: originalName ? path.basename(String(originalName)) : null,
   };
+};
+
+/**
+ * The storage columns shared by a pilot's `audio` and a call's `recording`.
+ * Both subdocuments store the same thing in the same columns, so this is the
+ * single place that decides how a saved recording is represented in Mongo.
+ */
+export const storageColumns = (saved) => ({
+  storage: saved?.storage === "cloud" ? "cloud" : "local",
+  publicId: saved?.publicId || null,
+  format: saved?.format || null,
+  fileName: saved?.fileName || null,
+  contentType: saved?.contentType || null,
+  bytes: saved?.bytes ?? null,
+  sha256: saved?.sha256 || null,
+  originalName: saved?.originalName || null,
+});
+
+/**
+ * Normalises whatever a caller has to hand into a storage record.
+ *
+ * A bare file name is treated as a local recording, which is exactly what every
+ * document written before durable storage holds, so those calls keep working
+ * untouched.
+ */
+export const normalizeAudioRecord = (record) => {
+  if (!record) return null;
+  if (typeof record === "string") {
+    return record ? { storage: "local", fileName: record, publicId: null } : null;
+  }
+
+  if (record.publicId) {
+    return {
+      storage: "cloud",
+      publicId: record.publicId,
+      format: record.format || null,
+      fileName: null,
+    };
+  }
+
+  if (record.fileName) {
+    return {
+      storage: "local",
+      fileName: record.fileName,
+      publicId: null,
+      format: null,
+    };
+  }
+
+  return null;
+};
+
+/** True when a recording exists on either backend. */
+export const hasAudioRecord = (record) => Boolean(normalizeAudioRecord(record));
+
+/**
+ * Resolves a stored recording to a local file the STT step can read.
+ *
+ * A local recording is used where it lies. A durable one is fetched into a
+ * working copy carrying the original extension, because the transcoder decides
+ * how to normalise the file from its name. `temporary` says whether the caller
+ * has to clean the file up.
+ */
+export const materializeAudio = async (record) => {
+  const audio = normalizeAudioRecord(record);
+  if (!audio) {
+    const error = new Error("This call has no stored recording.");
+    error.code = "AUDIO_NOT_STORED";
+    throw error;
+  }
+
+  if (audio.storage === "local") {
+    const filePath = resolveAudioPath(audio.fileName);
+    if (!fs.existsSync(filePath)) {
+      const error = new Error(
+        "The stored recording is no longer on this server.",
+      );
+      error.code = "AUDIO_FILE_MISSING";
+      throw error;
+    }
+    return {
+      filePath,
+      fileName: audio.fileName,
+      temporary: false,
+      cleanup: async () => {},
+    };
+  }
+
+  const buffer = await downloadAudioFromCloud({
+    publicId: audio.publicId,
+    format: audio.format,
+    maxBytes: getMaxAudioBytes(),
+  });
+
+  const dir = await ensureAudioTempDir();
+  // The extension carries the real format, so the transcoder reads the working
+  // copy exactly as it would have read the original upload.
+  const extension = safeSegment(audio.format) || "wav";
+  const fileName = `retry-${Date.now()}-${crypto.randomBytes(4).toString("hex")}.${extension}`;
+  const filePath = path.join(dir, fileName);
+
+  await fsp.writeFile(filePath, buffer);
+
+  return {
+    filePath,
+    fileName,
+    temporary: true,
+    cleanup: async () => {
+      await fsp.unlink(filePath).catch(() => {});
+    },
+  };
+};
+
+/**
+ * Runs work against a local copy of a stored recording and always removes the
+ * working copy afterwards. Used by transcription and by the authenticated
+ * playback route so neither has to remember the cleanup itself.
+ */
+export const withAudioFile = async (record, run) => {
+  const handle = await materializeAudio(record);
+  try {
+    return await run(handle);
+  } finally {
+    if (handle.temporary) await handle.cleanup();
+  }
 };
 
 /**
@@ -159,22 +343,51 @@ export const resolveAudioPath = (fileName) => {
   return path.join(getAudioDir(), baseName);
 };
 
-export const audioExists = (fileName) => {
+/**
+ * Whether a recording is retrievable. For a durable recording this reports the
+ * stored identifier and configured credentials rather than probing the remote
+ * asset, so the check stays cheap enough to sit in a request path.
+ */
+export const audioExists = (record) => {
+  const audio = normalizeAudioRecord(record);
+  if (!audio) return false;
+  if (audio.storage === "cloud") {
+    return Boolean(audio.publicId) && isCloudAudioConfigured();
+  }
+
   try {
-    return fs.existsSync(resolveAudioPath(fileName));
+    return fs.existsSync(resolveAudioPath(audio.fileName));
   } catch {
     return false;
   }
 };
 
-export const removeAudio = async (fileName) => {
+/**
+ * Deletes a recording from whichever backend holds it. Accepts a stored record
+ * or a bare file name, so the callers that only have a file name keep working.
+ */
+export const removeAudio = async (record) => {
+  const audio = normalizeAudioRecord(record);
+  if (!audio) return false;
+
+  if (audio.storage === "cloud") {
+    if (!isCloudAudioConfigured()) return false;
+    try {
+      return await deleteAudioFromCloud({ publicId: audio.publicId });
+    } catch {
+      return false;
+    }
+  }
+
   try {
-    await fsp.unlink(resolveAudioPath(fileName));
+    await fsp.unlink(resolveAudioPath(audio.fileName));
     return true;
   } catch {
     return false;
   }
 };
+
+export { describeAudioStorage, getAudioBackend, isCloudAudioConfigured };
 
 export const getAudioRetentionDays = () =>
   Math.max(1, Number(process.env.PILOT_AUDIO_RETENTION_DAYS) || 30);

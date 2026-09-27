@@ -3,7 +3,11 @@ import { API_BASE_URL } from "@/lib/constants";
 
 /**
  * Supplier-only client for the Phase 1 phone-call pilot.
- * Every request is a draft read; nothing here can create an order.
+ *
+ * Every draft route here reads or writes the pilot record only. The single
+ * exception is the opt-in `createOrder` flag on confirm, which hands the
+ * confirmed draft to the backend bridge — the one place allowed to write an
+ * Order. No client here writes an Order directly.
  */
 
 const base = () => `${API_BASE_URL}/api/v1/pilot/phone-call`;
@@ -114,13 +118,20 @@ export const addPilotReviewItem = async (pilotCallId, line) =>
 
 /**
  * Final pilot action. Saves the supplier-confirmed result on the pilot record.
- * It does not create a real e-Setu order.
+ *
+ * With `createOrder: true` the same tap also asks the bridge to write the real
+ * e-Setu Order, so the supplier reviews and orders in one action. Omitted or
+ * false, no Order is created.
  */
-export const confirmPilotDraft = async (pilotCallId) =>
+export const confirmPilotDraft = async (pilotCallId, { createOrder = false } = {}) =>
   unwrap(
-    await axios.post(`${base()}/${pilotCallId}/review/confirm`, null, {
-      headers: authHeaders(),
-    }),
+    await axios.post(
+      `${base()}/${pilotCallId}/review/confirm`,
+      { createOrder },
+      {
+        headers: authHeaders(),
+      },
+    ),
   );
 
 /** Undo a confirmation made by mistake. Still cannot create an order. */
@@ -139,4 +150,15 @@ export const createOrderFromConfirmedPilotCall = async (pilotCallId) =>
       {},
       { headers: authHeaders() },
     ),
+  );
+
+/**
+ * Re-runs the failed STT -> draft pipeline from the recording already held.
+ * Creates no Order. Refused once the call has produced one.
+ */
+export const retryPilotProcessing = async (pilotCallId) =>
+  unwrap(
+    await axios.post(`${base()}/${pilotCallId}/retry`, null, {
+      headers: authHeaders(),
+    }),
   );

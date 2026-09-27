@@ -94,6 +94,7 @@ const makeCall = (overrides = {}) => ({
 });
 
 const originals = {
+  callFind: PhoneCall.find,
   callFindById: PhoneCall.findById,
   callFindOne: PhoneCall.findOne,
   pilotFindById: PhoneCallPilot.findById,
@@ -107,6 +108,7 @@ const originals = {
 };
 
 const restoreModels = () => {
+  PhoneCall.find = originals.callFind;
   PhoneCall.findById = originals.callFindById;
   PhoneCall.findOne = originals.callFindOne;
   PhoneCallPilot.findById = originals.pilotFindById;
@@ -449,6 +451,15 @@ test("retention keeps audio linked to a completed real Order", async () => {
     lean: async () => [
       { _id: PILOT_ID, audio: { fileName: "ordered-call.wav" } },
     ],
+  });
+  // The scheduled sweep covers both backends, so the call side is listed too.
+  // Stubbed to an empty durable set, which keeps this test about the local
+  // policy it was written for.
+  PhoneCall.find = () => ({
+    select() {
+      return this;
+    },
+    lean: async () => [],
   });
   Order.find = () => ({
     select() {

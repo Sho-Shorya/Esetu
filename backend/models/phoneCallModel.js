@@ -68,7 +68,18 @@ const providerSchema = new mongoose.Schema(
 
 const recordingSchema = new mongoose.Schema(
   {
-    // Local private file only. Never a public URL: audio is streamed through an
+    // Where the bytes live. "local" is a file on this server's disk, which the
+    // deployment target can erase on redeploy; "cloud" is a private, durable
+    // asset. Records written before durable storage existed have no value here
+    // and only a fileName, and are read as local.
+    storage: { type: String, enum: ["local", "cloud", null], default: null },
+    // Durable-storage asset id. Present only for a cloud recording, and never
+    // exposed to a client: playback goes through an authenticated route.
+    publicId: { type: String, default: null },
+    // The format durable storage kept, so a download reproduces the original
+    // file rather than a re-encoded one.
+    format: { type: String, default: null },
+    // A local private file. Never a public URL: audio is streamed through an
     // authenticated endpoint, never served from a guessable path.
     fileName: { type: String, default: null },
     contentType: { type: String, default: null },

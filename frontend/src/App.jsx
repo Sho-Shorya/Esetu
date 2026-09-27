@@ -45,6 +45,7 @@ import PaymentStatus from "./components/PaymentStatus";
 import DailyOrders from "./pages/DailyOrders";
 import OrderRingOverlay from "./components/OrderRingOverlay";
 import PhoneOrderPilot from "./pages/pilot/PhoneOrderPilot";
+import TestAudioPage from "./pages/pilot/TestAudioPage";
 import Calling from "./pages/Calling";
 import SupplierPhone from "./pages/SupplierPhone";
 function App() {
@@ -444,6 +445,20 @@ function App() {
               <>
                 <Nav />
                 <PhoneOrderPilot />
+                <Navbar />
+              </>
+            ) : (
+              <Navigate to="/admin-login" replace />
+            )
+          }
+        />
+        <Route
+          path="/pilot/test-audio"
+          element={
+            supplierData ? (
+              <>
+                <Nav />
+                <TestAudioPage />
                 <Navbar />
               </>
             ) : (

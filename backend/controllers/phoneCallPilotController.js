@@ -6,9 +6,12 @@ import { getTelephonyProvider } from "../services/telephony/telephonyProvider.js
 import {
   ensureAudioDir,
   getMaxAudioBytes,
+  hasAudioRecord,
+  materializeAudio,
   removeAudio,
-  resolveAudioPath,
   saveAudioBuffer,
+  storageColumns,
+  withAudioFile,
 } from "../services/pilotAudioStorage.js";
 import { transcribePilotAudio } from "../services/sttService.js";
 import {
@@ -16,6 +19,7 @@ import {
   extractOrderDraft,
 } from "../services/orderExtractionService.js";
 import { normalizeIndianPhone } from "../services/pilotPhoneNormalizer.js";
+import { setProcessingStatus } from "../services/phoneCallService.js";
 import {
   addManualReviewLine,
   confirmReviewDraft,
@@ -123,6 +127,24 @@ const matchCustomer = async (rawFrom) => {
   };
 };
 
+/**
+ * Turns a storage record into `audio.`-prefixed Mongo update fields, so a
+ * recording is written to the document the same way whether it was just
+ * downloaded from the provider or uploaded by the supplier.
+ */
+const audioFieldUpdates = (audio, { storedAt = new Date() } = {}) => ({
+  "audio.storage": audio.storage || "local",
+  "audio.publicId": audio.publicId || null,
+  "audio.format": audio.format || null,
+  "audio.fileName": audio.fileName || null,
+  "audio.contentType": audio.contentType || null,
+  "audio.bytes": audio.bytes ?? null,
+  "audio.sha256": audio.sha256 || null,
+  "audio.originalName": audio.originalName || null,
+  "audio.source": audio.source || null,
+  "audio.storedAt": storedAt,
+});
+
 const recordPipelineError = async (pilotId, error) => {
   await PhoneCallPilot.updateOne(
     { _id: pilotId },
@@ -168,15 +190,12 @@ const runPilotPipeline = async (pilotId) => {
     const provider = getTelephonyProvider();
     await ensureAudioDir();
 
-    let fileName = doc.audio?.fileName || null;
-    let contentType = doc.audio?.contentType || null;
+    // The stored recording, whichever backend holds it. Kept as a record rather
+    // than a file name so a durable recording is re-read the same way a local
+    // one is, and so a retry after a redeploy finds the audio again.
+    let audio = doc.audio || null;
 
-    if (fileName) {
-      await PhoneCallPilot.updateOne(
-        { _id: pilotId },
-        { $set: { "pipeline.stage": "transcribing" } },
-      );
-    } else {
+    if (!hasAudioRecord(audio)) {
       if (!doc.provider?.recordingUrl) {
         const missing = new Error(
           "This call has no provider recording URL and no stored audio, so there is nothing to transcribe.",
@@ -193,6 +212,8 @@ const runPilotPipeline = async (pilotId) => {
       const { buffer, contentType: downloadedType } =
         await provider.downloadRecording(doc.provider.recordingUrl);
 
+      // Durable storage is written first. If it fails, the pipeline records the
+      // failure and no half-saved recording is left behind.
       const saved = await saveAudioBuffer({
         buffer,
         contentType: downloadedType,
@@ -200,30 +221,35 @@ const runPilotPipeline = async (pilotId) => {
         prefix: doc.provider.callId || "call",
       });
 
-      fileName = saved.fileName;
-      contentType = saved.contentType;
+      audio = { ...storageColumns(saved), source: doc.source };
 
       await PhoneCallPilot.updateOne(
         { _id: pilotId },
         {
           $set: {
-            "audio.fileName": saved.fileName,
-            "audio.contentType": saved.contentType,
-            "audio.bytes": saved.bytes,
-            "audio.originalName": saved.originalName,
-            "audio.source": doc.source,
-            "audio.storedAt": new Date(),
+            ...audioFieldUpdates(audio, { storedAt: new Date() }),
             "pipeline.stage": "transcribing",
           },
         },
       );
+    } else {
+      await PhoneCallPilot.updateOne(
+        { _id: pilotId },
+        { $set: { "pipeline.stage": "transcribing" } },
+      );
     }
 
-    const transcript = await transcribePilotAudio({
-      filePath: resolveAudioPath(fileName),
-      fileName,
-      contentType,
-    });
+    // A local recording is transcribed where it lies; a durable one is fetched
+    // into a working copy for the length of the call and removed afterwards.
+    // Nothing here deletes the stored recording, so a failure leaves the audio
+    // in place and the supplier can retry against the very same bytes.
+    const transcript = await withAudioFile(audio, ({ filePath, fileName }) =>
+      transcribePilotAudio({
+        filePath,
+        fileName,
+        contentType: audio.contentType,
+      }),
+    );
 
     await PhoneCallPilot.updateOne(
       { _id: pilotId },
@@ -499,11 +525,15 @@ const toPublicCall = (doc) => {
     caller: plain.caller || null,
     customer: plain.customer || null,
     audio: {
-      available: Boolean(plain.audio?.fileName),
+      // Presence is decided by the stored record, not by a local file name, so
+      // a durable recording is reported and played exactly like a local one.
+      // No storage identifier is ever included: the authenticated endpoint is
+      // the only way to reach the audio.
+      available: hasAudioRecord(plain.audio),
       bytes: plain.audio?.bytes ?? null,
       contentType: plain.audio?.contentType || null,
       storedAt: plain.audio?.storedAt || null,
-      endpoint: plain.audio?.fileName
+      endpoint: hasAudioRecord(plain.audio)
         ? `/api/v1/pilot/phone-call/${plain._id}/audio`
         : null,
     },
@@ -556,6 +586,98 @@ export const getPilotCall = async (req, res) => {
 };
 
 /**
+ * Runs the STT -> draft pipeline again for a call whose processing failed.
+ *
+ * The supplier never has to re-upload: the recording is deliberately preserved
+ * after a failure, so a retry is just this call. It re-arms the same claim the
+ * provider webhook uses and hands off to the same runner, so there is exactly
+ * one pipeline in the codebase.
+ *
+ * Refuses anything that already produced a real Order, and anything that did
+ * not fail, so a retry can never silently discard a good draft or duplicate an
+ * order.
+ */
+export const retryPilotProcessing = async (req, res) => {
+  try {
+    const doc = await findOwnedPilotCall(
+      req.params.id,
+      req.userId,
+      "audio.fileName audio.publicId audio.storage audio.format audio.bytes " +
+        "audio.contentType audio.sha256 pipeline.stage phoneCallId " +
+        "review.confirmed",
+    );
+    if (!doc) {
+      return res
+        .status(404)
+        .json({ success: false, message: "यह कॉल नहीं मिली।" });
+    }
+
+    if (doc.review?.confirmed?.orderCreated === true) {
+      return res.status(409).json({
+        success: false,
+        code: "ORDER_ALREADY_CREATED",
+        message: "इस कॉल का ऑर्डर पहले ही बन चुका है।",
+      });
+    }
+
+    // A retry with no audio can never succeed, and the re-upload path is
+    // separately refused while a recording is attached, so say which one it is.
+    // Checked against the stored record, so a durable recording counts just as
+    // much as a local file, including on a server that has never seen it.
+    if (!hasAudioRecord(doc.audio)) {
+      return res.status(409).json({
+        success: false,
+        code: "NO_RECORDING",
+        message: "इस कॉल में रिकॉर्डिंग नहीं है। पहले रिकॉर्डिंग जोड़ें।",
+      });
+    }
+
+    // Atomic claim, same as the provider webhook: a double tap can only start
+    // one run, and a run already in flight is never stolen from.
+    const claimed = await PhoneCallPilot.findOneAndUpdate(
+      {
+        _id: doc._id,
+        "pipeline.stage": { $in: REPROCESSABLE_STAGES },
+      },
+      {
+        $set: {
+          "pipeline.stage": "processing_recording",
+          "pipeline.recordingReadyAt": new Date(),
+          "pipeline.error": null,
+        },
+      },
+      { new: true },
+    );
+
+    if (!claimed) {
+      return res.status(409).json({
+        success: false,
+        code: "ALREADY_PROCESSING",
+        message: "यह कॉल अभी प्रोसेस हो रही है। थोड़ी देर बाद देखें।",
+      });
+    }
+
+    if (doc.phoneCallId) {
+      await setProcessingStatus({
+        callId: doc.phoneCallId,
+        processingStatus: "processing",
+        error: null,
+      });
+    }
+
+    // Acknowledge first, then do the slow work.
+    res.status(202).json({
+      success: true,
+      pilotCallId: claimed._id,
+      message: "प्रोसेसिंग फिर से शुरू हो गई।",
+    });
+    startPipelineInBackground(claimed._id);
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+/**
  * Streams stored audio. The only way to hear a pilot recording: authenticated,
  * no public URL, no-store caching.
  */
@@ -566,32 +688,41 @@ export const streamPilotAudio = async (req, res) => {
       req.userId,
       "audio supplierId phoneCallId source testUpload.uploadedBy",
     );
-    const fileName = doc?.audio?.fileName;
 
-    if (!fileName) {
+    if (!hasAudioRecord(doc?.audio)) {
       return res
         .status(404)
         .json({ success: false, message: "No audio stored for this call." });
     }
 
-    const filePath = resolveAudioPath(fileName);
-    if (!fs.existsSync(filePath)) {
-      return res.status(410).json({
-        success: false,
-        message: "Stored audio is no longer available on this server.",
-      });
-    }
-
-    const stats = fs.statSync(filePath);
     const contentType = doc.audio.contentType || "application/octet-stream";
 
+    // A durable recording is fetched into a working copy and streamed from
+    // there, so the browser keeps getting the same authenticated, no-store
+    // response no matter which backend holds the audio.
+    const handle = await materializeAudio(doc.audio);
     res.setHeader("Content-Type", contentType);
-    res.setHeader("Content-Length", stats.size);
+    res.setHeader("Content-Length", fs.statSync(handle.filePath).size);
     res.setHeader("Content-Disposition", "inline");
     res.setHeader("Cache-Control", "private, no-store");
 
-    return fs.createReadStream(filePath).pipe(res);
+    const stream = fs.createReadStream(handle.filePath);
+    if (handle.temporary) {
+      // The working copy is only needed while the response is being written.
+      res.on("close", () => void handle.cleanup());
+    }
+
+    return stream.pipe(res);
   } catch (error) {
+    if (
+      error?.code === "AUDIO_FILE_MISSING" ||
+      error?.code === "AUDIO_CLOUD_MISSING"
+    ) {
+      return res.status(410).json({
+        success: false,
+        message: "Stored audio is no longer available.",
+      });
+    }
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -637,10 +768,7 @@ export const uploadTestAudio = async (req, res) => {
       supplierId: req.userId,
       provider: { name: "test" },
       audio: {
-        fileName: saved.fileName,
-        contentType: saved.contentType,
-        bytes: saved.bytes,
-        originalName: saved.originalName,
+        ...storageColumns(saved),
         source: "test",
         storedAt: new Date(),
       },
@@ -659,7 +787,16 @@ export const uploadTestAudio = async (req, res) => {
 
     startPipelineInBackground(doc._id);
   } catch (error) {
-    if (saved?.fileName) await removeAudio(saved.fileName);
+    // Nothing was linked to the recording, so drop the bytes rather than leave
+    // an asset nothing points at.
+    if (saved) await removeAudio(saved);
+    if (error?.code === "AUDIO_CLOUD_UPLOAD_FAILED") {
+      return res.status(503).json({
+        success: false,
+        code: error.code,
+        message: "रिकॉर्डिंग सुरक्षित जगह नहीं जा पाई। फिर कोशिश करें।",
+      });
+    }
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -862,8 +999,13 @@ export const addPilotReviewItem = async (req, res) => {
  *
  * Refused while any line is unresolved, ambiguous, uncertain or invalid, unless
  * the supplier explicitly resolved that line during review. On success the
- * result is written to PhoneCallPilot.review.confirmed and nowhere else. No
- * Order is created, imported or referenced.
+ * result is written to PhoneCallPilot.review.confirmed and nowhere else.
+ *
+ * With `createOrder: true` the same tap also asks the bridge for a real Order,
+ * so the supplier reviews and orders in one action. That is opt-in per request:
+ * omitted or false, no Order is created, imported or referenced. Either way the
+ * Order is only ever written by the bridge, so revalidation and the duplicate
+ * guard behave identically to the separate step.
  */
 export const confirmPilotDraft = async (req, res) => {
   try {
@@ -879,7 +1021,14 @@ export const confirmPilotDraft = async (req, res) => {
         message: "This call has no AI draft to confirm.",
       });
     }
-    if (doc.review?.status === REVIEW_STATUS.CONFIRMED) {
+    const wantsOrder = req.body?.createOrder === true;
+    const alreadyConfirmed = doc.review?.status === REVIEW_STATUS.CONFIRMED;
+
+    // A draft that is already confirmed only short-circuits when the supplier
+    // is not also asking for the order. Asking again is exactly how a retry
+    // after a failed order creation reaches the bridge, and the bridge answers
+    // "already created" when the order is in fact there.
+    if (alreadyConfirmed && !wantsOrder) {
       return res.status(200).json({
         success: true,
         alreadyConfirmed: true,
@@ -888,38 +1037,42 @@ export const confirmPilotDraft = async (req, res) => {
       });
     }
 
-    const outcome = confirmReviewDraft({
-      doc,
-      catalog: await getReviewCatalog(),
-      userId: req.userId || null,
-    });
+    let outcome = null;
 
-    if (!outcome.ok) {
-      return res.status(outcome.status).json({
-        success: false,
-        code: outcome.code,
-        message: outcome.message,
-        review: {
-          status: doc.review?.status || REVIEW_STATUS.NOT_STARTED,
-          lines: outcome.report.lines,
-          report: {
-            counts: outcome.report.counts,
-            blockers: outcome.report.blockers,
-            confirmable: false,
-          },
-          confirmed: null,
-        },
+    if (!alreadyConfirmed) {
+      outcome = confirmReviewDraft({
+        doc,
+        catalog: await getReviewCatalog(),
+        userId: req.userId || null,
       });
-    }
 
-    await doc.save();
+      if (!outcome.ok) {
+        return res.status(outcome.status).json({
+          success: false,
+          code: outcome.code,
+          message: outcome.message,
+          review: {
+            status: doc.review?.status || REVIEW_STATUS.NOT_STARTED,
+            lines: outcome.report.lines,
+            report: {
+              counts: outcome.report.counts,
+              blockers: outcome.report.blockers,
+              confirmable: false,
+            },
+            confirmed: null,
+          },
+        });
+      }
+
+      await doc.save();
+    }
 
     /*
      * One-tap flow: the supplier asks for the order in the same action that
      * confirms the draft. It still goes through the bridge, so revalidation and
      * the duplicate guard apply exactly as they do for the separate step.
      */
-    if (req.body?.createOrder === true) {
+    if (wantsOrder) {
       const { createOrderFromConfirmedPhoneCall } =
         await import("../services/phoneOrderBridgeService.js");
 
@@ -930,6 +1083,18 @@ export const confirmPilotDraft = async (req, res) => {
       });
 
       if (!orderResult.ok) {
+        // The draft is confirmed and safe, so the call is "confirmed", not
+        // "failed": nothing failed to process, the order step was refused.
+        // That also keeps the call in the supplier's "ऑर्डर के लिए" list, which
+        // is the only place a retry can be started from.
+        if (doc.phoneCallId) {
+          await setProcessingStatus({
+            callId: doc.phoneCallId,
+            processingStatus: REVIEW_STATUS.CONFIRMED,
+            error: { message: orderResult.message, code: orderResult.code },
+          });
+        }
+
         return res.status(orderResult.status || 400).json({
           success: false,
           code: orderResult.code,
@@ -941,9 +1106,25 @@ export const confirmPilotDraft = async (req, res) => {
         });
       }
 
+      // The bridge stamps orderCreated/orderId with its own update, so the
+      // `doc` this handler is holding is stale by one write. Re-read before
+      // replying, or the supplier is told the order exists while the review
+      // payload still claims it does not.
+      const settled = await PhoneCallPilot.findById(doc._id);
+
+      // Link the Order onto the call itself, not just the pilot record. Without
+      // this the call never leaves "needs review" and the supplier is never
+      // shown that the order exists.
+      if (doc.phoneCallId) {
+        await setProcessingStatus({
+          callId: doc.phoneCallId,
+          orderId: orderResult.orderId,
+        });
+      }
+
       return res.status(200).json({
         success: true,
-        review: publicReview(doc),
+        review: publicReview(settled || doc),
         order: orderResult.order,
         orderId: orderResult.orderId,
         alreadyCreated: orderResult.alreadyCreated === true,

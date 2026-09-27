@@ -4,8 +4,10 @@ import { User } from "../models/userModel.js";
 import {
   getAudioDigest,
   getMaxAudioBytes,
+  hasAudioRecord,
   removeAudio,
   saveAudioBuffer,
+  storageColumns,
 } from "../services/pilotAudioStorage.js";
 import { validateManualAudio } from "../services/sttService.js";
 import { startPipelineInBackground } from "./phoneCallPilotController.js";
@@ -230,11 +232,12 @@ export const getSupplierPhoneSection = async (req, res) => {
   try {
     const supplierId = req.user._id;
     const limit = req.query.limit;
+    const date = req.query.date;
 
     const [incoming, recent, needsReview] = await Promise.all([
-      listIncomingCalls({ supplierId, limit }),
-      listCallsForSupplier({ supplierId, limit }),
-      listCallsNeedingReview({ supplierId, limit }),
+      listIncomingCalls({ supplierId, limit, date }),
+      listCallsForSupplier({ supplierId, limit, date }),
+      listCallsNeedingReview({ supplierId, limit, date }),
     ]);
 
     return ok(res, {
@@ -378,7 +381,7 @@ export const attachCallAudio = async (req, res) => {
     const linkedPilotCallId = call.pilotCallId?._id || call.pilotCallId || null;
     const pilot = linkedPilotCallId
       ? await PhoneCallPilot.findById(linkedPilotCallId).select(
-          "audio.fileName audio.sha256 review.confirmed.orderCreated",
+          "audio.fileName audio.publicId audio.sha256 review.confirmed.orderCreated",
         )
       : null;
     const existingDigest =
@@ -395,9 +398,9 @@ export const attachCallAudio = async (req, res) => {
 
     if (
       existingDigest ||
-      call.recording?.fileName ||
+      hasAudioRecord(call.recording) ||
       linkedPilotCallId ||
-      pilot?.audio?.fileName ||
+      hasAudioRecord(pilot?.audio) ||
       pilot?.review?.confirmed?.orderCreated
     ) {
       return fail(
@@ -457,11 +460,7 @@ export const attachCallAudio = async (req, res) => {
           method: customerParty?.matchMethod || "unknown",
         },
         audio: {
-          fileName: saved.fileName,
-          contentType: saved.contentType,
-          bytes: saved.bytes,
-          sha256: saved.sha256,
-          originalName: saved.originalName,
+          ...storageColumns(saved),
           source: "call-upload",
           storedAt: new Date(),
         },
@@ -476,7 +475,10 @@ export const attachCallAudio = async (req, res) => {
         {
           $set: {
             supplierId: call.supplierId,
-            "audio.fileName": saved.fileName,
+            "audio.storage": saved.storage,
+            "audio.publicId": saved.publicId || null,
+            "audio.format": saved.format || null,
+            "audio.fileName": saved.fileName || null,
             "audio.contentType": saved.contentType,
             "audio.bytes": saved.bytes,
             "audio.sha256": saved.sha256,
@@ -491,11 +493,7 @@ export const attachCallAudio = async (req, res) => {
     }
 
     call.recording = {
-      fileName: saved.fileName,
-      contentType: saved.contentType,
-      bytes: saved.bytes,
-      sha256: saved.sha256,
-      originalName: saved.originalName,
+      ...storageColumns(saved),
       capturedBy: isOwner ? "supplier" : "shopkeeper",
       storedAt: new Date(),
     };
@@ -514,13 +512,25 @@ export const attachCallAudio = async (req, res) => {
     // Same background runner the pilot already uses. No second pipeline.
     startPipelineInBackground(linkedPilotId);
   } catch (error) {
-    if (saved?.fileName) await removeAudio(saved.fileName);
+    // The call or pilot document was never linked, so the recording is an
+    // orphan: remove it from whichever backend took it.
+    if (saved) await removeAudio(saved);
     if (error?.code === 11000) {
       return fail(
         res,
         409,
         "DUPLICATE_AUDIO",
         "यह रिकॉर्डिंग दूसरी कॉल में पहले से जुड़ी है।",
+      );
+    }
+    if (error?.code === "AUDIO_CLOUD_UPLOAD_FAILED") {
+      // Nothing was stored and no processing was started, so say exactly that
+      // rather than letting the supplier believe the call is being handled.
+      return fail(
+        res,
+        503,
+        error.code,
+        "रिकॉर्डिंग सुरक्षित जगह सेव नहीं हो पाई। प्रोसेसिंग शुरू नहीं हुई। फिर कोशिश करें।",
       );
     }
     if (
@@ -580,10 +590,13 @@ export const createOrderFromCall = async (req, res) => {
     if (!result.ok) {
       // A failure on a call that has a linked PhoneCall is recorded there too,
       // so the supplier's list shows why instead of silently showing nothing.
+      // "confirmed" rather than "failed": the draft is confirmed and the order
+      // step is what was refused, and only "confirmed" keeps the call in the
+      // "ऑर्डर के लिए" list where the supplier can actually retry it.
       if (pilot.phoneCallId) {
         await setProcessingStatus({
           callId: pilot.phoneCallId,
-          processingStatus: "failed",
+          processingStatus: "confirmed",
           error: { message: result.message, code: result.code },
         });
       }

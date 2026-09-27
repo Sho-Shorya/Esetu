@@ -26,8 +26,15 @@ export const recordOutgoingCall = async ({ supplierId, toPhone, callAt }) =>
     ),
   );
 
-export const fetchSupplierPhoneSection = async () =>
-  unwrap(await axios.get(`${base()}/supplier/section`, { headers: headers() }));
+export const fetchSupplierPhoneSection = async (date) => {
+  const params = date ? { date } : {};
+  return unwrap(
+    await axios.get(`${base()}/supplier/section`, {
+      headers: headers(),
+      params,
+    }),
+  );
+};
 
 export const fetchSupplierCall = async (callId) =>
   unwrap(

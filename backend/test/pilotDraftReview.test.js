@@ -26,9 +26,11 @@ import {
   setReviewCatalogLoader,
 } from "../services/pilotDraftReviewService.js";
 import PhoneCallPilot from "../models/phoneCallPilotModel.js";
+import PhoneCall from "../models/phoneCallModel.js";
 import { Order } from "../models/orderModel.js";
 import {
   confirmPilotDraft,
+  retryPilotProcessing,
   savePilotReview,
 } from "../controllers/phoneCallPilotController.js";
 
@@ -675,6 +677,54 @@ test("confirming with createOrder hands off to the bridge, which is what writes 
   assert.ok(res.body.review, "the supplier keeps their confirmed work");
 });
 
+test("confirming again with createOrder retries the order instead of short-circuiting", async () => {
+  const doc = makeDoc({ items: [saltItem()] });
+  openReview({ doc, catalog });
+  confirmReviewDraft({ doc, catalog, userId: "supplier-1" });
+
+  const res = makeRes();
+  await withPatchedModel(doc, () =>
+    confirmPilotDraft(
+      {
+        params: { id: "pilot-1" },
+        userId: "supplier-1",
+        body: { createOrder: true },
+      },
+      res,
+    ),
+  );
+
+  // This is the retry a supplier makes after an order creation was refused. It
+  // must reach the bridge, so the refusal comes from the bridge (this fake
+  // document has no real id) rather than from an "already confirmed" no-op that
+  // silently swallowed the request. The stored draft is untouched either way.
+  assert.equal(res.statusCode, 400);
+  assert.equal(res.body.success, false);
+  assert.equal(res.body.code, "PHONE_CALL_NOT_FOUND");
+  assert.equal(doc.review.status, REVIEW_STATUS.CONFIRMED);
+  assert.equal(doc.saves, 0, "a retry must not rewrite the confirmed draft");
+});
+
+test("confirming an already confirmed draft without createOrder stays a no-op", async () => {
+  const doc = makeDoc({ items: [saltItem()] });
+  openReview({ doc, catalog });
+  confirmReviewDraft({ doc, catalog, userId: "supplier-1" });
+
+  const res = makeRes();
+  await withPatchedModel(doc, () =>
+    confirmPilotDraft(
+      { params: { id: "pilot-1" }, userId: "supplier-1", body: {} },
+      res,
+    ),
+  );
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.body.success, true);
+  assert.equal(res.body.alreadyConfirmed, true);
+  assert.equal(res.body.order, undefined, "no order was asked for, so none is made");
+  assert.equal(doc.saves, 0);
+});
+
 test("confirmPilotDraft is refused with 422 while blockers remain and writes nothing", async () => {
   const doc = makeDoc({
     items: [saltItem()],
@@ -854,4 +904,226 @@ test("createManualLine keeps a free-text unit exactly as typed", () => {
 
   assert.equal(line.unit, "half peti");
   assert.equal(line.origin, LINE_ORIGIN.MANUAL);
+});
+
+/* ==================== scenario: retry a failed recording ==================== */
+
+/**
+ * Retry has to satisfy the exact harness the handler expects: a queryable
+ * pilot record, an atomic claim that can be won or refused, a linked call to
+ * report status to, and a captured background run so no real STT happens.
+ */
+const withRetryFakes = async ({ doc, claimed, call, run }) => {
+  const originals = {
+    pilotFindById: PhoneCallPilot.findById,
+    pilotFindOneAndUpdate: PhoneCallPilot.findOneAndUpdate,
+    callFindOne: PhoneCall.findOne,
+    callFindById: PhoneCall.findById,
+    setImmediate: globalThis.setImmediate,
+  };
+
+  const claims = [];
+  const scheduled = [];
+
+  PhoneCallPilot.findById = () => ({
+    select: async () => doc,
+  });
+  PhoneCallPilot.findOneAndUpdate = async (filter, update) => {
+    claims.push({ filter, update });
+    return claimed;
+  };
+  PhoneCall.findOne = () => ({ select: async () => call });
+  PhoneCall.findById = async () => call;
+  globalThis.setImmediate = (callback) => {
+    scheduled.push(callback);
+    return 1;
+  };
+
+  try {
+    return await run({ claims, scheduled });
+  } finally {
+    PhoneCallPilot.findById = originals.pilotFindById;
+    PhoneCallPilot.findOneAndUpdate = originals.pilotFindOneAndUpdate;
+    PhoneCall.findOne = originals.callFindOne;
+    PhoneCall.findById = originals.callFindById;
+    globalThis.setImmediate = originals.setImmediate;
+  }
+};
+
+const makeRetryDoc = (overrides = {}) => ({
+  _id: "pilot-1",
+  source: "phone_call",
+  supplierId: "supplier-1",
+  phoneCallId: null,
+  audio: { fileName: "call-1.wav" },
+  pipeline: { stage: "failed", error: { message: "boom" } },
+  review: { status: REVIEW_STATUS.NOT_STARTED, confirmed: null },
+  ...overrides,
+});
+
+const makeLinkedCall = (overrides = {}) => ({
+  _id: "call-1",
+  supplierId: "supplier-1",
+  processingStatus: "failed",
+  lastError: { message: "boom" },
+  saves: 0,
+  async save() {
+    this.saves += 1;
+    return this;
+  },
+  ...overrides,
+});
+
+test("retry re-arms the failed stage and hands the same recording to the pipeline", async () => {
+  const doc = makeRetryDoc();
+  const claimed = { ...doc, pipeline: { stage: "processing_recording" } };
+  const res = makeRes();
+
+  await withRetryFakes({
+    doc,
+    claimed,
+    call: null,
+    async run({ claims, scheduled }) {
+      await retryPilotProcessing(
+        { params: { id: "pilot-1" }, userId: "supplier-1" },
+        res,
+      );
+
+      assert.equal(res.statusCode, 202);
+      assert.equal(res.body.success, true);
+      assert.equal(claims.length, 1, "the stage is claimed exactly once");
+      assert.deepEqual(claims[0].filter["pipeline.stage"].$in, [
+        "new",
+        "call_answered",
+        "call_ended",
+        "recording_ready",
+        "failed",
+      ]);
+      assert.equal(
+        claims[0].update.$set["pipeline.stage"],
+        "processing_recording",
+      );
+      assert.equal(claims[0].update.$set["pipeline.error"], null);
+      assert.equal(scheduled.length, 1, "one background run, reusing the runner");
+    },
+  });
+});
+
+test("retry is refused for a call that already produced a real Order", async () => {
+  const doc = makeRetryDoc({
+    review: {
+      status: REVIEW_STATUS.CONFIRMED,
+      confirmed: { at: new Date(), itemCount: 1, orderCreated: true, orderId: "o1" },
+    },
+  });
+  const res = makeRes();
+
+  await withRetryFakes({
+    doc,
+    claimed: { ...doc },
+    call: null,
+    async run({ claims, scheduled }) {
+      await retryPilotProcessing(
+        { params: { id: "pilot-1" }, userId: "supplier-1" },
+        res,
+      );
+
+      assert.equal(res.statusCode, 409);
+      assert.equal(res.body.code, "ORDER_ALREADY_CREATED");
+      assert.equal(claims.length, 0, "no claim is taken for a finished call");
+      assert.equal(scheduled.length, 0, "no pipeline is restarted");
+    },
+  });
+});
+
+test("retry without a recording is refused instead of failing silently later", async () => {
+  const doc = makeRetryDoc({ audio: { fileName: null } });
+  const res = makeRes();
+
+  await withRetryFakes({
+    doc,
+    claimed: { ...doc },
+    call: null,
+    async run({ claims }) {
+      await retryPilotProcessing(
+        { params: { id: "pilot-1" }, userId: "supplier-1" },
+        res,
+      );
+
+      assert.equal(res.statusCode, 409);
+      assert.equal(res.body.code, "NO_RECORDING");
+      assert.equal(claims.length, 0);
+    },
+  });
+});
+
+test("a double-tapped retry cannot take the claim a run already holds", async () => {
+  const doc = makeRetryDoc();
+  const res = makeRes();
+
+  await withRetryFakes({
+    doc,
+    claimed: null, // the atomic claim was lost: another run owns it
+    call: null,
+    async run({ scheduled }) {
+      await retryPilotProcessing(
+        { params: { id: "pilot-1" }, userId: "supplier-1" },
+        res,
+      );
+
+      assert.equal(res.statusCode, 409);
+      assert.equal(res.body.code, "ALREADY_PROCESSING");
+      assert.equal(scheduled.length, 0, "no second pipeline is started");
+    },
+  });
+});
+
+test("another supplier cannot retry this supplier's failed call", async () => {
+  const doc = makeRetryDoc({ supplierId: "supplier-1", phoneCallId: "call-1" });
+  const res = makeRes();
+
+  PhoneCall.findOne = () => ({
+    select: async () => null, // no call of theirs matches this pilot record
+  });
+
+  await withRetryFakes({
+    doc,
+    claimed: { ...doc },
+    call: null,
+    async run({ claims }) {
+      await retryPilotProcessing(
+        { params: { id: "pilot-1" }, userId: "supplier-2" },
+        res,
+      );
+
+      assert.equal(res.statusCode, 404);
+      assert.equal(claims.length, 0);
+    },
+  });
+});
+
+test("retrying a linked call also clears its failed status on the screen", async () => {
+  const doc = makeRetryDoc({ phoneCallId: "call-1" });
+  const claimed = { ...doc, pipeline: { stage: "processing_recording" } };
+  const call = makeLinkedCall();
+  const res = makeRes();
+
+  await withRetryFakes({
+    doc,
+    claimed,
+    call,
+    async run() {
+      await retryPilotProcessing(
+        { params: { id: "pilot-1" }, userId: "supplier-1" },
+        res,
+      );
+
+      assert.equal(res.statusCode, 202);
+      assert.equal(call.processingStatus, "processing");
+      // The stored error is blanked, not deleted: the field shape the phone
+      // list renders stays intact while the stale message is gone.
+      assert.equal(call.lastError.message, null);
+      assert.equal(call.saves, 1);
+    },
+  });
 });

@@ -13,6 +13,7 @@ import {
   handleStatusWebhook,
   listPilotCalls,
   reopenPilotDraft,
+  retryPilotProcessing,
   savePilotReview,
   streamPilotAudio,
   uploadTestAudio,
@@ -67,6 +68,12 @@ router.post("/test-audio", isAuthenticated, isSupp, handleUpload, uploadTestAudi
 router.get("/review/catalog", isAuthenticated, isSupp, getPilotReviewCatalog);
 router.post("/:id/review/confirm", isAuthenticated, isSupp, confirmPilotDraft);
 router.post("/:id/review/reopen", isAuthenticated, isSupp, reopenPilotDraft);
+
+/*
+ * Re-runs the failed STT -> draft pipeline from the recording already held.
+ * Creates no Order and touches no draft, so it is safe to call at any time.
+ */
+router.post("/:id/retry", isAuthenticated, isSupp, retryPilotProcessing);
 
 router.get("/:id", isAuthenticated, isSupp, getPilotCall);
 router.get("/:id/audio", isAuthenticated, isSupp, streamPilotAudio);

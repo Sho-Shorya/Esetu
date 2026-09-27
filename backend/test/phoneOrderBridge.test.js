@@ -542,6 +542,39 @@ test("a confirmed draft creates one real order with catalog prices and provenanc
   });
 });
 
+test("a durable recording is audited as available audio, with no storage id leaked", async () => {
+  await withFakes({ products: catalog, users: customers }, async (fakes) => {
+    const doc = makeConfirmedDoc([saltLine()]);
+    // A recording in durable storage holds no local file name, so availability
+    // must not be decided by one.
+    fakes.state.pilotDoc = {
+      ...doc,
+      audio: {
+        storage: "cloud",
+        publicId: "esetu/phone-calls/rec-1-abcdef",
+        format: "wav",
+        fileName: null,
+        contentType: "audio/wav",
+        bytes: 1234,
+        source: "provider",
+        storedAt: new Date("2026-01-05T10:03:00Z"),
+      },
+    };
+
+    const result = await createOrderFromConfirmedPhoneCall({
+      pilotCallId: OBJECT_IDS.pilot,
+      userId: OBJECT_IDS.supplier,
+      notify: false,
+    });
+
+    assert.equal(result.ok, true);
+    const reference = fakes.state.created[0].phoneCallAudit.audioReferences[0];
+    assert.equal(reference.available, true);
+    assert.equal(JSON.stringify(reference).includes("publicId"), false);
+    assert.equal(JSON.stringify(reference).includes("esetu/phone-calls"), false);
+  });
+});
+
 test("a draft the supplier never confirmed cannot become an order", async () => {
   const doc = makeConfirmedDoc([saltLine()], {
     review: { status: "in_progress" },
