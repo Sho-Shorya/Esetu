@@ -1,8 +1,7 @@
 import OneSignal from "react-onesignal";
 import axios from "axios";
 import { playRing, stopRing } from "./lib/ringManager";
-
-const API_BASE_URL = import.meta.env.VITE_API_URL;
+import { API_BASE_URL } from "./lib/constants";
 
 let initialized = false;
 
@@ -59,7 +58,9 @@ const installAudioUnlock = () => {
       src.buffer = buffer;
       src.connect(ctx.destination);
       src.start(0);
-    } catch {}
+    } catch {
+      /* Audio unlock may be unavailable; the ring falls back to a silent run. */
+    }
     document.removeEventListener("pointerdown", unlock);
     document.removeEventListener("touchstart", unlock);
   };
@@ -88,7 +89,9 @@ export async function initOneSignal() {
     if (userId) {
       try {
         OneSignal.login(String(userId));
-      } catch {}
+      } catch {
+        /* The SDK may not be ready for external ids yet; the subscription is still linked. */
+      }
     }
 
     installAudioUnlock();
@@ -123,7 +126,9 @@ export async function initOneSignal() {
         const id = OneSignal.User.PushSubscription.id;
         if (id && id !== subscriptionId) saveSubscription(id);
       });
-    } catch {}
+    } catch {
+      /* Some browsers do not expose subscription change events; nothing to sync. */
+    }
   } catch (err) {
     console.error("OneSignal init error:", err);
     /* Allow retry on next login/token change — e.g. push is not

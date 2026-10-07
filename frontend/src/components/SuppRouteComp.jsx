@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { ChevronDown, Loader2, MoveRight, Truck, Check, X } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence } from "framer-motion";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -8,7 +8,7 @@ import axios from "axios";
 import { setUserData } from "../redux/userSlice";
 // ⬆️ Change this path if your userSlice is somewhere else
 
-const API_BASE_URL = import.meta.env.VITE_API_URL;
+import { API_BASE_URL } from "../lib/constants";
 
 const SuppRouteComp = () => {
   const navigate = useNavigate();
