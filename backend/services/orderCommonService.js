@@ -162,7 +162,7 @@ export const withUserOrderLock = async (userId, task) => {
    ORDER NOTIFICATIONS
    ============================================================ */
 
-export const sendOrderNotifications = async ({ user }) => {
+export const sendOrderNotifications = async ({ user, autoAccepted }) => {
   try {
     if (user.oneSignalSubscriptionId) {
       setTimeout(async () => {
@@ -211,7 +211,9 @@ export const sendOrderNotifications = async ({ user }) => {
 
             title: `🟢 ${customerName} का ऑर्डर आया है`,
 
-            message: "कृपया चेक करके, मंज़ूर या अस्वीकार करें।",
+            message: autoAccepted
+              ? "ऑर्डर अपने आप मंज़ूर हो गया है।"
+              : "कृपया चेक करके, मंज़ूर या अस्वीकार करें।",
 
             sendToAll: false,
           });

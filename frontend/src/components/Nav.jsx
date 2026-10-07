@@ -5,11 +5,6 @@ import { useSelector } from "react-redux";
 
 const userLinks = [
   {
-    to: "/calling",
-    label: "कॉल",
-    icon: Phone,
-  },
-  {
     to: "/",
     label: "नया ऑर्डर",
     icon: Home,
@@ -29,7 +24,7 @@ const userLinks = [
 const supplierLinks = [
   {
     to: "/supplier-phone",
-    label: "फोन",
+    label: "कॉल ऑर्डर",
     icon: Phone,
   },
   {

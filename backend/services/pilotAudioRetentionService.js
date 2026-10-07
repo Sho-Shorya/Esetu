@@ -22,7 +22,6 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  */
 const ACTIVE_PIPELINE_STAGES = [
   "processing_recording",
-  "downloading_recording",
   "transcribing",
   "extracting",
 ];

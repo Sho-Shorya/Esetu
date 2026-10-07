@@ -1,10 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import Fuse from "fuse.js";
 import { Link } from "react-router-dom";
@@ -15,6 +9,7 @@ import {
   ChevronDown,
   CircleHelp,
   CircleSlash,
+  ClipboardList,
   Info,
   Layers,
   Loader2,
@@ -50,45 +45,122 @@ import {
 
 const AUTOSAVE_MS = 900;
 
+/**
+ * The backend phrases line problems, reasons and clarification questions as
+ * plain English sentences. The supplier reads Hindi, so the fixed ones are
+ * mapped here at the display layer; free-form text (the model's own wording)
+ * passes through untouched.
+ */
+const FRIENDLY_NOTES = [
+  ["No product selected.", "कोई सामान चुना नहीं गया।"],
+  [
+    "This product is no longer in the catalog. Pick another product.",
+    "यह सामान अब सूची में नहीं है। कोई और सामान चुनें।",
+  ],
+  [
+    "Quantity must be a whole number of 1 or more.",
+    "मात्रा 1 या उससे ज़्यादा, पूरी संख्या में होनी चाहिए।",
+  ],
+  [
+    "Variant (size/weight) was not stated. Pick the right one.",
+    "नाप/वज़न नहीं बताया गया। सही नाप चुनें।",
+  ],
+  [
+    "Company/brand was not stated. Pick the right one.",
+    "कंपनी नहीं बताई गई। सही कंपनी चुनें।",
+  ],
+  ["not matched to catalog", "दुकान की सूची से मैच नहीं हुआ"],
+  ["not in catalog", "सूची में नहीं है"],
+  ["removed by supplier", "आपने हटाया"],
+  ["malformed item row", "सामान की जानकारी ठीक नहीं थी"],
+  ["no valid catalog ref", "सूची में नहीं मिला"],
+];
+
+const FRIENDLY_PATTERNS = [
+  [
+    /^No quantity was stated for (.+)\. Enter how many\.$/,
+    (m) => `${m[1]} की मात्रा नहीं बताई। कितने लिखें।`,
+  ],
+  [
+    /^No quantity was stated for (.+)\. How many\.$/,
+    (m) => `${m[1]} की मात्रा नहीं बताई गई। कितने?`,
+  ],
+  [
+    /^“(.+)” is not a variant of (.+)\. Pick a listed variant\.$/,
+    (m) => `“${m[1]}” यह ${m[2]} की किस्म नहीं है। सूची में से सही किस्म चुनें।`,
+  ],
+  [
+    /^“(.+)” does not make (.+)\. Pick a listed company\.$/,
+    (m) => `${m[1]} कंपनी ${m[2]} नहीं बनाती। सूची में से सही कंपनी चुनें।`,
+  ],
+  [
+    /^“(.+)” does not make (.+) in (.+)\. Pick a listed combination\.$/,
+    (m) =>
+      `${m[2]} में “${m[1]}” कंपनी का ${m[3]} नाप नहीं मिलता। सूचीवाली जोड़ी चुनें।`,
+  ],
+  [
+    /^AI could not match “([^”]+)”[:：]\s*(.*)$/,
+    (m) =>
+      m[2]
+        ? `सामान पहचाना नहीं जा सका: “${m[1]}” — ${m[2]}`
+        : `सामान पहचाना नहीं जा सका: “${m[1]}”`,
+  ],
+  [
+    /^Which product did the customer mean by (.+)\? None of these are in the catalog\.$/,
+    (m) => `ग्राहक का मतलब ${m[1]} से था। ये कोई भी सामान दुकान की सूची में नहीं है।`,
+  ],
+];
+
+const friendlyNote = (text) => {
+  if (!text) return text;
+  const exact = FRIENDLY_NOTES.find(([source]) => source === text);
+  if (exact) return exact[1];
+  for (const [pattern, to] of FRIENDLY_PATTERNS) {
+    const matched = String(text).match(pattern);
+    if (matched) return to(matched);
+  }
+  return text;
+};
+
 const LINE_FLAGS = {
   unresolved: {
-    label: "Not matched",
+    label: "मैच नहीं",
     card: "border-orange-300 bg-orange-50/70",
     chip: "bg-orange-200 text-orange-900",
     icon: CircleSlash,
   },
   ambiguous: {
-    label: "Check product",
+    label: "सामान जाँचें",
     card: "border-amber-300 bg-amber-50/70",
     chip: "bg-amber-200 text-amber-900",
     icon: TriangleAlert,
   },
   uncertain_variant: {
-    label: "Variant needed",
+    label: "किस्म चुनें",
     card: "border-sky-300 bg-sky-50/70",
     chip: "bg-sky-200 text-sky-900",
     icon: Info,
   },
   quantity_unknown: {
-    label: "How many?",
+    label: "कितने?",
     card: "border-fuchsia-300 bg-fuchsia-50/70",
     chip: "bg-fuchsia-200 text-fuchsia-900",
     icon: CircleHelp,
   },
   merged_mentions: {
-    label: "Added up",
+    label: "जोड़ा गया",
     card: "border-emerald-200 bg-white",
     chip: "bg-slate-200 text-slate-700",
     icon: Layers,
   },
   invalid: {
-    label: "Fix this",
+    label: "सुधारें",
     card: "border-red-300 bg-red-50/70",
     chip: "bg-red-200 text-red-900",
     icon: AlertTriangle,
   },
   ok: {
-    label: "Ready",
+    label: "तैयार",
     card: "border-emerald-200 bg-white",
     chip: "bg-emerald-100 text-emerald-700",
     icon: Check,
@@ -146,7 +218,7 @@ const ProductPicker = ({ catalog, value, onPick, autoFocus }) => {
           autoFocus={autoFocus}
           onChange={(event) => setQuery(event.target.value)}
           onFocus={() => setOpen(true)}
-          placeholder="Search product…"
+          placeholder="सामान खोजें…"
           className={`${fieldClass} pl-9`}
         />
       </div>
@@ -155,7 +227,7 @@ const ProductPicker = ({ catalog, value, onPick, autoFocus }) => {
         <div className="absolute left-0 right-0 top-12 z-30 max-h-64 overflow-y-auto rounded-2xl border border-slate-200 bg-white shadow-xl">
           {results.length === 0 ? (
             <p className="px-4 py-3 text-sm text-slate-400">
-              No product found.
+              कोई सामान नहीं मिला।
             </p>
           ) : (
             results.map((product) => {
@@ -234,7 +306,7 @@ const VariantPick = ({
         onChange={(event) => onMeasurement(event.target.value || null)}
         className={smallFieldClass}
       >
-        <option value="">Size / weight…</option>
+        <option value="">नाप / वज़न…</option>
         {measurements.map((option) => (
           <option key={option} value={option}>
             {option}
@@ -248,7 +320,7 @@ const VariantPick = ({
         onChange={(event) => onCompany(event.target.value || null)}
         className={smallFieldClass}
       >
-        <option value="">Brand…</option>
+        <option value="">कंपनी…</option>
         {companies.map((option) => (
           <option key={option} value={option}>
             {option}
@@ -296,22 +368,22 @@ const LineCard = ({
             </span>
             {line.origin === "manual" && (
               <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[11px] font-black uppercase text-violet-700">
-                Added by you
+                आपने जोड़ा
               </span>
             )}
             {line.origin === "ai_unresolved" && !line.removed && (
               <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-black uppercase text-slate-700">
-                Missing item
+                छूटा सामान
               </span>
             )}
             {wasCorrected && (
               <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-black uppercase text-emerald-700">
-                Corrected
+                सुधारा गया
               </span>
             )}
             {typeof line.confidence === "number" && line.origin === "ai" && (
               <span className="text-[11px] font-bold text-slate-400">
-                AI {Math.round(line.confidence * 100)}%
+                भरोसा {Math.round(line.confidence * 100)}%
               </span>
             )}
             {line.origin !== "manual" &&
@@ -319,10 +391,10 @@ const LineCard = ({
               !line.removed && (
                 <span
                   className="inline-flex items-center gap-1 rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-black uppercase text-slate-700"
-                  title="The customer mentioned this more than once. The total was added up from those mentions, not spoken as a single number."
+                  title="ग्राहक ने यह बात कई बार कही। कुल उन्हीं बातों से जोड़ा गया है, अलग से नंबर नहीं बोला गया।"
                 >
                   <Layers className="h-3 w-3" />
-                  {line.mentions} mentions
+                  {line.mentions} बार कहा
                 </span>
               )}
           </div>
@@ -331,7 +403,7 @@ const LineCard = ({
             {product?.name ||
               line.spokenName ||
               line.productName ||
-              "Unknown item"}
+              "अनजान सामान"}
           </p>
 
           {product?.hinglishName && (
@@ -342,12 +414,12 @@ const LineCard = ({
 
           {line.matchedPhrase && product && (
             <p className="mt-0.5 truncate text-xs text-slate-400">
-              heard as “{line.matchedPhrase}”
+              सुना: “{line.matchedPhrase}”
             </p>
           )}
           {line.origin === "ai_unresolved" && line.reason && (
             <p className="mt-0.5 text-xs font-semibold text-orange-800">
-              {line.reason}
+              {friendlyNote(line.reason)}
             </p>
           )}
         </div>
@@ -357,7 +429,7 @@ const LineCard = ({
             type="button"
             disabled={disabled}
             onClick={() => onRemove(line.key, line.removed)}
-            title={line.removed ? "Undo remove" : "Remove this item"}
+            title={line.removed ? "हटाना वापस लें" : "यह सामान हटाएँ"}
             className={`flex h-9 w-9 items-center justify-center rounded-full border transition disabled:opacity-40 ${
               line.removed
                 ? "border-slate-300 bg-white text-slate-700"
@@ -377,7 +449,7 @@ const LineCard = ({
         <ul className="mt-2 space-y-0.5">
           {line.issues.map((issue) => (
             <li key={issue} className="text-xs font-bold text-slate-700">
-              • {issue}
+              • {friendlyNote(issue)}
             </li>
           ))}
         </ul>
@@ -435,7 +507,7 @@ const LineCard = ({
                 className="flex h-10 w-full items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-bold text-slate-700 transition hover:border-slate-900 disabled:opacity-40"
               >
                 <Pencil className="h-3.5 w-3.5" />
-                Change product
+                सामान बदलें
               </button>
             )}
 
@@ -469,7 +541,7 @@ const LineCard = ({
                     })
                   }
                   className="flex h-full w-10 items-center justify-center text-slate-600 transition hover:bg-slate-50 active:bg-slate-100 disabled:opacity-40"
-                  title="One less"
+                  title="एक कम"
                 >
                   <Minus className="h-4 w-4" />
                 </button>
@@ -487,7 +559,7 @@ const LineCard = ({
                     patch({ quantity: Number(line.quantity || 0) + 1 })
                   }
                   className="flex h-full w-10 items-center justify-center text-slate-600 transition hover:bg-slate-50 active:bg-slate-100 disabled:opacity-40"
-                  title="One more"
+                  title="एक ज़्यादा"
                 >
                   <Plus className="h-4 w-4" />
                 </button>
@@ -496,7 +568,7 @@ const LineCard = ({
               <input
                 value={line.unit || ""}
                 disabled={disabled}
-                placeholder="unit (peti, kg…)"
+                placeholder="नाप (पेटी, किलो…)"
                 onChange={(event) => patch({ unit: event.target.value })}
                 className={`${smallFieldClass} flex-1`}
               />
@@ -511,7 +583,7 @@ const LineCard = ({
               className="mt-2 flex h-11 w-full items-center justify-center gap-2 rounded-xl border-2 border-slate-900 bg-slate-900 text-sm font-black text-white transition hover:bg-slate-700 disabled:opacity-40"
             >
               <CheckCheck className="h-4 w-4" />
-              Match is correct — accept this line
+              मैच सही है — यह पंक्ति मान लें
             </button>
           )}
         </>
@@ -520,7 +592,7 @@ const LineCard = ({
       {line.removed && (
         <p className="mt-2 flex items-center gap-2 text-xs font-bold text-slate-500">
           <Trash2 className="h-3.5 w-3.5" />
-          Removed from this draft
+          ड्राफ्ट से हटाया गया
         </p>
       )}
     </li>
@@ -564,7 +636,7 @@ const AddItemPanel = ({ catalog, onAdd, busy }) => {
         className="flex h-11 w-full items-center justify-center gap-2 text-sm font-black text-slate-700"
       >
         <Plus className="h-4 w-4" />
-        Add a missing item
+        छूटा सामान जोड़ें
         <ChevronDown
           className={`h-4 w-4 transition ${open ? "rotate-180" : ""}`}
         />
@@ -617,7 +689,7 @@ const AddItemPanel = ({ catalog, onAdd, busy }) => {
             </div>
             <input
               value={unit}
-              placeholder="unit (peti, kg…)"
+              placeholder="नाप (पेटी, किलो…)"
               onChange={(event) => setUnit(event.target.value)}
               className={`${smallFieldClass} flex-1`}
             />
@@ -634,7 +706,7 @@ const AddItemPanel = ({ catalog, onAdd, busy }) => {
             ) : (
               <Plus className="h-4 w-4" />
             )}
-            Add to draft
+            ड्राफ्ट में जोड़ें
           </button>
         </div>
       )}
@@ -741,7 +813,7 @@ const ConfirmedPanel = ({
             ड्राफ्ट पक्का हुआ · {confirmed.itemCount} सामान
           </p>
           <p className="text-xs font-semibold text-emerald-800">
-            {new Date(confirmed.at).toLocaleString("en-IN")}
+            {new Date(confirmed.at).toLocaleString("hi-IN")}
           </p>
           <p
             className={`mt-2 rounded-xl p-2.5 text-xs font-bold ${
@@ -803,7 +875,7 @@ const ConfirmedPanel = ({
               className="rounded-xl bg-white/80 p-2.5 text-sm text-slate-800"
             >
               <span className="font-black">
-                {item.quantity} {item.unit || "unit(s)"}
+                {item.quantity} {item.unit || "नग"}
               </span>{" "}
               · {item.productName}
               <span className="block text-xs text-slate-500">
@@ -818,12 +890,12 @@ const ConfirmedPanel = ({
 
       {confirmed.removed?.length > 0 && (
         <p className="mt-2 text-xs font-bold text-emerald-800">
-          {confirmed.removed.length} incorrect item(s) removed during review.
+          {confirmed.removed.length} गलत सामान जाँच के दौरान हटाया गया।
         </p>
       )}
       {confirmed.corrections?.length > 0 && (
         <p className="mt-1 text-xs font-bold text-emerald-800">
-          {confirmed.corrections.length} item(s) corrected by you.
+          आपने {confirmed.corrections.length} सामान जाँच में सही किया।
         </p>
       )}
 
@@ -913,7 +985,7 @@ const PilotOrderReview = ({ call, onChanged }) => {
       dirtyRef.current = false;
     } catch (error) {
       toast.error(
-        error.response?.data?.message || "Could not open the draft review.",
+        error.response?.data?.message || "जाँच नहीं खुल सकी।",
       );
       setReview(null);
     } finally {
@@ -948,7 +1020,7 @@ const PilotOrderReview = ({ call, onChanged }) => {
         return data.review;
       } catch (error) {
         toast.error(
-          error.response?.data?.message || "Could not save this draft.",
+          error.response?.data?.message || "यह ड्राफ्ट सहेजा नहीं जा सका।",
         );
         return null;
       } finally {
@@ -1018,7 +1090,7 @@ const PilotOrderReview = ({ call, onChanged }) => {
   const acknowledgeLine = useCallback(
     (key) => {
       changeLine(key, { resolution: { method: "supplier_acknowledged" } });
-      toast.success("Line accepted.");
+      toast.success("सही मान लिया गया।");
     },
     [changeLine],
   );
@@ -1030,10 +1102,10 @@ const PilotOrderReview = ({ call, onChanged }) => {
         const data = await addPilotReviewItem(pilotCallId, input);
         setReview(data.review);
         setLines(data.review.lines.map((line) => ({ ...line })));
-        toast.success("Item added to the draft.");
+        toast.success("सामान ड्राफ्ट में जुड़ गया।");
       } catch (error) {
         toast.error(
-          error.response?.data?.message || "Could not add that item.",
+          error.response?.data?.message || "यह सामान नहीं जुड़ सका।",
         );
       } finally {
         setAdding(false);
@@ -1083,10 +1155,10 @@ const PilotOrderReview = ({ call, onChanged }) => {
       const data = await reopenPilotDraft(pilotCallId);
       setReview(data.review);
       onChanged?.();
-      toast.success("Draft reopened for review.");
+      toast.success("ड्राफ्ट फिर जाँचने के लिए खुल गया।");
     } catch (error) {
       toast.error(
-        error.response?.data?.message || "Could not reopen the draft.",
+        error.response?.data?.message || "ड्राफ्ट फिर नहीं खुल सका।",
       );
     } finally {
       setReopening(false);
@@ -1097,7 +1169,7 @@ const PilotOrderReview = ({ call, onChanged }) => {
     return (
       <div className="flex items-center justify-center gap-2 py-8 text-sm font-bold text-slate-500">
         <Loader2 className="h-5 w-5 animate-spin" />
-        Opening draft review…
+        जाँच खोली जा रही है…
       </div>
     );
   }
@@ -1105,8 +1177,7 @@ const PilotOrderReview = ({ call, onChanged }) => {
   if (!review) {
     return (
       <p className="rounded-2xl border border-dashed border-slate-300 p-4 text-center text-sm font-bold text-slate-500">
-        This draft could not be opened for review. Refresh the call to try
-        again.
+        यह जाँच नहीं खुल सकी। कॉल को फिर से खोलकर कोशिश करें।
       </p>
     );
   }
@@ -1125,16 +1196,16 @@ const PilotOrderReview = ({ call, onChanged }) => {
     <section className="rounded-[24px] border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h4 className="text-lg font-black text-slate-900">
-          Review order ({kept.length} item{kept.length === 1 ? "" : "s"})
+          ऑर्डर की जाँच ({kept.length} सामान)
         </h4>
         <div className="flex items-center gap-2 text-xs font-bold">
           {saving ? (
             <span className="flex items-center gap-1 text-slate-500">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              Saving…
+              सहेजा जा रहा है…
             </span>
           ) : savedAt ? (
-            <span className="text-emerald-600">Saved</span>
+            <span className="text-emerald-600">सहेजा गया</span>
           ) : null}
         </div>
       </div>
@@ -1159,7 +1230,7 @@ const PilotOrderReview = ({ call, onChanged }) => {
             <div className="mt-3 rounded-2xl border-2 border-amber-300 bg-amber-50 p-3">
               <p className="flex items-center gap-2 text-sm font-black text-amber-900">
                 <TriangleAlert className="h-4 w-4" />
-                {blockers.length} item(s) need your decision
+                {blockers.length} सामान पर आपका फैसला चाहिए
               </p>
               <ul className="mt-1.5 space-y-0.5">
                 {blockers.map((blocker) => (
@@ -1167,7 +1238,7 @@ const PilotOrderReview = ({ call, onChanged }) => {
                     key={blocker.key}
                     className="text-xs font-bold text-amber-900"
                   >
-                    • {blocker.productName} — {blocker.messages?.[0]}
+                    • {blocker.productName} — {friendlyNote(blocker.messages?.[0])}
                   </li>
                 ))}
               </ul>
@@ -1179,12 +1250,12 @@ const PilotOrderReview = ({ call, onChanged }) => {
               {meta.clarificationQuestion ? (
                 <p className="flex items-start gap-2">
                   <CircleHelp className="mt-px h-4 w-4 shrink-0" />
-                  <span>{meta.clarificationQuestion}</span>
+                  <span>{friendlyNote(meta.clarificationQuestion)}</span>
                 </p>
               ) : (
                 <p>
-                  The AI was not fully sure about this call. Check every line
-                  against the transcript above.
+                  इस कॉल के बारे में पक्का भरोसा नहीं है। ऊपर लिखी बात से हर
+                  सामान जाँच लें।
                 </p>
               )}
             </div>
@@ -1192,14 +1263,14 @@ const PilotOrderReview = ({ call, onChanged }) => {
 
           {meta.customerNote && (
             <p className="mt-3 rounded-2xl bg-slate-50 p-3 text-sm text-slate-700">
-              <span className="font-black">Customer note:</span>{" "}
+              <span className="font-black">ग्राहक की बात:</span>{" "}
               {meta.customerNote}
             </p>
           )}
 
           {kept.length === 0 ? (
             <p className="mt-3 rounded-2xl border border-dashed border-slate-300 p-4 text-center text-sm font-bold text-slate-500">
-              Nothing left to confirm. Add the items that were ordered.
+              जाँचने के लिए कुछ नहीं बचा। मंगाया गया सामान जोड़ दें।
             </p>
           ) : (
             <ul className="mt-3 space-y-2.5">
@@ -1224,8 +1295,8 @@ const PilotOrderReview = ({ call, onChanged }) => {
           {removedCount > 0 && (
             <p className="mt-3 flex items-center gap-1.5 text-xs font-bold text-slate-500">
               <Trash2 className="h-3.5 w-3.5" />
-              {removedCount} removed item(s) — tap the undo icon to bring one
-              back.
+              {removedCount} सामान हटाए गए हैं — वापस लाने के लिए वापसी वाले
+              आइकन को दबाएँ।
             </p>
           )}
 

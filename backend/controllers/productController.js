@@ -1,4 +1,5 @@
 import Product from "../models/productModel.js";
+import mongoose from "mongoose";
 import cloudinary from "../utils/cloudinary.js";
 import getDataUri from "../utils/dataUri.js";
 import { uploadOnCloudinary } from "../utils/uploadOnCloudinary.js";
@@ -119,6 +120,9 @@ export const addProduct = async (req, res) => {
       variants,
       keyword: keywords,
       description,
+      // The supplier who logged in and added this product owns it. That is what
+      // lets a shopkeeper's home screen show only the selected supplier's list.
+      supplierId: req.userId || null,
     });
 
     // =====================================================
@@ -142,9 +146,26 @@ export const addProduct = async (req, res) => {
 
 export const getallproducts = async (req, res) => {
   try {
-    const products = await Product.find()
+    const { supplierId } = req.query;
+
+    // The home screen asks for one supplier's catalog. Products that have not
+    // been claimed yet stay visible to every shopkeeper until a supplier owns
+    // them, so nothing silently disappears the day this filter ships.
+    const filter =
+      supplierId && mongoose.isValidObjectId(supplierId)
+        ? {
+            $or: [
+              { supplierId },
+              { supplierId: null },
+              { supplierId: { $exists: false } },
+            ],
+          }
+        : {};
+
+    const products = await Product.find(filter)
       .populate("category")
       .populate("variants.company")
+      .populate("supplierId", "firstName lastName")
       .sort({ createdAt: -1 });
 
     return res.status(200).json({
@@ -227,6 +248,12 @@ export const updateProduct = async (req, res) => {
     }
     product.image = image;
     product.variants = variants || product.variants;
+
+    // An old product that no supplier owns yet becomes this supplier's on first
+    // edit, so every product eventually carries the name behind it.
+    if (req.userId && !product.supplierId) {
+      product.supplierId = req.userId;
+    }
 
     await product.save();
 

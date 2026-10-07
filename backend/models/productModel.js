@@ -71,6 +71,13 @@ const productSchema = new mongoose.Schema(
       type: Boolean,
       default: true,
     },
+
+    supplierId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+      index: true,
+    },
   },
   { timestamps: true },
 );

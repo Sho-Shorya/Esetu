@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { fetchPilotAnalytics } from "@/services/phoneOrderPilotApi";
 
 /**
@@ -54,8 +55,19 @@ export default function PilotAccuracyDashboard({ onOpenCall }) {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const navigate = useNavigate();
 
   const fetchReport = useCallback(() => fetchPilotAnalytics(), []);
+
+  /* Row clicks open the call on the supplier's review screen; the optional
+   * handler lets an embedding page override that navigation. */
+  const openCall = useCallback(
+    (id) => {
+      if (onOpenCall) return onOpenCall(id);
+      navigate(`/supplier-phone?callId=${id}`);
+    },
+    [onOpenCall, navigate],
+  );
 
   const message = (err) =>
     err?.response?.data?.message || "Could not load pilot analytics.";
@@ -295,7 +307,7 @@ export default function PilotAccuracyDashboard({ onOpenCall }) {
                     <td style={{ padding: "0.375rem 0.5rem", borderBottom: "1px solid #f3f4f6" }}>
                       <button
                         type="button"
-                        onClick={() => onOpenCall?.(row.pilotCallId)}
+                        onClick={() => openCall(row.pilotCallId)}
                         style={{
                           background: "none",
                           border: "none",

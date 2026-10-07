@@ -546,7 +546,6 @@ test("no supplier or customer data is written to the logs, on either outcome", a
           ...cloudPilot(expired, { _id: "pilot-pii" }),
           caller: { raw: "+91 98765-43210", normalized: "9876543210" },
           customer: { matched: true, method: "exact-10-digit" },
-          provider: { from: "9876543210", to: "9811111111", callId: "CA-pii" },
         },
         cloudPilot(ordered, {
           _id: "pilot-pii-ordered",

@@ -732,6 +732,12 @@ const MyTodayOrder = () => {
                     >
                       Order #{order._id.slice(-6)}
                     </h2>
+
+                    {order.source === "phone-call" && (
+                      <p className="mt-1 inline-block rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+                        फोन कॉल से बनाया गया ऑर्डर
+                      </p>
+                    )}
                   </div>
 
                   {/* STATUS */}

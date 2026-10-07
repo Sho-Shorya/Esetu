@@ -44,9 +44,7 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import PaymentStatus from "./components/PaymentStatus";
 import DailyOrders from "./pages/DailyOrders";
 import OrderRingOverlay from "./components/OrderRingOverlay";
-import PhoneOrderPilot from "./pages/pilot/PhoneOrderPilot";
-import TestAudioPage from "./pages/pilot/TestAudioPage";
-import Calling from "./pages/Calling";
+import PilotAccuracyDashboard from "./pages/pilot/PilotAccuracyDashboard";
 import SupplierPhone from "./pages/SupplierPhone";
 function App() {
   const token = localStorage.getItem("token");
@@ -113,20 +111,6 @@ function App() {
               </>
             ) : supplierData ? (
               <Navigate to="/admin-login" replace />
-            ) : (
-              <Navigate to="/login" replace />
-            )
-          }
-        />
-        <Route
-          path="/calling"
-          element={
-            userData ? (
-              <>
-                <Nav />
-                <Calling />
-                <Navbar />
-              </>
             ) : (
               <Navigate to="/login" replace />
             )
@@ -439,26 +423,12 @@ function App() {
           }
         />
         <Route
-          path="/pilot/phone-orders"
+          path="/pilot/accuracy"
           element={
             supplierData ? (
               <>
                 <Nav />
-                <PhoneOrderPilot />
-                <Navbar />
-              </>
-            ) : (
-              <Navigate to="/admin-login" replace />
-            )
-          }
-        />
-        <Route
-          path="/pilot/test-audio"
-          element={
-            supplierData ? (
-              <>
-                <Nav />
-                <TestAudioPage />
+                <PilotAccuracyDashboard />
                 <Navbar />
               </>
             ) : (

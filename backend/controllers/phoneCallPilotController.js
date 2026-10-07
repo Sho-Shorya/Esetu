@@ -1,16 +1,10 @@
 import fs from "fs";
 import PhoneCallPilot from "../models/phoneCallPilotModel.js";
 import PhoneCall from "../models/phoneCallModel.js";
-import { User } from "../models/userModel.js";
-import { getTelephonyProvider } from "../services/telephony/telephonyProvider.js";
 import {
   ensureAudioDir,
-  getMaxAudioBytes,
   hasAudioRecord,
   materializeAudio,
-  removeAudio,
-  saveAudioBuffer,
-  storageColumns,
   withAudioFile,
 } from "../services/pilotAudioStorage.js";
 import { transcribePilotAudio } from "../services/sttService.js";
@@ -18,7 +12,6 @@ import {
   buildCatalogProjection,
   extractOrderDraft,
 } from "../services/orderExtractionService.js";
-import { normalizeIndianPhone } from "../services/pilotPhoneNormalizer.js";
 import { setProcessingStatus } from "../services/phoneCallService.js";
 import {
   addManualReviewLine,
@@ -43,32 +36,64 @@ import { aggregatePilotAnalytics } from "../services/pilotAnalyticsService.js";
  * (POST /api/v1/phone-call/drafts/:id/order), so a supplier can always review
  * first and order second.
  *
- * Webhooks are authenticated by provider signature, not by JWT, because a
- * telephony provider cannot send our supplier token. The supplier UI routes use
+ * The recording itself arrives through the supplier upload endpoint
+ * (POST /api/v1/phone-orders/recording); every route in this file is guarded by
  * isAuthenticated + isSupp.
  */
 
-export const PILOT_ROUTE_PATHS = {
-  answer: "/api/v1/pilot/phone-call/answer",
-  status: "/api/v1/pilot/phone-call/status",
-  recordingReady: "/api/v1/pilot/phone-call/recording-ready",
-};
+const REPROCESSABLE_STAGES = ["new", "failed"];
 
-const REPROCESSABLE_STAGES = [
-  "new",
-  "call_answered",
-  "call_ended",
-  "recording_ready",
-  "failed",
+/*
+ * Stages a run is actively sitting in. These must be released before a new run
+ * can start — the only way out is a claim that sees the run as abandoned.
+ */
+const IN_FLIGHT_STAGES = [
+  "processing_recording",
+  "transcribing",
+  "extracting",
 ];
 
 const STALE_CLAIM_MS = Number(
   process.env.PILOT_CLAIM_TIMEOUT_MS || 10 * 60 * 1000,
 );
 
-const isTestAudioEnabled = () =>
-  String(process.env.PILOT_TEST_AUDIO_ENABLED || "").toLowerCase() === "true" &&
-  process.env.NODE_ENV !== "production";
+/**
+ * The one claim every pipeline run goes through: the upload endpoint, manual
+ * retries and the crash-recovery sweep all gate on the same atomic filter.
+ *
+ * A pipeline in flight can only be claimed again after it has been silent for
+ * longer than STALE_CLAIM_MS. `pipeline.recordingReadyAt` doubles as the run
+ * token: it is stamped here with a fresh timestamp, and every write of a run
+ * matches on it, so a run that was declared stale and replaced can never
+ * scribble over its replacement.
+ */
+const claimProcessing = async ({ match = {}, set = {} } = {}) => {
+  const staleBefore = new Date(Date.now() - STALE_CLAIM_MS);
+
+  return PhoneCallPilot.findOneAndUpdate(
+    {
+      ...match,
+      $or: [
+        { "pipeline.stage": { $in: REPROCESSABLE_STAGES } },
+        {
+          "pipeline.stage": { $in: IN_FLIGHT_STAGES },
+          "pipeline.recordingReadyAt": {
+            $lte: staleBefore,
+          },
+        },
+      ],
+    },
+    {
+      $set: {
+        "pipeline.stage": "processing_recording",
+        "pipeline.recordingReadyAt": new Date(),
+        "pipeline.error": null,
+        ...set,
+      },
+    },
+    { new: true },
+  );
+};
 
 const findOwnedPilotCall = async (id, supplierId, select = null) => {
   let query = PhoneCallPilot.findById(id);
@@ -77,12 +102,6 @@ const findOwnedPilotCall = async (id, supplierId, select = null) => {
   if (!doc) return null;
 
   if (String(doc.supplierId || "") === String(supplierId || "")) return doc;
-  if (
-    doc.source === "test" &&
-    String(doc.testUpload?.uploadedBy || "") === String(supplierId || "")
-  ) {
-    return doc;
-  }
   if (doc.phoneCallId) {
     const call = await PhoneCall.findOne({
       _id: doc.phoneCallId,
@@ -93,61 +112,12 @@ const findOwnedPilotCall = async (id, supplierId, select = null) => {
   return null;
 };
 
-const xmlError = (message) =>
-  `<?xml version="1.0" encoding="UTF-8"?>\n<Response><Speak>${message}</Speak></Response>`;
+const recordPipelineError = async (pilotId, error, runToken = null) => {
+  const filter = { _id: pilotId };
+  if (runToken) filter["pipeline.recordingReadyAt"] = runToken;
 
-const rejectInvalidSignature = (res, result) =>
-  res.status(403).json({
-    success: false,
-    message: `Rejected unsigned or invalid provider callback (${result.reason}).`,
-  });
-
-/** Exact 10-digit lookup only. Never fuzzy, never writes to User. */
-const matchCustomer = async (rawFrom) => {
-  const caller = normalizeIndianPhone(rawFrom);
-
-  if (!caller.normalized) {
-    return {
-      caller,
-      customer: { matched: false, userId: null, method: "unavailable" },
-    };
-  }
-
-  const user = await User.findOne({ phoneNumber: Number(caller.normalized) })
-    .select("_id")
-    .lean();
-
-  return {
-    caller,
-    customer: {
-      matched: Boolean(user),
-      userId: user?._id || null,
-      method: "exact-10-digit",
-    },
-  };
-};
-
-/**
- * Turns a storage record into `audio.`-prefixed Mongo update fields, so a
- * recording is written to the document the same way whether it was just
- * downloaded from the provider or uploaded by the supplier.
- */
-const audioFieldUpdates = (audio, { storedAt = new Date() } = {}) => ({
-  "audio.storage": audio.storage || "local",
-  "audio.publicId": audio.publicId || null,
-  "audio.format": audio.format || null,
-  "audio.fileName": audio.fileName || null,
-  "audio.contentType": audio.contentType || null,
-  "audio.bytes": audio.bytes ?? null,
-  "audio.sha256": audio.sha256 || null,
-  "audio.originalName": audio.originalName || null,
-  "audio.source": audio.source || null,
-  "audio.storedAt": storedAt,
-});
-
-const recordPipelineError = async (pilotId, error) => {
-  await PhoneCallPilot.updateOne(
-    { _id: pilotId },
+  const result = await PhoneCallPilot.updateOne(
+    filter,
     {
       $set: {
         "pipeline.stage": "failed",
@@ -159,6 +129,10 @@ const recordPipelineError = async (pilotId, error) => {
       },
     },
   );
+
+  // A newer run owns the document; the failing run may not flip it to failed.
+  if (result.matchedCount === 0) return;
+
   await PhoneCall.updateOne(
     { pilotCallId: pilotId },
     {
@@ -175,11 +149,10 @@ const recordPipelineError = async (pilotId, error) => {
 };
 
 /**
- * Runs download -> STT -> extraction. Fire-and-forget from the webhook so Plivo
- * always gets a fast 200 and never retries a long job.
+ * Runs STT -> extraction over a recording the supplier already uploaded.
  *
- * A test upload already has its audio on disk, so the provider download is
- * skipped. Only a live call needs the recording pulled down first.
+ * Fire-and-forget from the upload endpoint, so the HTTP response returns at once
+ * and the long job never blocks it.
  */
 const runPilotPipeline = async (pilotId) => {
   let doc;
@@ -187,56 +160,41 @@ const runPilotPipeline = async (pilotId) => {
     doc = await PhoneCallPilot.findById(pilotId);
     if (!doc) return;
 
-    const provider = getTelephonyProvider();
     await ensureAudioDir();
+
+    // The claim stamped by whichever path started this run. Every write below
+    // carries it, so once a run has been declared stale and replaced, the old
+    // run's writes simply match nothing and it stops — see the `write` guard.
+    const runToken = doc.pipeline?.recordingReadyAt || null;
+
+    const write = async (set) => {
+      const filter = { _id: pilotId };
+      if (runToken) filter["pipeline.recordingReadyAt"] = runToken;
+      const result = await PhoneCallPilot.updateOne(filter, { $set: set });
+      if (result.matchedCount === 0) {
+        if (runToken) {
+          console.warn("Pilot pipeline superseded, stopping:", pilotId);
+        }
+        return false;
+      }
+      return true;
+    };
 
     // The stored recording, whichever backend holds it. Kept as a record rather
     // than a file name so a durable recording is re-read the same way a local
     // one is, and so a retry after a redeploy finds the audio again.
-    let audio = doc.audio || null;
+    const audio = doc.audio || null;
 
     if (!hasAudioRecord(audio)) {
-      if (!doc.provider?.recordingUrl) {
-        const missing = new Error(
-          "This call has no provider recording URL and no stored audio, so there is nothing to transcribe.",
-        );
-        missing.code = "NO_AUDIO_AVAILABLE";
-        throw missing;
-      }
-
-      await PhoneCallPilot.updateOne(
-        { _id: pilotId },
-        { $set: { "pipeline.stage": "downloading_recording" } },
+      const missing = new Error(
+        "This call has no stored audio, so there is nothing to transcribe.",
       );
+      missing.code = "NO_AUDIO_AVAILABLE";
+      throw missing;
+    }
 
-      const { buffer, contentType: downloadedType } =
-        await provider.downloadRecording(doc.provider.recordingUrl);
-
-      // Durable storage is written first. If it fails, the pipeline records the
-      // failure and no half-saved recording is left behind.
-      const saved = await saveAudioBuffer({
-        buffer,
-        contentType: downloadedType,
-        originalName: doc.provider.recordingId,
-        prefix: doc.provider.callId || "call",
-      });
-
-      audio = { ...storageColumns(saved), source: doc.source };
-
-      await PhoneCallPilot.updateOne(
-        { _id: pilotId },
-        {
-          $set: {
-            ...audioFieldUpdates(audio, { storedAt: new Date() }),
-            "pipeline.stage": "transcribing",
-          },
-        },
-      );
-    } else {
-      await PhoneCallPilot.updateOne(
-        { _id: pilotId },
-        { $set: { "pipeline.stage": "transcribing" } },
-      );
+    if (!(await write({ "pipeline.stage": "transcribing" }))) {
+      return;
     }
 
     // A local recording is transcribed where it lies; a durable one is fetched
@@ -251,28 +209,27 @@ const runPilotPipeline = async (pilotId) => {
       }),
     );
 
-    await PhoneCallPilot.updateOne(
-      { _id: pilotId },
-      {
-        $set: {
-          "stt.status": "completed",
-          "stt.engine": transcript.engine,
-          "stt.transport": transcript.transport,
-          "stt.model": transcript.model,
-          "stt.jobId": transcript.jobId,
-          "stt.transcript": transcript.transcript,
-          "stt.languageCode": transcript.languageCode,
-          "stt.timestamps": transcript.timestamps,
-          "stt.speakers": transcript.speakers,
-          "stt.speakerAttributionAvailable":
-            transcript.speakerAttributionAvailable,
-          "stt.channelsMerged": transcript.channelsMerged,
-          "stt.audioInput": transcript.audioInput ?? null,
-          "stt.error": null,
-          "pipeline.stage": "extracting",
-        },
-      },
-    );
+    if (
+      !(await write({
+        "stt.status": "completed",
+        "stt.engine": transcript.engine,
+        "stt.transport": transcript.transport,
+        "stt.model": transcript.model,
+        "stt.jobId": transcript.jobId,
+        "stt.transcript": transcript.transcript,
+        "stt.languageCode": transcript.languageCode,
+        "stt.timestamps": transcript.timestamps,
+        "stt.speakers": transcript.speakers,
+        "stt.speakerAttributionAvailable":
+          transcript.speakerAttributionAvailable,
+        "stt.channelsMerged": transcript.channelsMerged,
+        "stt.audioInput": transcript.audioInput ?? null,
+        "stt.error": null,
+        "pipeline.stage": "extracting",
+      }))
+    ) {
+      return;
+    }
 
     const catalog = await buildCatalogProjection();
     const extraction = await extractOrderDraft({
@@ -280,22 +237,21 @@ const runPilotPipeline = async (pilotId) => {
       catalog,
     });
 
-    await PhoneCallPilot.updateOne(
-      { _id: pilotId },
-      {
-        $set: {
-          "extraction.status": "completed",
-          "extraction.model": extraction.model,
-          "extraction.draft": extraction.draft,
-          "extraction.validationErrors": extraction.validationErrors,
-          "extraction.needsReview": extraction.needsReview,
-          "extraction.error": null,
-          "pipeline.stage": "completed",
-          "pipeline.completedAt": new Date(),
-          "pipeline.error": null,
-        },
-      },
-    );
+    if (
+      !(await write({
+        "extraction.status": "completed",
+        "extraction.model": extraction.model,
+        "extraction.draft": extraction.draft,
+        "extraction.validationErrors": extraction.validationErrors,
+        "extraction.needsReview": extraction.needsReview,
+        "extraction.error": null,
+        "pipeline.stage": "completed",
+        "pipeline.completedAt": new Date(),
+        "pipeline.error": null,
+      }))
+    ) {
+      return;
+    }
 
     await PhoneCall.updateOne(
       { pilotCallId: pilotId },
@@ -310,15 +266,19 @@ const runPilotPipeline = async (pilotId) => {
     );
   } catch (error) {
     console.error("Pilot pipeline failed:", pilotId, error?.message);
-    await recordPipelineError(pilotId, error);
+    await recordPipelineError(
+      pilotId,
+      error,
+      doc?.pipeline?.recordingReadyAt || null,
+    );
   }
 };
 
 /**
  * Kicks the STT -> draft pipeline off without blocking the HTTP response.
  *
- * Exported so the calling feature reuses this exact runner when a call
- * recording is attached, instead of growing a second copy of the pipeline.
+ * Exported so the supplier upload route starts this exact runner when a
+ * recording arrives, instead of growing a second copy of the pipeline.
  */
 export const startPipelineInBackground = (pilotId) => {
   setImmediate(() => {
@@ -328,177 +288,53 @@ export const startPipelineInBackground = (pilotId) => {
   });
 };
 
-/* ----------------------------- provider webhooks ---------------------------- */
+const RECOVERY_INTERVAL_MS = Number(
+  process.env.PILOT_RECOVERY_INTERVAL_MS || 5 * 60 * 1000,
+);
 
-export const handleAnswerWebhook = async (req, res) => {
-  let provider;
-  try {
-    provider = getTelephonyProvider();
-  } catch (error) {
-    return res
-      .status(503)
-      .type("text/xml")
-      .send(xmlError("Pilot provider unavailable."));
-  }
+/**
+ * Crash recovery for the STT -> draft pipeline.
+ *
+ * A run that dies mid-flight leaves its stage parked in an in-flight value with
+ * a stale run token. Nothing else in the system would ever move it — so this
+ * sweep reclaims exactly those runs through the same atomic claim every
+ * other start uses, and relaunches the run under a fresh token.
+ *
+ * Never throws on its own: a flaky database visit is logged and the next sweep
+ * tries again.
+ */
+export const startPilotPipelineRecovery = () => {
+  const run = async () => {
+    try {
+      const staleBefore = new Date(Date.now() - STALE_CLAIM_MS);
+      const stuck = await PhoneCallPilot.find({
+        "pipeline.stage": { $in: IN_FLIGHT_STAGES },
+        "pipeline.recordingReadyAt": { $lte: staleBefore },
+      })
+        .select("_id")
+        .limit(25);
 
-  const signature = provider.verifyWebhookSignature(
-    req,
-    PILOT_ROUTE_PATHS.answer,
-  );
-  if (!signature.valid) return rejectInvalidSignature(res, signature);
+      for (const doc of stuck) {
+        const claimed = await claimProcessing({ match: { _id: doc._id } });
+        if (claimed) {
+          console.warn(
+            "Recovered a stale pilot pipeline:",
+            claimed._id,
+            "from stage:",
+            doc.pipeline?.stage,
+          );
+          startPipelineInBackground(claimed._id);
+        }
+      }
+    } catch (error) {
+      console.error("Pilot pipeline recovery sweep failed:", error?.message);
+    }
+  };
 
-  const callId = provider.getCallId(req);
-  const from = provider.getFromNumber(req);
-  const to = provider.getToNumber(req);
-
-  if (!callId) {
-    return res
-      .status(400)
-      .type("text/xml")
-      .send(xmlError("Missing call identifier."));
-  }
-
-  const { caller, customer } = await matchCustomer(from);
-
-  await PhoneCallPilot.findOneAndUpdate(
-    { "provider.callId": callId },
-    {
-      $setOnInsert: {
-        source: "live",
-        "provider.name": provider.PROVIDER_NAME,
-        "provider.callId": callId,
-        "provider.from": from,
-        "provider.to": to,
-        "provider.direction": provider.getDirection(req),
-        "provider.callStatus": provider.getCallStatus(req) || "in-progress",
-        caller,
-        customer,
-        "pipeline.stage": "call_answered",
-        "pipeline.startedAt": new Date(),
-      },
-    },
-    { upsert: true, new: true, setDefaultsOnInsert: true },
-  );
-
-  return res.status(200).type("text/xml").send(provider.buildAnswerXml());
-};
-
-export const handleStatusWebhook = async (req, res) => {
-  let provider;
-  try {
-    provider = getTelephonyProvider();
-  } catch {
-    return res
-      .status(503)
-      .json({ success: false, message: "Pilot provider unavailable." });
-  }
-
-  const signature = provider.verifyWebhookSignature(
-    req,
-    PILOT_ROUTE_PATHS.status,
-  );
-  if (!signature.valid) return rejectInvalidSignature(res, signature);
-
-  const callId = provider.getCallId(req);
-  if (!callId) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Missing call identifier." });
-  }
-
-  const updates = {};
-  const callStatus = provider.getCallStatus(req);
-  const duration = provider.getDurationSeconds(req);
-  const direction = provider.getDirection(req);
-
-  if (callStatus) updates["provider.callStatus"] = callStatus;
-  if (direction) updates["provider.direction"] = direction;
-  // Plivo sends -1 or omits duration until the call is truly finished.
-  if (duration !== null) updates["provider.durationSeconds"] = duration;
-
-  if (callStatus) {
-    const stage = [
-      "completed",
-      "failed",
-      "busy",
-      "no-answer",
-      "canceled",
-    ].includes(callStatus)
-      ? "call_ended"
-      : "call_answered";
-    updates["pipeline.stage"] = stage;
-  }
-
-  if (Object.keys(updates).length) {
-    await PhoneCallPilot.updateOne(
-      { "provider.callId": callId },
-      { $set: updates },
-    );
-  }
-
-  return res.status(200).json({ success: true });
-};
-
-export const handleRecordingWebhook = async (req, res) => {
-  let provider;
-  try {
-    provider = getTelephonyProvider();
-  } catch {
-    return res
-      .status(503)
-      .json({ success: false, message: "Pilot provider unavailable." });
-  }
-
-  const signature = provider.verifyWebhookSignature(
-    req,
-    PILOT_ROUTE_PATHS.recordingReady,
-  );
-  if (!signature.valid) return rejectInvalidSignature(res, signature);
-
-  const callId = provider.getCallId(req);
-  if (!callId) {
-    return res
-      .status(400)
-      .json({ success: false, message: "Missing call identifier." });
-  }
-
-  const staleBefore = new Date(Date.now() - STALE_CLAIM_MS);
-
-  // Atomic claim so duplicate Plivo callbacks cannot start two pipelines.
-  const doc = await PhoneCallPilot.findOneAndUpdate(
-    {
-      "provider.callId": callId,
-      $or: [
-        { "pipeline.stage": { $in: REPROCESSABLE_STAGES } },
-        {
-          "pipeline.stage": "processing_recording",
-          "pipeline.recordingReadyAt": { $lt: staleBefore },
-        },
-      ],
-    },
-    {
-      $set: {
-        "provider.name": provider.PROVIDER_NAME,
-        "provider.recordingId": provider.getRecordingId(req),
-        "provider.recordingUrl": provider.getRecordingUrl(req),
-        "provider.callStatus": provider.getCallStatus(req) || "completed",
-        "pipeline.stage": "processing_recording",
-        "pipeline.recordingReadyAt": new Date(),
-      },
-    },
-    { new: true },
-  );
-
-  if (!doc) {
-    return res.status(200).json({
-      success: true,
-      message: "Recording already queued or processed.",
-    });
-  }
-
-  // Acknowledge first, then do the slow work.
-  res.status(200).json({ success: true, pilotCallId: doc._id });
-  startPipelineInBackground(doc._id);
+  void run();
+  const timer = setInterval(run, RECOVERY_INTERVAL_MS);
+  timer.unref?.();
+  return timer;
 };
 
 /* ----------------------------- supplier pilot UI ---------------------------- */
@@ -509,19 +345,9 @@ const toPublicCall = (doc) => {
   return {
     _id: plain._id,
     source: plain.source,
+    phoneCallId: plain.phoneCallId || null,
     createdAt: plain.createdAt,
     updatedAt: plain.updatedAt,
-    provider: {
-      name: plain.provider?.name || null,
-      callId: plain.provider?.callId || null,
-      recordingId: plain.provider?.recordingId || null,
-      from: plain.provider?.from || null,
-      to: plain.provider?.to || null,
-      direction: plain.provider?.direction || null,
-      callStatus: plain.provider?.callStatus || null,
-      durationSeconds: plain.provider?.durationSeconds ?? null,
-      // The provider-hosted URL is intentionally never returned.
-    },
     caller: plain.caller || null,
     customer: plain.customer || null,
     audio: {
@@ -549,7 +375,6 @@ const toPublicCall = (doc) => {
       // Pilot guarantee, surfaced so the screen can state it plainly.
       orderCreated: plain.review?.confirmed?.orderCreated === true,
     },
-    testUpload: plain.testUpload || null,
   };
 };
 
@@ -577,7 +402,7 @@ export const getPilotCall = async (req, res) => {
     if (!doc) {
       return res
         .status(404)
-        .json({ success: false, message: "Pilot call not found." });
+        .json({ success: false, message: "यह कॉल नहीं मिली।" });
     }
     return res.status(200).json({ success: true, call: toPublicCall(doc) });
   } catch (error) {
@@ -590,7 +415,7 @@ export const getPilotCall = async (req, res) => {
  *
  * The supplier never has to re-upload: the recording is deliberately preserved
  * after a failure, so a retry is just this call. It re-arms the same claim the
- * provider webhook uses and hands off to the same runner, so there is exactly
+ * upload endpoint uses and hands off to the same runner, so there is exactly
  * one pipeline in the codebase.
  *
  * Refuses anything that already produced a real Order, and anything that did
@@ -632,22 +457,11 @@ export const retryPilotProcessing = async (req, res) => {
       });
     }
 
-    // Atomic claim, same as the provider webhook: a double tap can only start
-    // one run, and a run already in flight is never stolen from.
-    const claimed = await PhoneCallPilot.findOneAndUpdate(
-      {
-        _id: doc._id,
-        "pipeline.stage": { $in: REPROCESSABLE_STAGES },
-      },
-      {
-        $set: {
-          "pipeline.stage": "processing_recording",
-          "pipeline.recordingReadyAt": new Date(),
-          "pipeline.error": null,
-        },
-      },
-      { new: true },
-    );
+    // Atomic claim, same as the upload path: a double tap can only start
+    // one run, and a run in flight is never stolen from — except once it has
+    // been silent long enough to count as crashed, in which case this is the
+    // manual way back.
+    const claimed = await claimProcessing({ match: { _id: doc._id } });
 
     if (!claimed) {
       return res.status(409).json({
@@ -686,13 +500,13 @@ export const streamPilotAudio = async (req, res) => {
     const doc = await findOwnedPilotCall(
       req.params.id,
       req.userId,
-      "audio supplierId phoneCallId source testUpload.uploadedBy",
+      "audio supplierId phoneCallId source",
     );
 
     if (!hasAudioRecord(doc?.audio)) {
       return res
         .status(404)
-        .json({ success: false, message: "No audio stored for this call." });
+        .json({ success: false, message: "इस कॉल की रिकॉर्डिंग नहीं है।" });
     }
 
     const contentType = doc.audio.contentType || "application/octet-stream";
@@ -720,81 +534,7 @@ export const streamPilotAudio = async (req, res) => {
     ) {
       return res.status(410).json({
         success: false,
-        message: "Stored audio is no longer available.",
-      });
-    }
-    return res.status(500).json({ success: false, message: error.message });
-  }
-};
-
-export const getPilotCapability = async (_req, res) =>
-  res.status(200).json({
-    success: true,
-    testAudioEnabled: isTestAudioEnabled(),
-    maxAudioBytes: getMaxAudioBytes(),
-  });
-
-/**
- * Development-only path for exercising the pipeline with a real recording.
- * Requires an actual audio file; it never synthesises a transcript.
- */
-export const uploadTestAudio = async (req, res) => {
-  if (!isTestAudioEnabled()) {
-    return res.status(403).json({
-      success: false,
-      message:
-        "Test audio is disabled. Set PILOT_TEST_AUDIO_ENABLED=true outside production.",
-    });
-  }
-
-  if (!req.file || !req.file.buffer?.length) {
-    return res.status(400).json({
-      success: false,
-      message: "Attach an audio file in the `audio` field.",
-    });
-  }
-
-  let saved = null;
-  try {
-    saved = await saveAudioBuffer({
-      buffer: req.file.buffer,
-      contentType: req.file.mimetype,
-      originalName: req.file.originalname,
-      prefix: "test",
-    });
-
-    const doc = await PhoneCallPilot.create({
-      source: "test",
-      supplierId: req.userId,
-      provider: { name: "test" },
-      audio: {
-        ...storageColumns(saved),
-        source: "test",
-        storedAt: new Date(),
-      },
-      testUpload: {
-        uploadedBy: req.userId || null,
-        originalName: saved.originalName,
-      },
-      pipeline: { stage: "transcribing", startedAt: new Date() },
-    });
-
-    res.status(202).json({
-      success: true,
-      pilotCallId: doc._id,
-      audio: { bytes: saved.bytes, contentType: saved.contentType },
-    });
-
-    startPipelineInBackground(doc._id);
-  } catch (error) {
-    // Nothing was linked to the recording, so drop the bytes rather than leave
-    // an asset nothing points at.
-    if (saved) await removeAudio(saved);
-    if (error?.code === "AUDIO_CLOUD_UPLOAD_FAILED") {
-      return res.status(503).json({
-        success: false,
-        code: error.code,
-        message: "रिकॉर्डिंग सुरक्षित जगह नहीं जा पाई। फिर कोशिश करें।",
+        message: "रिकॉर्डिंग अब उपलब्ध नहीं है।",
       });
     }
     return res.status(500).json({ success: false, message: error.message });
@@ -880,13 +620,13 @@ export const getPilotReview = async (req, res) => {
     if (!doc) {
       return res
         .status(404)
-        .json({ success: false, message: "Pilot call not found." });
+        .json({ success: false, message: "यह कॉल नहीं मिली।" });
     }
 
     if (doc.extraction?.status !== "completed" || !doc.extraction?.draft) {
       return res.status(409).json({
         success: false,
-        message: "This call has no AI draft to review yet.",
+        message: "इस कॉल का ऑर्डर ड्राफ्ट अभी तैयार नहीं है।",
         review: publicReview(doc),
       });
     }
@@ -915,12 +655,12 @@ export const getPilotReview = async (req, res) => {
 
 const loadReviewableCall = async (id, supplierId) => {
   const doc = await findOwnedPilotCall(id, supplierId);
-  if (!doc) return { status: 404, message: "Pilot call not found." };
+  if (!doc) return { status: 404, message: "यह कॉल नहीं मिली।" };
   if (doc.extraction?.status !== "completed" || !doc.extraction?.draft) {
-    return { status: 409, message: "This call has no AI draft to review yet." };
+    return { status: 409, message: "इस कॉल का ऑर्डर ड्राफ्ट अभी तैयार नहीं है।" };
   }
   if (doc.review?.status === REVIEW_STATUS.CONFIRMED) {
-    return { status: 409, message: "This draft is already confirmed." };
+    return { status: 409, message: "यह ड्राफ्ट पहले ही कन्फर्म हो चुका है।" };
   }
   return { doc };
 };
@@ -944,7 +684,7 @@ export const savePilotReview = async (req, res) => {
     if (!Array.isArray(req.body?.lines)) {
       return res.status(400).json({
         success: false,
-        message: "Send the whole review as { lines: [...] }.",
+        message: "पूरी जाँच { lines: [...] } के रूप में भेजें।",
       });
     }
 
@@ -1013,12 +753,12 @@ export const confirmPilotDraft = async (req, res) => {
     if (!doc) {
       return res
         .status(404)
-        .json({ success: false, message: "Pilot call not found." });
+        .json({ success: false, message: "यह कॉल नहीं मिली।" });
     }
     if (doc.extraction?.status !== "completed" || !doc.extraction?.draft) {
       return res.status(409).json({
         success: false,
-        message: "This call has no AI draft to confirm.",
+        message: "इस कॉल का ऑर्डर ड्राफ्ट नहीं बना है।",
       });
     }
     const wantsOrder = req.body?.createOrder === true;
@@ -1155,12 +895,12 @@ export const reopenPilotDraft = async (req, res) => {
     if (!doc) {
       return res
         .status(404)
-        .json({ success: false, message: "Pilot call not found." });
+        .json({ success: false, message: "यह कॉल नहीं मिली।" });
     }
     if (doc.review?.status !== REVIEW_STATUS.CONFIRMED) {
       return res
         .status(409)
-        .json({ success: false, message: "This draft is not confirmed." });
+        .json({ success: false, message: "यह ड्राफ्ट कन्फर्म नहीं हुआ है।" });
     }
 
     const review = reopenReview({ doc });

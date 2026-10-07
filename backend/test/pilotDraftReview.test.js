@@ -401,6 +401,52 @@ test("uncertain and invalid variants both block until corrected", () => {
   assert.match(wrongBrand.lines[0].issues.join(" "), /Fortune/);
 });
 
+test("a variant/company pair the shop never sells is blocked before the bridge sees it", () => {
+  // Individually every field is real, but Dabur only sells 500 g and
+  // Patanjali only sells 1 kg — the pair itself must fail.
+  const comboCatalog = [
+    {
+      ref: "P1",
+      productId: "prod-honey",
+      name: "Honey",
+      hinglishName: "Shahad",
+      aliases: ["shahad", "honey"],
+      variants: [
+        { companyId: "cmp-x", company: "Dabur", measurement: "500 g" },
+        { companyId: "cmp-y", company: "Patanjali", measurement: "1 kg" },
+      ],
+    },
+  ];
+  const line = (overrides = {}) => ({
+    key: "k1",
+    origin: LINE_ORIGIN.AI,
+    productId: "prod-honey",
+    productName: "Honey",
+    quantity: 2,
+    unit: "jar",
+    confidence: 0.95,
+    variantMeasurement: "500 g",
+    company: "Dabur",
+    ...overrides,
+  });
+
+  const wrongPair = checkLine(
+    line({ variantMeasurement: "500 g", company: "Patanjali" }),
+    comboCatalog,
+  );
+  assert.equal(wrongPair.status, LINE_STATUS.INVALID);
+  assert.equal(wrongPair.blocking, true);
+  assert.match(wrongPair.issues.join(" "), /Patanjali/);
+  assert.match(wrongPair.issues.join(" "), /combination/);
+
+  const rightPair = checkLine(line(), comboCatalog);
+  assert.equal(rightPair.status, LINE_STATUS.OK);
+
+  // The same pair addressed by companyId resolves too.
+  const byId = checkLine(line({ company: "cmp-x" }), comboCatalog);
+  assert.equal(byId.status, LINE_STATUS.OK);
+});
+
 /* ================== scenario: removing an incorrect item =================== */
 
 test("supplier can remove an incorrect item and it leaves the confirmed draft", () => {
@@ -550,7 +596,7 @@ test("describeBlockers explains why confirm is refused", () => {
   const report = openReview({ doc, catalog });
 
   const message = describeBlockers(report.blockers);
-  assert.match(message, /Resolve 1 item/);
+  assert.match(message, /पक्का करने से पहले 1 सामान ठीक करें/);
   assert.match(message, /hing/);
   assert.equal(describeBlockers([]), null);
 });
@@ -992,13 +1038,34 @@ test("retry re-arms the failed stage and hands the same recording to the pipelin
       assert.equal(res.statusCode, 202);
       assert.equal(res.body.success, true);
       assert.equal(claims.length, 1, "the stage is claimed exactly once");
-      assert.deepEqual(claims[0].filter["pipeline.stage"].$in, [
+
+      // The claim leases back either a finished stage or a run that was sitting
+      // in an in-flight stage longer than the crash timeout.
+      const finishedBranches = claims[0].filter.$or.filter(
+        (clause) =>
+          clause["pipeline.recordingReadyAt"] === undefined &&
+          clause["pipeline.stage"],
+      );
+      assert.equal(finishedBranches.length, 1);
+      assert.deepEqual(finishedBranches[0]["pipeline.stage"].$in, [
         "new",
-        "call_answered",
-        "call_ended",
-        "recording_ready",
         "failed",
       ]);
+
+      const staleRuns = claims[0].filter.$or.filter(
+        (clause) => clause["pipeline.recordingReadyAt"] !== undefined,
+      );
+      assert.equal(staleRuns.length, 1, "stale in-flight runs are leased back");
+      assert.deepEqual(staleRuns[0]["pipeline.stage"].$in, [
+        "processing_recording",
+        "transcribing",
+        "extracting",
+      ]);
+      assert.ok(
+        staleRuns[0]["pipeline.recordingReadyAt"].$lte instanceof Date,
+        "leased back only once the run has been silent past the crash timeout",
+      );
+
       assert.equal(
         claims[0].update.$set["pipeline.stage"],
         "processing_recording",

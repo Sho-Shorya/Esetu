@@ -389,6 +389,57 @@ test("a variant that no longer exists is refused instead of silently substituted
   assert.equal(result.code, BRIDGE_CODES.UNKNOWN_VARIANT);
 });
 
+test("a company spoken as a name still resolves to the catalog variant", async () => {
+  // The review pickers and the extractor store the company's name, not its
+  // ObjectId; that line must be priced instead of refused.
+  const result = await withFakes({ products: catalog }, () =>
+    revalidateConfirmedItems([saltLine({ company: "Tata" })]),
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.orderItems[0].companyName, "Tata");
+  assert.equal(result.orderItems[0].price, 28);
+});
+
+test("a name-form company resolves against unpopulated variants too", async () => {
+  // This is the real shape Mongo returns: variants.company is a plain
+  // ObjectId and the name lives on the Company document.
+  const products = [
+    {
+      _id: OBJECT_IDS.salt,
+      name: "Salt",
+      hinglishName: "Salt",
+      isActive: true,
+      category: { _id: "64b0000000000000000000cc1", name: "Grocery" },
+      variants: [
+        {
+          company: OBJECT_IDS.tata,
+          measurement: "1 kg",
+          price: 28,
+          available: true,
+        },
+      ],
+    },
+  ];
+  const companies = [{ _id: OBJECT_IDS.tata, name: "Tata" }];
+
+  const result = await withFakes({ products, companies }, () =>
+    revalidateConfirmedItems([saltLine({ company: "tata" })]),
+  );
+
+  assert.equal(result.ok, true);
+  assert.equal(result.orderItems[0].companyName, "Tata");
+});
+
+test("a company name that does not make the product is refused", async () => {
+  const result = await withFakes({ products: catalog }, () =>
+    revalidateConfirmedItems([saltLine({ company: "Patanjali" })]),
+  );
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, BRIDGE_CODES.UNKNOWN_VARIANT);
+});
+
 test("an unavailable variant is refused", async () => {
   const products = [
     makeProduct(OBJECT_IDS.salt, "Salt", [
@@ -513,7 +564,7 @@ test("a confirmed draft creates one real order with catalog prices and provenanc
     assert.equal(String(created.supplierId), OBJECT_IDS.supplier);
     assert.equal(created.source, "phone-call");
     assert.equal(created.paymentMethod, "COD");
-    assert.equal(created.status, "Pending");
+    assert.equal(created.status, "Approved");
     assert.equal(created.totalAmount, 56 + 420);
     assert.equal(String(created.phoneCallPilotId), OBJECT_IDS.pilot);
 
@@ -540,6 +591,73 @@ test("a confirmed draft creates one real order with catalog prices and provenanc
     assert.equal(marked.update.$set["review.confirmed.orderCreated"], true);
     assert.ok(marked.update.$set["review.confirmed.orderId"]);
   });
+});
+
+test("a second phone order on the same day merges into and accepts today's order", async () => {
+  // Today's order started as a pending cart order. A confirmed phone call must
+  // find it, merge its items into it, and accept it outright rather than asking
+  // the supplier to approve a brand new order a second time.
+  const cartOrder = {
+    _id: "order-today",
+    userId: OBJECT_IDS.customer,
+    status: "Pending",
+    isTodayOrder: true,
+    source: "cart",
+    supplierId: null,
+    items: [
+      {
+        productId: OBJECT_IDS.salt,
+        companyId: OBJECT_IDS.tata,
+        name: "Salt",
+        measurement: "1 kg",
+        price: 28,
+        qty: 1,
+        total: 28,
+      },
+    ],
+    totalAmount: 28,
+    phoneCallIds: [],
+    phoneCallPilotIds: [],
+    save: async function () {
+      return this;
+    },
+  };
+
+  await withFakes(
+    { products: catalog, users: customers, order: cartOrder },
+    async (fakes) => {
+      const doc = makeConfirmedDoc([saltLine()]);
+      fakes.state.pilotDoc = doc;
+
+      const result = await createOrderFromConfirmedPhoneCall({
+        pilotCallId: OBJECT_IDS.pilot,
+        userId: OBJECT_IDS.supplier,
+        notify: false,
+      });
+
+      assert.equal(result.ok, true);
+      assert.equal(result.status, 201);
+      assert.equal(result.merged, true);
+
+      // Nothing new was written: the existing document is the returned one.
+      assert.equal(fakes.state.created.length, 0);
+      assert.equal(fakes.state.orders.length, 1);
+      assert.equal(String(fakes.state.orders[0]._id), "order-today");
+
+      const merged = fakes.state.orders[0];
+      // The phone order's items joined the cart order's. The cart already had
+      // 1 kg of salt; the call adds 2 more, so the item's line merges instead
+      // of duplicating...
+      assert.equal(merged.items.length, 1);
+      assert.equal(merged.items[0].qty, 3);
+      assert.equal(merged.items[0].total, 84);
+      // ...and the whole order became accepted, no further approval needed.
+      assert.equal(merged.status, "Approved");
+      assert.equal(merged.source, "phone-call");
+      assert.equal(merged.totalAmount, 84);
+      assert.ok(merged.phoneCallAudit.transcript.includes("bhai do kilo namak"));
+    },
+  );
 });
 
 test("a durable recording is audited as available audio, with no storage id leaked", async () => {

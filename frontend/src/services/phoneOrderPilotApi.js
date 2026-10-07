@@ -2,15 +2,23 @@ import axios from "axios";
 import { API_BASE_URL } from "@/lib/constants";
 
 /**
- * Supplier-only client for the Phase 1 phone-call pilot.
+ * Supplier-only client for the phone-order flow.
  *
- * Every draft route here reads or writes the pilot record only. The single
+ * Two families of routes:
+ *   - /api/v1/phone-orders  → recording upload, upload limits, created orders
+ *   - /api/v1/pilot/phone-call → the pipeline record, its draft and its review
+ *
+ * Every draft route reads or writes the pilot record only. The single
  * exception is the opt-in `createOrder` flag on confirm, which hands the
  * confirmed draft to the backend bridge — the one place allowed to write an
  * Order. No client here writes an Order directly.
  */
 
-const base = () => `${API_BASE_URL}/api/v1/pilot/phone-call`;
+const uploadBase = () => `${API_BASE_URL}/api/v1/phone-orders`;
+
+const pilotBase = () => `${API_BASE_URL}/api/v1/pilot/phone-call`;
+
+const callBase = () => `${API_BASE_URL}/api/v1/phone-call`;
 
 /**
  * Analytics lives beside the pilot, not under it: /api/v1/pilot/analytics.
@@ -24,21 +32,56 @@ const authHeaders = () => ({
 
 const unwrap = (response) => response.data;
 
-export const fetchPilotCapability = async () =>
-  unwrap(await axios.get(`${base()}/capability`, { headers: authHeaders() }));
+/* ----------------------------- recording upload --------------------------- */
+
+/** The server's own limits: size, duration and accepted file types. */
+export const fetchPhoneOrderConfig = async () =>
+  unwrap(await axios.get(`${uploadBase()}/config`, { headers: authHeaders() }));
+
+/**
+ * The one entry point of the flow. Expects a FormData with `customerUserId`
+ * and the recording under `audio`; answers 202 once the bytes are stored and
+ * the pipeline has been started in the background.
+ */
+export const uploadPhoneOrderRecording = async (formData, onUploadProgress) =>
+  unwrap(
+    await axios.post(`${uploadBase()}/recording`, formData, {
+      headers: authHeaders(),
+      onUploadProgress,
+    }),
+  );
+
+/** Orders this supplier's recordings produced, newest first. */
+export const fetchCreatedOrders = async (limit = 50) =>
+  unwrap(
+    await axios.get(`${uploadBase()}/orders`, {
+      headers: authHeaders(),
+      params: { limit },
+    }),
+  );
+
+/* ------------------------------ customer picker --------------------------- */
+
+/** Customers the supplier may pick as the shopkeeper on an upload. */
+export const fetchCustomerCandidates = async () =>
+  unwrap(
+    await axios.get(`${callBase()}/supplier/candidates`, {
+      headers: authHeaders(),
+    }),
+  );
+
+/* -------------------------------- pipeline -------------------------------- */
 
 export const fetchPilotCalls = async (limit = 50) =>
   unwrap(
-    await axios.get(`${base()}`, {
+    await axios.get(`${pilotBase()}`, {
       headers: authHeaders(),
       params: { limit },
     }),
   );
 
 export const fetchPilotCall = async (pilotCallId) =>
-  unwrap(
-    await axios.get(`${base()}/${pilotCallId}`, { headers: authHeaders() }),
-  );
+  unwrap(await axios.get(`${pilotBase()}/${pilotCallId}`, { headers: authHeaders() }));
 
 /**
  * Read-only accuracy report. Aggregated on the server from frozen confirmed
@@ -54,23 +97,11 @@ export const fetchPilotAnalytics = async () =>
  * player as an object URL. Callers must revokeObjectURL when done.
  */
 export const fetchPilotAudioObjectUrl = async (pilotCallId) => {
-  const response = await axios.get(`${base()}/${pilotCallId}/audio`, {
+  const response = await axios.get(`${pilotBase()}/${pilotCallId}/audio`, {
     headers: authHeaders(),
     responseType: "blob",
   });
   return URL.createObjectURL(response.data);
-};
-
-export const uploadTestAudio = async (file, onUploadProgress) => {
-  const formData = new FormData();
-  formData.append("audio", file);
-
-  return unwrap(
-    await axios.post(`${base()}/test-audio`, formData, {
-      headers: authHeaders(),
-      onUploadProgress,
-    }),
-  );
 };
 
 /* ------------------------------- draft review ------------------------------ */
@@ -81,13 +112,13 @@ export const uploadTestAudio = async (file, onUploadProgress) => {
  */
 export const fetchPilotReviewCatalog = async () =>
   unwrap(
-    await axios.get(`${base()}/review/catalog`, { headers: authHeaders() }),
+    await axios.get(`${pilotBase()}/review/catalog`, { headers: authHeaders() }),
   );
 
 /** The supplier's working copy, seeded from the AI draft on first open. */
 export const fetchPilotReview = async (pilotCallId) =>
   unwrap(
-    await axios.get(`${base()}/${pilotCallId}/review`, {
+    await axios.get(`${pilotBase()}/${pilotCallId}/review`, {
       headers: authHeaders(),
     }),
   );
@@ -100,7 +131,7 @@ export const fetchPilotReview = async (pilotCallId) =>
 export const savePilotReview = async (pilotCallId, lines) =>
   unwrap(
     await axios.put(
-      `${base()}/${pilotCallId}/review`,
+      `${pilotBase()}/${pilotCallId}/review`,
       { lines },
       {
         headers: authHeaders(),
@@ -111,13 +142,13 @@ export const savePilotReview = async (pilotCallId, lines) =>
 /** Adds an item the AI missed. Still only a draft line. */
 export const addPilotReviewItem = async (pilotCallId, line) =>
   unwrap(
-    await axios.post(`${base()}/${pilotCallId}/review/items`, line, {
+    await axios.post(`${pilotBase()}/${pilotCallId}/review/items`, line, {
       headers: authHeaders(),
     }),
   );
 
 /**
- * Final pilot action. Saves the supplier-confirmed result on the pilot record.
+ * Final action. Saves the supplier-confirmed result on the pilot record.
  *
  * With `createOrder: true` the same tap also asks the bridge to write the real
  * e-Setu Order, so the supplier reviews and orders in one action. Omitted or
@@ -126,7 +157,7 @@ export const addPilotReviewItem = async (pilotCallId, line) =>
 export const confirmPilotDraft = async (pilotCallId, { createOrder = false } = {}) =>
   unwrap(
     await axios.post(
-      `${base()}/${pilotCallId}/review/confirm`,
+      `${pilotBase()}/${pilotCallId}/review/confirm`,
       { createOrder },
       {
         headers: authHeaders(),
@@ -137,19 +168,9 @@ export const confirmPilotDraft = async (pilotCallId, { createOrder = false } = {
 /** Undo a confirmation made by mistake. Still cannot create an order. */
 export const reopenPilotDraft = async (pilotCallId) =>
   unwrap(
-    await axios.post(`${base()}/${pilotCallId}/review/reopen`, null, {
+    await axios.post(`${pilotBase()}/${pilotCallId}/review/reopen`, null, {
       headers: authHeaders(),
     }),
-  );
-
-/** Creates the production Order only from a supplier-confirmed pilot draft. */
-export const createOrderFromConfirmedPilotCall = async (pilotCallId) =>
-  unwrap(
-    await axios.post(
-      `${API_BASE_URL}/api/v1/phone-call/drafts/${pilotCallId}/order`,
-      {},
-      { headers: authHeaders() },
-    ),
   );
 
 /**
@@ -158,7 +179,7 @@ export const createOrderFromConfirmedPilotCall = async (pilotCallId) =>
  */
 export const retryPilotProcessing = async (pilotCallId) =>
   unwrap(
-    await axios.post(`${base()}/${pilotCallId}/retry`, null, {
+    await axios.post(`${pilotBase()}/${pilotCallId}/retry`, null, {
       headers: authHeaders(),
     }),
   );

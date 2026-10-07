@@ -9,7 +9,6 @@ import { toast } from "sonner";
 import { API_BASE_URL } from "@/lib/constants";
 import { setCartData } from "@/redux/ProductSlice";
 import WelcomeCard from "../components/home/WelcomeCard";
-import suppRouteComp from "../components/SuppRouteComp";
 import SearchBar from "../components/home/Searchbar";
 import CompanyScroller from "../components/home/CompanyScroller";
 import Fuse from "fuse.js";

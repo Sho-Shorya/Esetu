@@ -1,10 +1,6 @@
 import mongoose from "mongoose";
 
-import PhoneCall, {
-  CALL_STATUS,
-  PROCESSING_STATUS,
-  TERMINAL_STATUSES,
-} from "../models/phoneCallModel.js";
+import PhoneCall, { PROCESSING_STATUS } from "../models/phoneCallModel.js";
 import { User } from "../models/userModel.js";
 import {
   normalizeIndianPhone,
@@ -12,61 +8,19 @@ import {
 } from "./pilotPhoneNormalizer.js";
 
 /**
- * Call recording, lookup and customer association for the e-Setu calling
- * feature.
+ * Customer association and call projection for e-Setu phone orders.
  *
- * The important honesty rule in this file: a call placed from an app on an
- * ordinary handset is a real dialled call, but the handset tells the app almost
- * nothing about it. The app cannot see whether it connected, cannot see the
- * caller's number, and cannot record the audio. So every function here records
- * only what is actually known, and the screens show "not known" instead of
- * guessing.
+ * A call is always created by the supplier upload route, so this file only
+ * handles what comes after: who is on each side of the call, fixing the
+ * customer by hand when it was not recognised, the pipeline state written onto
+ * the call, and the projection the screens are allowed to see.
+ *
+ * The honesty rule still applies: nothing here invents a fact the system does
+ * not actually know about a call — a number is only ever shown matched, or
+ * masked.
  */
 
 export const UNKNOWN_CALLER_LABEL = "अज्ञात कॉलर";
-
-/** Maps a handset/webhook status word onto our own vocabulary. */
-export const CALL_STATUS_BY_KEYWORD = {
-  initiated: "initiated",
-  initiateddialing: "initiated",
-  ringing: "ringing",
-  ringingin: "ringing",
-  ringingout: "ringing",
-  answered: "answered",
-  answeredon: "answered",
-  inprogress: "answered",
-  active: "answered",
-  completed: "completed",
-  completedcallback: "completed",
-  endcall: "completed",
-  hangup: "completed",
-  failed: "failed",
-  busy: "failed",
-  failedbusy: "failed",
-  failednoanswer: "no_answer",
-  noanswer: "no_answer",
-  noanswerin: "no_answer",
-  voicemail: "completed",
-  canceled: "cancelled",
-  hangupbyuser: "cancelled",
-  rejected: "cancelled",
-  missed: "missed",
-  unanswered: "missed",
-  notconnected: "failed",
-};
-
-export const normalizeCallStatus = (raw) => {
-  const key = String(raw || "")
-    .toLowerCase()
-    .replace(/[^a-z]/g, "");
-  if (!key) return null;
-  return CALL_STATUS_BY_KEYWORD[key] || null;
-};
-
-export const isTerminalStatus = (status) => TERMINAL_STATUSES.has(status);
-
-/** Indian 10-digit dial string, or null when the number is not usable. */
-export const toDialString = (raw) => toLookupNumber(raw);
 
 /* -------------------------------------------------------------------------- */
 /*                              party resolution                              */
@@ -92,6 +46,17 @@ export const displayName = (user) => {
   if (!user) return "";
   return [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
 };
+
+/**
+ * Which side of a call holds the customer.
+ *
+ * A call the supplier uploaded has the customer on "to"; any other call reached
+ * this app as a shopkeeper dialling a supplier, so the customer is "from".
+ * Every reader of a call's parties must use this rule — picking a side by hand
+ * is how a supplier ends up overwritten with a customer, or vice versa.
+ */
+export const customerSideOf = (call) =>
+  call?.initiatedByRole === "supplier" ? "to" : "from";
 
 /**
  * Builds one side of a call (from or to).
@@ -157,230 +122,6 @@ export const buildParty = async ({
 };
 
 /* -------------------------------------------------------------------------- */
-/*                                 call writing                                */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Records a call the shopkeeper placed from the app.
- *
- * The supplied `status` is what the handset reports. The app cannot upgrade it:
- * `answered` is only ever recorded when a telephony provider says so.
- */
-export const logOutgoingCall = async ({
-  initiatedBy,
-  supplierId,
-  toPhone,
-  status = "initiated",
-  durationSeconds = null,
-  callAt,
-  now,
-} = {}) => {
-  const at = now || new Date();
-
-  const to = await buildParty({
-    userId: supplierId,
-    phone: toPhone,
-    preferSupplier: true,
-  });
-
-  if (!to.matched || to.isSupplier !== true) {
-    return {
-      ok: false,
-      code: "SUPPLIER_NOT_FOUND",
-      message: "यह सप्लायर नहीं मिला।",
-    };
-  }
-
-  const resolvedStatus = isTerminalStatus(status)
-    ? status
-    : CALL_STATUS.includes(status)
-      ? status
-      : "initiated";
-
-  const call = await PhoneCall.create({
-    direction: "outgoing",
-    status: resolvedStatus,
-    processingStatus: "no_audio",
-    from: await buildParty({ userId: initiatedBy }),
-    to,
-    initiatedBy: initiatedBy || null,
-    supplierId: to.userId,
-    callAt: callAt || at,
-    endedAt: isTerminalStatus(resolvedStatus) ? at : null,
-    durationSeconds: Number.isFinite(Number(durationSeconds))
-      ? Number(durationSeconds)
-      : null,
-  });
-
-  return { ok: true, call };
-};
-
-/**
- * Records a call that arrived on the supplier's number.
- *
- * Only used when something on the line actually tells us: a telephony provider
- * webhook, or the supplier reporting it. The app cannot detect this on its own,
- * so this is never called speculatively.
- */
-export const logIncomingCall = async ({
-  supplierId,
-  fromPhone,
-  status = "ringing",
-  callAt,
-  now,
-  providerCallId,
-} = {}) => {
-  const at = now || new Date();
-
-  const supplier = supplierId
-    ? await User.findById(supplierId)
-        .select("_id firstName lastName role")
-        .lean()
-    : null;
-
-  if (!supplier || supplier.role !== "supplier") {
-    return {
-      ok: false,
-      code: "SUPPLIER_NOT_FOUND",
-      message: "सप्लायर नहीं मिला।",
-    };
-  }
-
-  const call = await PhoneCall.create({
-    direction: "incoming",
-    status: CALL_STATUS.includes(status) ? status : "ringing",
-    processingStatus: "no_audio",
-    from: await buildParty({ phone: fromPhone }),
-    to: await buildParty({ userId: supplier._id }),
-    supplierId: supplier._id,
-    provider: {
-      name: providerCallId ? "provider" : "device",
-      callId: providerCallId || null,
-    },
-    callAt: callAt || at,
-  });
-
-  return { ok: true, call };
-};
-
-/**
- * Moves a call to a new status.
- *
- * Terminal states are final, so a late "ringing" webhook cannot resurrect a call
- * that already ended. Duration is only recorded when the caller actually
- * reported one.
- */
-export const updateCallStatus = async ({
-  callId,
-  status,
-  durationSeconds,
-  now,
-} = {}) => {
-  const at = now || new Date();
-  const next = CALL_STATUS.includes(status) ? status : null;
-
-  if (!next) {
-    return {
-      ok: false,
-      code: "BAD_STATUS",
-      message: "कॉल स्थिति सही नहीं है।",
-    };
-  }
-
-  const call = await PhoneCall.findById(callId);
-  if (!call) {
-    return {
-      ok: false,
-      code: "NOT_FOUND",
-      status: 404,
-      message: "कॉल नहीं मिली।",
-    };
-  }
-  // A call that already ended stays ended.
-  if (isTerminalStatus(call.status)) {
-    return { ok: true, call, unchanged: true };
-  }
-
-  const patch = { status: next };
-
-  if (next === "answered" && !call.answeredAt) patch.answeredAt = at;
-  if (isTerminalStatus(next)) patch.endedAt = at;
-
-  if (Number.isFinite(Number(durationSeconds))) {
-    patch.durationSeconds = Number(durationSeconds);
-  } else if (isTerminalStatus(next) && call.answeredAt) {
-    // Fall back to what we can actually prove: answered -> ended.
-    const measured = Math.max(
-      0,
-      Math.round((at - new Date(call.answeredAt)) / 1000),
-    );
-    if (measured > 0) patch.durationSeconds = measured;
-  }
-
-  call.set(patch);
-  await call.save();
-
-  return { ok: true, call };
-};
-
-export const logSupplierOutgoingCall = async ({
-  supplierId,
-  customerUserId,
-  now,
-} = {}) => {
-  const [supplier, customer] = await Promise.all([
-    User.findById(supplierId)
-      .select("_id firstName lastName phoneNumber role place")
-      .lean(),
-    User.findById(customerUserId)
-      .select("_id firstName lastName phoneNumber role place")
-      .lean(),
-  ]);
-
-  if (!supplier || supplier.role !== "supplier") {
-    return {
-      ok: false,
-      code: "SUPPLIER_NOT_FOUND",
-      message: "सप्लायर नहीं मिला।",
-    };
-  }
-  if (!customer || customer.role !== "user") {
-    return {
-      ok: false,
-      code: "CUSTOMER_NOT_FOUND",
-      message: "दुकानदार नहीं मिला।",
-    };
-  }
-
-  const at = now || new Date();
-  const call = await PhoneCall.create({
-    direction: "outgoing",
-    status: "initiated",
-    processingStatus: "no_audio",
-    from: {
-      userId: supplier._id,
-      phoneNumber: String(supplier.phoneNumber),
-      name: displayName(supplier),
-      matchMethod: "manual",
-      matched: true,
-    },
-    to: {
-      userId: customer._id,
-      phoneNumber: String(customer.phoneNumber),
-      name: displayName(customer),
-      matchMethod: "manual",
-      matched: true,
-    },
-    initiatedBy: supplier._id,
-    initiatedByRole: "supplier",
-    supplierId: supplier._id,
-    callAt: at,
-  });
-
-  return { ok: true, call, customer, supplier };
-};
-
-/* -------------------------------------------------------------------------- */
 /*                             customer association                            */
 /* -------------------------------------------------------------------------- */
 
@@ -410,6 +151,26 @@ export const identifyCallCustomer = async ({
       message: "कॉल नहीं मिली।",
     };
 
+  const pilotId = call.pilotCallId?._id || call.pilotCallId || null;
+  if (pilotId) {
+    // Once a real Order exists for the call, the customer behind it is part of
+    // that order's record. Re-identifying afterwards would silently change who
+    // the order writer believes it sold to.
+    const { default: PhoneCallPilot } =
+      await import("../models/phoneCallPilotModel.js");
+    const pilot = await PhoneCallPilot.findById(pilotId)
+      .select("review.confirmed.orderCreated")
+      .lean();
+    if (pilot?.review?.confirmed?.orderCreated === true) {
+      return {
+        ok: false,
+        code: "ORDER_CREATED",
+        status: 409,
+        message: "इस कॉल का ऑर्डर बन चुका है। ग्राहक नहीं बदला जा सकता।",
+      };
+    }
+  }
+
   const targetUserId =
     customerUserId || call.from?.userId || call.to?.userId || null;
 
@@ -435,13 +196,11 @@ export const identifyCallCustomer = async ({
     };
   }
 
-  // Which side of the call holds the customer depends on who dialled. When the
-  // supplier placed the call the supplier is on "from" and the shopkeeper is on
-  // "to" (see logSupplierOutgoingCall), so writing "from" here would overwrite
-  // the supplier with the customer and lose the real caller. Any other call
-  // reached this app as the shopkeeper dialling the supplier, so the customer
-  // is "from".
-  const customerSide = call.initiatedByRole === "supplier" ? "to" : "from";
+  // Which side of the call holds the customer depends on who placed it: an
+  // uploaded call has the supplier on "from" and the shopkeeper on "to", so
+  // writing "from" here would overwrite the supplier with the customer and lose
+  // the real caller.
+  const customerSide = customerSideOf(call);
 
   call[customerSide] = {
     userId: user._id,
@@ -528,8 +287,6 @@ export const toPublicCall = (doc) => {
         plain.pilotCallId,
     ),
     lastError: plain.lastError?.message || null,
-    waitUntil: plain.waitUntil || null,
-    waitNoticeSentAt: plain.waitNoticeSentAt || null,
   };
 };
 
@@ -547,99 +304,8 @@ export const maskPhone = (phone) => {
 };
 
 /* -------------------------------------------------------------------------- */
-/*                                    lists                                   */
+/*                              pipeline state                                 */
 /* -------------------------------------------------------------------------- */
-
-/** The shopkeeper's own calls, newest first. */
-export const listCallsForUser = async ({ userId, limit = 30 } = {}) => {
-  const calls = await PhoneCall.find({
-    $or: [{ initiatedBy: userId }, { "to.userId": userId }],
-  })
-    .sort({ callAt: -1, createdAt: -1 })
-    .limit(Math.min(Number(limit) || 30, 100))
-    .lean();
-
-  return calls.map(toPublicCall);
-};
-
-/** The supplier's phone section: recent calls, newest first. */
-export const listCallsForSupplier = async ({
-  supplierId,
-  limit = 30,
-  date,
-} = {}) => {
-  const query = { supplierId };
-  if (date) {
-    const start = new Date(date);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(date);
-    end.setHours(23, 59, 59, 999);
-    query.callAt = { $gte: start, $lte: end };
-  }
-  const calls = await PhoneCall.find(query)
-    .sort({ callAt: -1, createdAt: -1 })
-    .limit(Math.min(Number(limit) || 30, 100))
-    .lean();
-
-  return calls.map(toPublicCall);
-};
-
-/**
- * The section the supplier actually cares about: a draft is ready and nobody
- * has confirmed it. Ordered by the call being oldest first, because a call that
- * has been waiting longest is the one that will be forgotten.
- */
-export const listCallsNeedingReview = async ({
-  supplierId,
-  limit = 30,
-  date,
-} = {}) => {
-  const query = {
-    supplierId,
-    processingStatus: { $in: ["draft_ready", "needs_review", "confirmed"] },
-  };
-  if (date) {
-    const start = new Date(date);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(date);
-    end.setHours(23, 59, 59, 999);
-    query.callAt = { $gte: start, $lte: end };
-  }
-  const calls = await PhoneCall.find(query)
-    .sort({ callAt: 1 })
-    .limit(Math.min(Number(limit) || 30, 100))
-    .lean();
-
-  return calls.map(toPublicCall);
-};
-
-/** Calls the supplier has not picked up, or that produced no audio. */
-export const listIncomingCalls = async ({
-  supplierId,
-  limit = 30,
-  date,
-} = {}) => {
-  const query = {
-    supplierId,
-    $or: [
-      { direction: "incoming" },
-      { status: { $in: ["missed", "no_answer"] } },
-    ],
-  };
-  if (date) {
-    const start = new Date(date);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(date);
-    end.setHours(23, 59, 59, 999);
-    query.callAt = { $gte: start, $lte: end };
-  }
-  const calls = await PhoneCall.find(query)
-    .sort({ callAt: -1, createdAt: -1 })
-    .limit(Math.min(Number(limit) || 30, 100))
-    .lean();
-
-  return calls.map(toPublicCall);
-};
 
 /**
  * Sets a call's pipeline state, refusing any move that would hide a failure.

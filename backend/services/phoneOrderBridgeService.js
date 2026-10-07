@@ -97,7 +97,7 @@ export const revalidateConfirmedItems = async (items = []) => {
     return {
       ok: false,
       code: BRIDGE_CODES.EMPTY_DRAFT,
-      message: "The confirmed order has no items.",
+      message: "ऑर्डर में कोई सामान नहीं है।",
       blockers: [],
       orderItems: [],
       sources: [],
@@ -122,10 +122,19 @@ export const revalidateConfirmedItems = async (items = []) => {
     products.map((product) => [String(product._id), product]),
   );
 
+  /*
+   * The company on a confirmed line arrives in two forms: the review pickers
+   * and the extractor speak names ("Dabur"), while older callers passed the
+   * ObjectId. Every company any of these products' variants use is loaded in
+   * one query, so a name can be resolved against the same rows an id would.
+   */
   const companyIds = [
     ...new Set(
-      lines
-        .map((line) => line?.company)
+      products
+        .flatMap((product) =>
+          Array.isArray(product.variants) ? product.variants : [],
+        )
+        .map((variant) => variant?.company?._id ?? variant?.company)
         .filter((value) => isObjectId(value))
         .map((value) => new mongoose.Types.ObjectId(String(value))),
     ),
@@ -139,15 +148,30 @@ export const revalidateConfirmedItems = async (items = []) => {
     companies.map((company) => [String(company._id), company]),
   );
 
+  /** The name a variant row's company goes by, loaded or populated. */
+  const nameOfCompany = (candidate) => {
+    const companyId = String(
+      candidate?.company?._id ?? candidate?.company ?? "",
+    );
+    return (
+      companyById.get(companyId)?.name ||
+      (typeof candidate?.company === "object"
+        ? candidate?.company?.name
+        : null) ||
+      null
+    );
+  };
+
   lines.forEach((line, index) => {
-    const label = line?.productName || line?.spokenName || `item ${index + 1}`;
+    const label =
+      line?.productName || line?.spokenName || `सामान ${index + 1}`;
 
     if (!isObjectId(line?.productId)) {
       blockers.push({
         index,
         productName: label,
         code: BRIDGE_CODES.UNKNOWN_PRODUCT,
-        message: `${label}: product is not in the current catalog.`,
+        message: `${label}: यह सामान सूची में नहीं मिलता।`,
       });
       return;
     }
@@ -159,7 +183,7 @@ export const revalidateConfirmedItems = async (items = []) => {
         index,
         productName: label,
         code: BRIDGE_CODES.UNKNOWN_PRODUCT,
-        message: `${label}: product is no longer in the catalog.`,
+        message: `${label}: यह सामान अब सूची में नहीं है।`,
       });
       return;
     }
@@ -171,31 +195,46 @@ export const revalidateConfirmedItems = async (items = []) => {
         index,
         productName: label,
         code: BRIDGE_CODES.INVALID_QUANTITY,
-        message: `${label}: quantity is not a positive number.`,
+        message: `${label}: मात्रा 1 या उससे ज़्यादा होनी चाहिए।`,
       });
       return;
     }
 
     const variants = Array.isArray(product.variants) ? product.variants : [];
 
-    // The confirmed line holds a company ObjectId and a free-text measurement,
-    // exactly the pair the cart uses to price an item.
-    const variant = variants.find(
-      (candidate) =>
-        candidate.measurement === line.variantMeasurement &&
-        String(candidate.company?._id ?? candidate.company) ===
-          String(line.company),
-    );
+    /*
+     * The confirmed line holds a free-text measurement and a company that is
+     * either an ObjectId (legacy callers) or the company's name — exactly
+     * what the review pickers and the extractor produce. Both forms must
+     * resolve to the same variant row, or every real draft is refused here.
+     */
+    const wantedMeasurement = String(line?.variantMeasurement ?? "").trim();
+    const wantedCompany = String(line?.company ?? "").trim();
+    const wantedCompanyNorm = wantedCompany.toLowerCase();
+
+    const variant = variants.find((candidate) => {
+      if (String(candidate?.measurement ?? "").trim() !== wantedMeasurement) {
+        return false;
+      }
+      const candidateId = String(
+        candidate?.company?._id ?? candidate?.company ?? "",
+      );
+      if (candidateId && candidateId === wantedCompany) return true;
+      const candidateName = String(nameOfCompany(candidate) ?? "")
+        .trim()
+        .toLowerCase();
+      return Boolean(candidateName) && candidateName === wantedCompanyNorm;
+    });
 
     if (!variant) {
       const measurementHint = line.variantMeasurement
-        ? ` (${line.variantMeasurement})`
+        ? ` “${line.variantMeasurement}”`
         : "";
       blockers.push({
         index,
         productName: label,
         code: BRIDGE_CODES.UNKNOWN_VARIANT,
-        message: `${label}: that variant${measurementHint} no longer exists.`,
+        message: `${label}: यह नाप/कंपनी${measurementHint} अब नहीं मिलती।`,
       });
       return;
     }
@@ -205,7 +244,7 @@ export const revalidateConfirmedItems = async (items = []) => {
         index,
         productName: label,
         code: BRIDGE_CODES.VARIANT_UNAVAILABLE,
-        message: `${label}: that variant is currently unavailable.`,
+        message: `${label}: यह नाप अभी उपलब्ध नहीं है।`,
       });
       return;
     }
@@ -217,7 +256,7 @@ export const revalidateConfirmedItems = async (items = []) => {
         index,
         productName: label,
         code: BRIDGE_CODES.INVALID_ITEM,
-        message: `${label}: the catalog price is not usable.`,
+        message: `${label}: इस सामान की सही कीमत नहीं मिली।`,
       });
       return;
     }
@@ -258,7 +297,7 @@ export const revalidateConfirmedItems = async (items = []) => {
       message:
         blockers.length === 1
           ? blockers[0].message
-          : `${blockers.length} items cannot be ordered: ${blockers
+          : `${blockers.length} सामान नहीं जुड़ सके: ${blockers
               .slice(0, 3)
               .map((blocker) => blocker.message)
               .join(" ")}`,
@@ -357,7 +396,7 @@ const markOrderFailed = async ({ pilotCallId, message, code, at }) => {
     {
       $set: {
         "review.confirmed.orderCreationError": {
-          message: String(message || "Order creation failed.").slice(0, 500),
+          message: String(message || "ऑर्डर नहीं बन सका।").slice(0, 500),
           code: code || BRIDGE_CODES.CREATE_FAILED,
           at,
         },
@@ -442,7 +481,9 @@ export const persistOrderForCall = async ({
 
   const audit = {
     callerNumber: pilotDoc?.caller?.normalized || pilotDoc?.caller?.raw || null,
-    callAt: pilotDoc?.provider?.answeredAt || pilotDoc?.createdAt || at,
+    // When the call happened. The upload creates the record as the recording
+    // arrives, so the record's own creation time is the honest answer.
+    callAt: pilotDoc?.createdAt || at,
     transcript: pilotDoc?.stt?.transcript || "",
     aiDraft: pilotDoc?.extraction?.draft || null,
     aiConfidence: Array.isArray(pilotDoc?.extraction?.draft?.items)
@@ -469,7 +510,10 @@ export const persistOrderForCall = async ({
 
     const existing = await Order.findOne({
       userId,
-      status: "Pending",
+      // A phone order is accepted the moment the supplier confirms the call,
+      // so today's order can already be approved — it must still be found and
+      // merged into, never orphaned into a second same-day order.
+      status: { $in: ["Pending", "Approved"] },
       isTodayOrder: true,
       createdAt: { $gte: start, $lte: end },
     });
@@ -500,6 +544,9 @@ export const persistOrderForCall = async ({
       // today's order is what identifies it, and it is never overwritten after.
       if (!existing.supplierId && supplierId) existing.supplierId = supplierId;
       existing.source = "phone-call";
+      // The supplier confirmed this call, so the one order of the day is
+      // accepted then and there instead of waiting on a second approval.
+      existing.status = "Approved";
 
       // Every contributing call is kept. `phoneCallPilotId` stays as the call
       // that created the order, because that is the value the unique index on it
@@ -541,7 +588,9 @@ export const persistOrderForCall = async ({
       shippingAddress: user?.address || "",
       paymentMethod: "COD",
       paymentStatus: "Pending",
-      status: "Pending",
+      // Accepted without a second approval: the supplier confirmed the call
+      // that produced this order, and that confirmation is the acceptance.
+      status: "Approved",
       isTodayOrder: true,
       source: "phone-call",
       phoneCallId: phoneCallId || null,
@@ -633,7 +682,7 @@ export const createOrderFromConfirmedPhoneCall = async ({
       ok: false,
       status: 400,
       code: BRIDGE_CODES.NOT_FOUND,
-      message: "That call id is not valid.",
+      message: "यह कॉल आईडी मान्य नहीं है।",
     };
   }
 
@@ -644,7 +693,7 @@ export const createOrderFromConfirmedPhoneCall = async ({
       ok: false,
       status: 404,
       code: BRIDGE_CODES.NOT_FOUND,
-      message: "Call not found.",
+      message: "यह कॉल नहीं मिली।",
     };
   }
 
@@ -797,7 +846,7 @@ export const createOrderFromConfirmedPhoneCall = async ({
     if (notify) {
       // Same notification the cart path fires. Fire-and-forget so a OneSignal
       // outage can never roll back a real order.
-      sendOrderNotifications({ user }).catch((error) => {
+      sendOrderNotifications({ user, autoAccepted: true }).catch((error) => {
         console.error("Phone order notification error:", error);
       });
     }

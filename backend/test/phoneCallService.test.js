@@ -4,21 +4,11 @@ import assert from "node:assert/strict";
 import PhoneCall from "../models/phoneCallModel.js";
 import { User } from "../models/userModel.js";
 import {
-  CALL_STATUS_BY_KEYWORD,
   buildParty,
   identifyCallCustomer,
-  isTerminalStatus,
-  listCallsNeedingReview,
-  listCallsForSupplier,
-  listCallsForUser,
-  logIncomingCall,
-  logOutgoingCall,
   maskPhone,
-  normalizeCallStatus,
   setProcessingStatus,
-  toDialString,
   toPublicCall,
-  updateCallStatus,
   UNKNOWN_CALLER_LABEL,
 } from "../services/phoneCallService.js";
 
@@ -71,7 +61,6 @@ const originals = {
   userFindOne: User.findOne,
   userFindById: User.findById,
   userFind: User.find,
-  callCreate: PhoneCall.create,
   callFind: PhoneCall.find,
   callFindOne: PhoneCall.findOne,
   callFindById: PhoneCall.findById,
@@ -81,7 +70,6 @@ const restore = () => {
   User.findOne = originals.userFindOne;
   User.findById = originals.userFindById;
   User.find = originals.userFind;
-  PhoneCall.create = originals.callCreate;
   PhoneCall.find = originals.callFind;
   PhoneCall.findOne = originals.callFindOne;
   PhoneCall.findById = originals.callFindById;
@@ -104,45 +92,6 @@ const withUsers = async (run) => {
     restore();
   }
 };
-
-/* ============================ status vocabulary ============================ */
-
-test("a real provider status word maps onto our own vocabulary", () => {
-  assert.equal(normalizeCallStatus("Ringing"), "ringing");
-  assert.equal(normalizeCallStatus("in-progress"), "answered");
-  assert.equal(normalizeCallStatus("completed"), "completed");
-  assert.equal(normalizeCallStatus("no-answer"), "no_answer");
-  assert.equal(normalizeCallStatus("busy"), "failed");
-  assert.equal(normalizeCallStatus("unanswered"), "missed");
-  assert.equal(normalizeCallStatus("something-unknown"), null);
-  assert.equal(normalizeCallStatus(null), null);
-});
-
-test("every mapped status is one the model actually accepts", () => {
-  const allowed = new Set(PhoneCall.schema.path("status").enumValues);
-
-  for (const value of Object.values(CALL_STATUS_BY_KEYWORD)) {
-    assert.ok(allowed.has(value), `${value} is not a valid call status`);
-  }
-});
-
-test("a finished call stays finished", () => {
-  assert.equal(isTerminalStatus("completed"), true);
-  assert.equal(isTerminalStatus("missed"), true);
-  assert.equal(isTerminalStatus("ringing"), false);
-  assert.equal(isTerminalStatus("answered"), false);
-});
-
-/* ================================ dialling ================================= */
-
-test("a number is dialled as a plain 10-digit string", () => {
-  assert.equal(toDialString("9876543210"), 9876543210);
-  assert.equal(toDialString("+91 98765 43210"), 9876543210);
-  assert.equal(toDialString("09876543210"), 9876543210);
-  assert.equal(toDialString("12345"), null);
-  assert.equal(toDialString(""), null);
-  assert.equal(toDialString(null), null);
-});
 
 /* ============================ customer association ========================= */
 
@@ -172,7 +121,7 @@ test("a supplier slot refuses a shopkeeper's number", async () => {
   );
 
   // A shopkeeper is not a supplier, so the call is treated as unresolvable
-  // rather than dialling the wrong person.
+  // rather than pointing at the wrong person.
   assert.equal(party.matched, false);
   assert.equal(party.userId, null);
 });
@@ -187,7 +136,6 @@ test("a supplier number resolves in a supplier slot", async () => {
 });
 
 test("the supplier can identify an unknown caller by hand, and it is recorded", async () => {
-  const saved = [];
   PhoneCall.findById = async () => ({
     _id: OBJECT_IDS.call,
     direction: "incoming",
@@ -197,9 +145,7 @@ test("the supplier can identify an unknown caller by hand, and it is recorded", 
     set(patch) {
       Object.assign(this, patch);
     },
-    async save() {
-      saved.push(this);
-    },
+    async save() {},
   });
 
   try {
@@ -335,204 +281,6 @@ test("a shopkeeper-dialled call still records the customer as the caller", async
   }
 });
 
-/* =============================== call writing ============================== */
-
-test("a dialled call is recorded with the real supplier, not a guess", async () => {
-  let created = null;
-  PhoneCall.create = async (payload) => {
-    created = payload;
-    return payload;
-  };
-
-  const result = await withUsers(() =>
-    logOutgoingCall({
-      initiatedBy: OBJECT_IDS.shopkeeper,
-      supplierId: OBJECT_IDS.supplier,
-      toPhone: "9811111111",
-    }),
-  );
-
-  assert.equal(result.ok, true);
-  assert.equal(created.direction, "outgoing");
-  assert.equal(String(created.supplierId), OBJECT_IDS.supplier);
-  assert.equal(String(created.initiatedBy), OBJECT_IDS.shopkeeper);
-  assert.equal(created.processingStatus, "no_audio");
-  assert.equal(created.to.name, "Ramesh Wholesale");
-  assert.equal(String(created.from.userId), OBJECT_IDS.shopkeeper);
-});
-
-test("a call to a number that is not a supplier is refused", async () => {
-  PhoneCall.create = async () => {
-    throw new Error("must not create a call to a non-supplier");
-  };
-
-  const result = await withUsers(() =>
-    logOutgoingCall({
-      initiatedBy: OBJECT_IDS.shopkeeper,
-      toPhone: "9876543210",
-    }),
-  );
-
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "SUPPLIER_NOT_FOUND");
-});
-
-test("a call with no known outcome is stored as initiated, not as completed", async () => {
-  let created = null;
-  PhoneCall.create = async (payload) => {
-    created = payload;
-    return payload;
-  };
-
-  await withUsers(() =>
-    logOutgoingCall({
-      initiatedBy: OBJECT_IDS.shopkeeper,
-      supplierId: OBJECT_IDS.supplier,
-      status: "something-the-app-cannot-know",
-    }),
-  );
-
-  assert.equal(created.status, "initiated");
-  assert.equal(created.endedAt, null);
-});
-
-test("a reported duration is kept when the handset actually knows it", async () => {
-  let created = null;
-  PhoneCall.create = async (payload) => {
-    created = payload;
-    return payload;
-  };
-
-  await withUsers(() =>
-    logOutgoingCall({
-      initiatedBy: OBJECT_IDS.shopkeeper,
-      supplierId: OBJECT_IDS.supplier,
-      status: "completed",
-      durationSeconds: 42,
-    }),
-  );
-
-  assert.equal(created.status, "completed");
-  assert.equal(created.durationSeconds, 42);
-  assert.ok(created.endedAt);
-});
-
-test("an incoming call is recorded against the supplier who owns the line", async () => {
-  let created = null;
-  PhoneCall.create = async (payload) => {
-    created = payload;
-    return payload;
-  };
-
-  const result = await withUsers(() =>
-    logIncomingCall({
-      supplierId: OBJECT_IDS.supplier,
-      fromPhone: "9876543210",
-      status: "ringing",
-    }),
-  );
-
-  assert.equal(result.ok, true);
-  assert.equal(created.direction, "incoming");
-  assert.equal(created.status, "ringing");
-  assert.equal(String(created.from.userId), OBJECT_IDS.shopkeeper);
-});
-
-test("an incoming call for a non-supplier is refused", async () => {
-  PhoneCall.create = async () => {
-    throw new Error("must not create a call");
-  };
-
-  const result = await withUsers(() =>
-    logIncomingCall({
-      supplierId: OBJECT_IDS.shopkeeper,
-      fromPhone: "9876543210",
-    }),
-  );
-
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "SUPPLIER_NOT_FOUND");
-});
-
-/* ============================== status updates ============================= */
-
-const makeSavedCall = (overrides = {}) => {
-  const call = {
-    _id: OBJECT_IDS.call,
-    status: "ringing",
-    answeredAt: null,
-    endedAt: null,
-    durationSeconds: null,
-    saves: 0,
-    set(patch) {
-      Object.assign(this, patch);
-    },
-    async save() {
-      this.saves += 1;
-      return this;
-    },
-    ...overrides,
-  };
-  return call;
-};
-
-test("answering then ending a call records the time we can actually prove", async () => {
-  const call = makeSavedCall();
-
-  await withUsers(async () => {
-    PhoneCall.findById = async () => call;
-    await updateCallStatus({ callId: OBJECT_IDS.call, status: "answered" });
-    assert.equal(call.status, "answered");
-    assert.ok(call.answeredAt);
-
-    await updateCallStatus({
-      callId: OBJECT_IDS.call,
-      status: "completed",
-      now: new Date(new Date(call.answeredAt).getTime() + 65_000),
-    });
-  });
-
-  assert.equal(call.status, "completed");
-  assert.ok(call.endedAt);
-  // Measured from answer to end, not invented.
-  assert.equal(call.durationSeconds, 65);
-});
-
-test("a late webhook cannot resurrect a call that already ended", async () => {
-  const call = makeSavedCall({ status: "completed" });
-  PhoneCall.findById = async () => call;
-
-  const result = await withUsers(() =>
-    updateCallStatus({ callId: OBJECT_IDS.call, status: "ringing" }),
-  );
-
-  assert.equal(result.unchanged, true);
-  assert.equal(call.status, "completed");
-  assert.equal(call.saves, 0, "nothing was written");
-});
-
-test("an unusable status is rejected instead of guessed at", async () => {
-  PhoneCall.findById = async () => makeSavedCall();
-
-  const result = await withUsers(() =>
-    updateCallStatus({ callId: OBJECT_IDS.call, status: "banana" }),
-  );
-
-  assert.equal(result.ok, false);
-  assert.equal(result.code, "BAD_STATUS");
-});
-
-test("a missing call is a 404, not a crash", async () => {
-  PhoneCall.findById = async () => null;
-
-  const result = await withUsers(() =>
-    updateCallStatus({ callId: OBJECT_IDS.call, status: "completed" }),
-  );
-
-  assert.equal(result.ok, false);
-  assert.equal(result.status, 404);
-});
-
 /* ============================== projection ================================= */
 
 test("an unidentified caller is shown as अज्ञात कॉलर with a masked number", () => {
@@ -590,55 +338,27 @@ test("a phone number is masked for display", () => {
   assert.equal(maskPhone(""), "");
 });
 
-/* ================================= lists ================================== */
-
-test("the shopkeeper only ever sees their own calls", async () => {
-  const filter = [];
-  PhoneCall.find = (query) => {
-    filter.push(query);
-    return chain([]);
-  };
-
-  await withUsers(() => listCallsForUser({ userId: OBJECT_IDS.shopkeeper }));
-  assert.deepEqual(filter[0].$or, [
-    { initiatedBy: OBJECT_IDS.shopkeeper },
-    { "to.userId": OBJECT_IDS.shopkeeper },
-  ]);
-});
-
-test("the supplier section only ever sees calls to their own line", async () => {
-  const filter = [];
-  PhoneCall.find = (query) => {
-    filter.push(query);
-    return chain([]);
-  };
-
-  await withUsers(() =>
-    listCallsForSupplier({ supplierId: OBJECT_IDS.supplier }),
-  );
-  assert.equal(filter[0].supplierId, OBJECT_IDS.supplier);
-});
-
-test("calls needing review are only drafts that are not ordered yet", async () => {
-  const filter = [];
-  PhoneCall.find = (query) => {
-    filter.push(query);
-    return chain([]);
-  };
-
-  await withUsers(() =>
-    listCallsNeedingReview({ supplierId: OBJECT_IDS.supplier }),
-  );
-
-  const statuses = filter[0].processingStatus.$in;
-  assert.ok(statuses.includes("draft_ready"));
-  assert.ok(statuses.includes("needs_review"));
-  assert.ok(statuses.includes("confirmed"));
-  assert.equal(statuses.includes("order_created"), false);
-  assert.equal(statuses.includes("failed"), false);
-});
-
 /* ============================== pipeline state ============================ */
+
+const makeSavedCall = (overrides = {}) => {
+  const call = {
+    _id: OBJECT_IDS.call,
+    status: "ringing",
+    answeredAt: null,
+    endedAt: null,
+    durationSeconds: null,
+    saves: 0,
+    set(patch) {
+      Object.assign(this, patch);
+    },
+    async save() {
+      this.saves += 1;
+      return this;
+    },
+    ...overrides,
+  };
+  return call;
+};
 
 test("attaching an order marks the call done and clears any error", async () => {
   const call = makeSavedCall({
@@ -702,4 +422,13 @@ test("an unusable processing status cannot be stored", () => {
   const allowed = PhoneCall.schema.path("processingStatus").enumValues;
   assert.ok(allowed.includes("needs_review"));
   assert.equal(allowed.includes("bogus"), false);
+});
+
+test("the provider block is gone from the call model", () => {
+  const call = new PhoneCall({ direction: "outgoing" });
+
+  assert.equal(call.provider, undefined);
+  assert.equal(call.schema.path("provider"), undefined);
+  assert.equal(call.waitUntil, undefined);
+  assert.equal(call.waitNoticeSentAt, undefined);
 });

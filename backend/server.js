@@ -24,8 +24,10 @@ import notificationRouter from "./routes/notificationRoutes.js";
 import ringRouter from "./routes/ringRoutes.js";
 import phoneCallPilotRoute from "./routes/phoneCallPilotRoutes.js";
 import phoneCallRoute from "./routes/phoneCallRoutes.js";
+import phoneOrderRoute from "./routes/phoneOrderRoutes.js";
 import pilotAnalyticsRoutes from "./routes/pilotAnalyticsRoutes.js";
 import { startPilotAudioRetention } from "./services/pilotAudioRetentionService.js";
+import { startPilotPipelineRecovery } from "./controllers/phoneCallPilotController.js";
 
 dns.setServers(["1.1.1.1", "8.8.8.8"]);
 const app = express();
@@ -65,11 +67,15 @@ app.use("/api/v1/notify", notificationRouter);
 app.use("/api/v1/ring", ringRouter);
 
 /*
- * e-Setu calling: the shopkeeper's 📞 कॉल tab and the supplier's 📞 फोन section,
- * plus the controlled bridge from a confirmed phone-call draft to a real Order.
+ * e-Setu phone orders: the supplier uploads a recording of a call they made on
+ * their own phone, the pipeline turns it into a draft, and the controlled bridge
+ * below turns a confirmed draft into a real Order.
  */
+/* Recording upload + the orders it produced (supplier-only). */
+app.use("/api/v1/phone-orders", phoneOrderRoute);
+/* Customer fix + the bridge from a confirmed draft to a real Order. */
 app.use("/api/v1/phone-call", phoneCallRoute);
-/* Phone-call audio -> STT -> AI draft -> supplier review. */
+/* Recording -> STT -> AI draft -> supplier review. */
 app.use("/api/v1/pilot/phone-call", phoneCallPilotRoute);
 /* Pilot accuracy analytics. */
 app.use("/api/v1/pilot", pilotAnalyticsRoutes);
@@ -107,6 +113,7 @@ app.listen(PORT, async () => {
     startScheduledNotificationCron();
 
     startPilotAudioRetention();
+    startPilotPipelineRecovery();
 
     console.log(`🚀 Server running on port ${PORT}`);
   } catch (err) {

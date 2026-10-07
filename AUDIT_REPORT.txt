@@ -1,0 +1,226 @@
+
+STATUS: PARTIAL
+
+File: frontend/src/pages/OrderCall.jsx
+
+Evidence:
+
+- e-Setu branding: line ~193 (header shows 'e-Setu' and title UI). No 'e-Setu ?? ????? ???' exact string found.
+
+- Routes: OrderCall imported in App.jsx and routed at /order-call (userData-gated) - see App.jsx import at ~70, route at ~180-205.
+
+- UI states: loading, error, active call (live seconds), lastCall states implemented (lines ~190-290).
+
+- Technical jargon: No 'webhook/STT/PhoneCall ID/pilot' strings found in OrderCall.jsx (grep confirmed).
+
+GAPS: 'e-Setu ?? ????? ???' exact Hindi title not found. Caller identity display is limited (shows supplierName/status, but explicit 'caller identity' section not clearly labeled). No explicit technical jargon - GOOD.
+
+
+=== 2. ROUTES ===
+
+STATUS: PARTIAL
+
+Evidence from App.jsx:
+
+- /calling - userData gated (App.jsx ~170-185)
+
+- /order-call - userData gated (App.jsx ~180-200)
+
+- /supplier-phone - supplierData gated (App.jsx ~200-215)
+
+- /pilot/phone-orders - supplierData gated, imports PhoneOrderPilot (App.jsx ~535-550)
+
+- /pilot/test-audio - supplierData gated, imports TestAudioPage (App.jsx ~550-565)
+
+- /pilot/accuracy - supplierData gated, imports PilotAccuracyDashboard (App.jsx ~565-580)
+
+- PilotOrderReview: NOT routed directly in App.jsx; imported/rendered inside PhoneOrderPilot.jsx (line ~368)
+
+GAPS: No direct /pilot/review route found in App.jsx. No admin phone-pilot route/page found in admin folder (admin/* files do not contain phone-pilot references). No call-detail page found. PilotOrderReview is used internally in PhoneOrderPilot (routed via /pilot/phone-orders context), not independently routed. PilotAccuracyDashboard IS routed at /pilot/accuracy.
+
+
+=== 3. /supplier-phone WORKSPACE ===
+
+STATUS: PARTIAL
+
+File: frontend/src/pages/SupplierPhone.jsx (846 lines)
+
+Evidence:
+
+- Tabs defined: TABS = [{id:'dialer', label:'???', icon:Smartphone}, {id:'recent', label:'??? ????????'}, {id:'review', label:'????? ????'}] (lines ~25-35)
+
+- Tabs rendered with badge for review count (lines ~450-470)
+
+- Today stats: data.incoming/recent/needsReview loaded via fetchSupplierPhoneSection (date-based) (lines ~70-140). No explicit aggregated 'today stats (calls/orders/pending reviews counts)' card found in UI - counts exist per tab/badges.
+
+- Prominent actions: dialer keypad, call from dialer (lines ~496-540), shopkeeper list to call (lines ~540-660)
+
+- Recent calls: 'recent' tab renders calls list with direction/status/expand (lines ~660+)
+
+GAPS: No dedicated 'today stats' summary card section (calls/orders/pending reviews counts) prominently displayed as a stats block - only review badge count exists. Recent calls UI exists in 'recent' tab.
+
+
+=== 4. CALL DETAIL ===
+
+STATUS: PARTIAL
+
+Files checked: OrderCall.jsx, Calling.jsx, SupplierPhone.jsx, PhoneOrderPilot.jsx, PilotOrderReview.jsx
+
+Evidence:
+
+- OrderCall.jsx shows call status, supplierName, timing, processing status (lastCall view ~240-290) - basic detail view but minimal
+
+- SupplierPhone.jsx recent tab has expandable call rows with customer/call info (lines ~660-820)
+
+- PhoneOrderPilot.jsx shows call list with stages; PilotOrderReview shows draft review UI (transcript area exists in context of review screen)
+
+- PilotOrderReview.jsx includes SpeakerSegments component (lines ~340-375) showing speaker segments - 'collapsible transcript' style UI present
+
+GAPS: No dedicated standalone 'call-detail page' (separate route) found. 'Recording player' - AudioPlayer exists in PhoneOrderPilot.jsx (~300-360) for pilot calls; not broadly exposed in call detail UIs. 'Final order' vs 'AI order' distinction not clearly labeled as separate panels in reviewed UIs. 'Timeline' element not found. Collapsible transcript exists in PilotOrderReview context.
+
+
+=== 5. DRAFT REVIEW (PilotOrderReview.jsx) ===
+
+STATUS: PARTIAL
+
+File: frontend/src/pages/pilot/PilotOrderReview.jsx (1400+ lines)
+
+Evidence:
+
+- ProductPicker component present (line ~107, used at ~417, ~576)
+
+- LINE_FLAGS with statuses (unresolved/ambiguous/uncertain_variant/quantity_unknown/merged_mentions/invalid/ok) defined (lines ~75-105)
+
+- Quick-fix chips, one-tap corrections mentioned (line ~389), confirm tap creates order (lines ~1051-1105, confirmPilotDraft called with createOrder:true)
+
+- Item edit/remove/add actions present (edit via picker/variants, remove via removeLine, addItem function ~1025+)
+
+- Confirm summary UI (OrderSummary component) shows items, corrections, removed (lines ~800-860)
+
+GAPS: No explicit 'header info' section clearly labeled as such (shows call info in context). 'Collapsible transcript' - SpeakerSegments exists (~340-375) but not explicitly labeled 'collapsible' with expand/collapse toggle in the snippet seen. 'Item cards with qty/product/confidence' - items rendered with quantity, product name; confidence display not obvious in reviewed sections. 'Unresolved warnings + product picker' - warnings via LINE_FLAGS; product picker integrated. 'One-tap confirm summary ????? ?????' - confirm button text in Hindi? Button shows Hindi text in parts (e.g. line ~774-800 shows mixed Hindi/English in toasts; button label not explicitly seen as '????? ?????' in the confirm button at ~774-800 in the OrderSummary confirm section - check: line ~774-800 in OrderSummary confirm button shows text in context; actual Hindi string '????? ?????' not found in exact form). 'Double-tap protection' - no explicit double-tap prevention logic found (single confirm with disabled state during confirming).
+
+
+=== 6. PRODUCT PICKER ===
+
+STATUS: DONE (as implemented)
+
+File: frontend/src/pages/pilot/PilotOrderReview.jsx (ProductPicker component)
+
+Evidence:
+
+- Fuse.js fuzzy search over catalog (lines ~117-140)
+
+- Searches name, hinglishName, aliases (line ~117-125)
+
+- Shows name, company, measurement, price, availability? Product display shows name, hinglishName (lines ~180-200); variant pick shows measurements/companies (lines ~320+); availability/price not explicitly shown in picker item rows in snippet - shows name/hinglishName
+
+- Hindi/Hinglish search capability via hinglishName field in search keys (supports Hinglish matching)
+
+NOTE: Example 'dudh????' - hinglishName/aliases enable Hinglish search; exact mapping not shown but search keys include hinglishName.
+
+GAPS: Does not explicitly show company/measurement/price/availability in each picker result row in the basic picker - those appear in variant selection after picking product.
+
+
+=== 7. ORDER PROVENANCE UI ===
+
+STATUS: MISSING
+
+Search: '??? ??? ?? ????? ??? ?????' not found anywhere in frontend/src
+
+Evidence: Select-String search across all .jsx/.js returned no matches for the exact phrase.
+
+GAPS: No UI text showing '??? ??? ?? ????? ??? ?????' anywhere in frontend.
+
+
+=== 8. DIALER ===
+
+STATUS: PARTIAL
+
+File: frontend/src/pages/SupplierPhone.jsx (dialer tab)
+
+Evidence:
+
+- Large keypad UI (lines ~496-526) with digits 1-9,0,* ,# and backspace
+
+- Shopkeeper search implemented in dialer tab (search input at ~560-590, filters shopkeepers by name/phone/city)
+
+- Recent contacts shown as shopkeeper list (filteredShopkeepers rendered ~590-660)
+
+- Validation: dialedNumber required to enable call button (line ~533), checks phone validity in handleCallFromDialer
+
+- handleVoiceSearch function exists (line ~245-280) - sets voiceListening state
+
+- voiceListening state defined (line ~99)
+
+- Mic2 imported (line ~20)
+
+GAPS: handleVoiceSearch is defined and state exists but NO voice search/mic button UI is rendered in the dialer/search UI (search area ~560-590 has only text input, no Mic/Mic2 button). Mic2 imported but not used. Dead/unused voice search functionality.
+
+
+=== 9. WAIT/COUNTDOWN UI ===
+
+STATUS: PARTIAL
+
+Evidence:
+
+- Calling.jsx: wait state with secondsRemaining, countdown timer updates every second; displays waitCountdown (lines ~130-170 in Calling.jsx show wait logic)
+
+- SupplierPhone.jsx: '10 ???? ??????' button exists (line ~784 shows '10 ???? ??????!' text) - sends wait notice via sendSupplierWaitNotice (callId) when clicked
+
+GAPS: No explicit 10-minute wait countdown timer display with refresh behavior on supplier/customer side as specified - SupplierPhone has a button to send wait notice (not a live countdown UI shown in that action), Calling.jsx tracks wait state but need to verify UI rendering. The requirement says '10-minute wait countdown with refresh on supplier or customer side' - UI for live countdown display may be incomplete.
+
+
+=== 10. DEAD UI LIST ===
+
+STATUS: PARTIAL (found many dead items)
+
+Evidence:
+
+- suppRoutes stub: frontend/src/pages/suppRoutes.jsx - entire file is stub (lines 1-7). Orphaned, not imported/routed in App.jsx.
+
+- voiceListening/handleVoiceSearch: defined in SupplierPhone.jsx (lines 99, 245-280) but no UI button renders it - dead functionality. Mic2 imported (line 20) but never used.
+
+- Commented-out JSX blocks: SupplierPhone.jsx has large commented block starting at ~408 (shopkeeper picker section) - multiple lines commented with {/* ... */}
+
+- ClipboardList: imported in PhoneOrderPilot.jsx? Check - PhoneOrderPilot.jsx imports ClipboardList (line ~11 in snippet earlier shows FlaskConical, Gauge, etc; ClipboardList appears in imports at line ~11). Also searched - not used actively? May be unused import in some files.
+
+- repeat/amend: no UI elements with 'repeat'/'amend' text/buttons found in phone-related files; keywords appear in broader codebase but not as active UI in phone pages.
+
+- phoneCallingApi.js unused exports: exports include fetchCallSuppliers, fetchCallingCapability, fetchMyCalls, fetchOrderCall, recordOutgoingCall, fetchSupplierPhoneSection, fetchSupplierCall, fetchCustomerCandidates, startSupplierCall, sendSupplierWaitNotice, identifyCallCustomer, uploadCallAudio, createOrderFromPhoneCall, fetchPilotReviewCall - all appear to be used by Calling/SupplierPhone/OrderCall. No obviously unused exported functions visible.
+
+- Dead components: suppRoutes.jsx is dead/orphaned. No phone-specific components dir with dead components found.
+
+- Lucide icons unused (per phone files): SupplierPhone.jsx imports Mic2 (line 20) but never used - confirmed dead. PhoneOrderPilot imports many icons including ClipboardList (line ~11) - usage check needed but likely some unused.
+
+GAPS: Need deeper unused import analysis per file. Commented blocks exist (SupplierPhone header block at ~408). Lowercase <loading> tag is dead/non-standard.
+
+- lowercase <loading> tag at SupplierPhone.jsx:784 (non-standard React element)
+
+- Commented-out JSX block in SupplierPhone.jsx ~408-467 (header/shopkeeper picker section)
+
+- Unused: Mic2 imported in SupplierPhone.jsx line 20, never rendered; voiceListening state/handler unused in UI
+
+- suppRoutes.jsx (pages/suppRoutes.jsx) - orphaned stub component, not routed/imported
+
+
+=== 11. ERROR/LOADING/EMPTY/RETRY STATES ===
+
+STATUS: PARTIAL
+
+Evidence by page:
+
+- OrderCall.jsx: loading state (line ~207), error display with amber border (lines ~200-206), empty state when no active/last call (lines ~280-305), retry via refresh button (line ~190-197)
+
+- Calling.jsx: loading state, toast on errors, upload progress states, empty supplier/call states (has basic states)
+
+- SupplierPhone.jsx: loading, loadError display, empty lists (e.g. '??? ???????? ???? ????' at ~610), retry via refresh (line ~390-405)
+
+- PhoneOrderPilot.jsx: loading states, error toasts, retry actions (Retry button for failed processing), empty states
+
+- PilotOrderReview.jsx: loading review, error states, orderError display (line ~780+), autosave/retry on failures
+
+- PilotAccuracyDashboard.jsx: loading, error display, retry via reload
+
+- TestAudioPage.jsx: loading, uploading progress, capability checks, error toasts
+
+GAPS: Raw backend error exposure - errors shown via toasts and inline messages (sometimes pass through err.response?.data?.message). Sonner (toast) is used in all phone pages (OrderCall imports toast from sonner; Calling, SupplierPhone, pilot pages all use toast). No obvious unhandled raw stack traces exposed to UI.

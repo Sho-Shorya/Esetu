@@ -17,10 +17,10 @@ const execFileAsync = promisify(execFile);
  *     diarization. This is the default because a real order call is normally
  *     longer than 30 seconds.
  *
- * Sarvam merges every input channel into one, so the stereo recording Plivo
- * produces is flattened before transcription. `speakerAttributionAvailable` is
- * only ever true when the engine actually returned diarized segments; channel
- * layout is never presented as speaker separation.
+ * Sarvam merges every input channel into one, so a stereo recording is
+ * flattened before transcription. `speakerAttributionAvailable` is only ever
+ * true when the engine actually returned diarized segments; channel layout is
+ * never presented as speaker separation.
  */
 
 const SARVAM_BASE = (
@@ -108,7 +108,7 @@ const buildJobParameters = ({ withDiarization, keyterms }) => {
  *
  * PCM WAV is normalised to 16 kHz mono 16-bit here with no extra dependency.
  * Compressed formats (mp3/aac/opus) cannot be decoded without ffmpeg and are
- * passed through untouched, so those should be recorded as WAV by the provider.
+ * passed through untouched, so those should be checked with ffmpeg available.
  */
 
 export const STT_TARGET_SAMPLE_RATE = 16000;
@@ -274,7 +274,7 @@ const remoteExtensionFor = (fileName) => {
  * Compressed recordings (mp3/m4a/aac/ogg/opus/webm/flac/amr/wma) cannot be
  * resampled in pure JS, so they are transcoded to 16 kHz mono PCM with ffmpeg.
  * That single conversion makes every accepted upload format usable, and it is
- * also what keeps Sarvam's 16 kHz assumption satisfied for live Plivo calls.
+ * also what keeps Sarvam's 16 kHz assumption satisfied for any recording.
  *
  * ffmpeg-static ships a self-contained binary, so no system install or root is
  * needed on Railway. Set PILOT_FFMPEG_PATH to use a system binary instead, or
@@ -396,7 +396,13 @@ export const prepareSttInput = async (buffer, fileName) => {
   return { ...direct, method: "passthrough", reason };
 };
 
-const MANUAL_AUDIO_EXTENSIONS = new Set([".wav", ".mp3", ".m4a"]);
+const MANUAL_AUDIO_EXTENSIONS = new Set([
+  ".wav",
+  ".mp3",
+  ".m4a",
+  ".aac",
+  ".webm",
+]);
 
 export const validateManualAudio = async ({
   buffer,
@@ -411,7 +417,9 @@ export const validateManualAudio = async ({
 
   const extension = path.extname(String(fileName || "")).toLowerCase();
   if (!MANUAL_AUDIO_EXTENSIONS.has(extension)) {
-    const error = new Error("Only WAV, MP3, or M4A recordings can be added.");
+    const error = new Error(
+      "Only WAV, MP3, M4A, AAC or WebM recordings can be added.",
+    );
     error.code = "AUDIO_FORMAT_UNSUPPORTED";
     throw error;
   }
@@ -428,6 +436,10 @@ export const validateManualAudio = async ({
     "audio/mp3",
     "audio/mp4",
     "audio/x-m4a",
+    "audio/aac",
+    "audio/aacp",
+    "audio/x-aac",
+    "audio/webm",
     "application/octet-stream",
   ]);
   if (mimeType && !allowedMimeTypes.has(mimeType)) {
@@ -446,6 +458,72 @@ export const validateManualAudio = async ({
   }
 
   return { extension, bytes: buffer.length };
+};
+
+const FFMPEG_DURATION_PATTERN = /Duration:\s*(\d+):(\d{2}):(\d{2}(?:\.\d+)?)/;
+
+const parseFfmpegDuration = (text) => {
+  const match = FFMPEG_DURATION_PATTERN.exec(String(text || ""));
+  if (!match) return null;
+  const total =
+    Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+  return Number.isFinite(total) ? total : null;
+};
+
+/**
+ * The length of a recording in seconds, established before anything is stored.
+ *
+ * PCM WAV answers from its own header, with no subprocess — which is also the
+ * path every generated test file takes. Compressed formats (mp3/m4a/aac) are
+ * probed with ffmpeg: `ffmpeg -i <file>` prints the container's Duration line
+ * and then exits non-zero because no output was given, so both the success and
+ * the failure branch are parsed.
+ *
+ * Returns null when the length cannot be established; the upload route turns
+ * that into a refusal instead of accepting a recording of unknown length.
+ */
+export const probeAudioDurationSeconds = async ({ buffer, fileName } = {}) => {
+  if (!Buffer.isBuffer(buffer) || buffer.length === 0) return null;
+
+  const wav = parseWav(buffer);
+  if (wav) {
+    const byteRate = wav.sampleRate * wav.channels * (wav.bitsPerSample / 8);
+    const fromHeader = byteRate > 0 ? wav.dataLength / byteRate : null;
+    if (fromHeader !== null && Number.isFinite(fromHeader)) return fromHeader;
+  }
+
+  const binary = await resolveFfmpeg();
+  if (!binary) return null;
+
+  const token = randomUUID();
+  const ext = remoteExtensionFor(fileName);
+  const inputPath = path.join(os.tmpdir(), `pilot-probe-${token}.${ext}`);
+
+  try {
+    await fsp.writeFile(inputPath, buffer);
+
+    let output = "";
+    try {
+      const { stdout, stderr } = await execFileAsync(
+        binary,
+        ["-hide_banner", "-nostdin", "-i", inputPath],
+        {
+          timeout: Number(process.env.PILOT_FFMPEG_PROBE_TIMEOUT_MS || 30000),
+          maxBuffer: 1024 * 1024,
+          windowsHide: true,
+        },
+      );
+      output = `${stderr || ""}\n${stdout || ""}`;
+    } catch (error) {
+      output = `${error?.stderr || ""}\n${error?.stdout || ""}`;
+    }
+
+    return parseFfmpegDuration(output);
+  } catch {
+    return null;
+  } finally {
+    await fsp.rm(inputPath, { force: true }).catch(() => {});
+  }
 };
 
 const pollBatchJob = async (jobId) => {

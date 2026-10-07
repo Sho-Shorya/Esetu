@@ -8,7 +8,7 @@ import {
   setProductData,
 } from "../src/redux/ProductSlice";
 
-export const fetchAllProducts = async (dispatch) => {
+export const fetchAllProducts = async (dispatch, supplierId = null) => {
   dispatch(setProdLoading(true));
 
   try {
@@ -18,7 +18,10 @@ export const fetchAllProducts = async (dispatch) => {
       dispatch(setProdLoading(false));
       return;
     }
-    const res = await axios.get(`${API_BASE_URL}/api/v1/product/`, {
+    const query = supplierId
+      ? `?supplierId=${encodeURIComponent(supplierId)}`
+      : "";
+    const res = await axios.get(`${API_BASE_URL}/api/v1/product/${query}`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -41,9 +44,14 @@ export const fetchAllProducts = async (dispatch) => {
 const useGetAllProducts = () => {
   const dispatch = useDispatch();
   const { userData, supplierData } = useSelector((state) => state.user);
+  const selectedSupplierId = userData?.selectedSupplier || null;
+
   useEffect(() => {
-    fetchAllProducts(dispatch);
-  }, [dispatch, userData, supplierData]);
+    // A shopkeeper sees only the catalog of the supplier they picked in the
+    // "सप्लायर चुनें" bar; a supplier's own management panel keeps the full
+    // catalog so nothing has to be re-typed.
+    fetchAllProducts(dispatch, supplierData ? null : selectedSupplierId);
+  }, [dispatch, userData, supplierData, selectedSupplierId]);
 };
 
 export default useGetAllProducts;

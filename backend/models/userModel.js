@@ -28,17 +28,6 @@ const userSchema = new mongoose.Schema(
       ref: "User",
       default: null,
     },
-    phoneOrderWaitUntil: { type: Date, default: null, index: true },
-    phoneOrderWaitSupplierId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-    },
-    phoneOrderWaitCallId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "PhoneCall",
-      default: null,
-    },
   },
   { timestamps: true },
 ); //gives timeStamps for "Created at" and "updated at"

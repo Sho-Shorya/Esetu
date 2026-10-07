@@ -1,25 +1,24 @@
 import mongoose from "mongoose";
 
 /**
- * One phone call in the e-Setu calling feature.
+ * One phone call in the e-Setu phone-order flow.
  *
- * This is the join point between a real dialled call and the existing
- * PhoneCallPilot pipeline. It exists because the two halves of the flow are
- * recorded separately:
+ * This is the join point between a call the supplier made on their own phone
+ * and the existing PhoneCallPilot pipeline. It exists because the two halves of
+ * the flow are recorded separately:
  *
- *   - who called whom, when, for how long, and how it ended  -> this model
- *   - the recording, transcript, AI draft and review           -> PhoneCallPilot
+ *   - who called whom, when, for how long                 -> this model
+ *   - the recording, transcript, AI draft and review      -> PhoneCallPilot
  *
- * A call links to a pilot record through `pilotCallId` once audio exists. Before
- * that the call is a real, logged phone call with no order attached, which is
- * the honest state of a call made on a normal handset.
+ * The call is created together with its pilot record when the supplier uploads
+ * the recording, so `pilotCallId` is set from the start.
  */
 
 const CALL_DIRECTION = ["incoming", "outgoing"];
 
 /**
- * How the dialler actually ended. `device` means the handset reported it, which
- * is the only truth available without a telephony provider on the line.
+ * How the call ended, as reported by whoever reported it (today: the supplier's
+ * upload, which records a completed call).
  */
 const CALL_STATUS = [
   "initiated",
@@ -56,16 +55,6 @@ const PROCESSING_STATUS = [
   "failed",
 ];
 
-const providerSchema = new mongoose.Schema(
-  {
-    name: { type: String, default: "device" },
-    callId: { type: String, default: null, index: true, sparse: true },
-    recordingId: { type: String, default: null },
-    recordingUrl: { type: String, default: null },
-  },
-  { _id: false },
-);
-
 const recordingSchema = new mongoose.Schema(
   {
     // Where the bytes live. "local" is a file on this server's disk, which the
@@ -86,7 +75,9 @@ const recordingSchema = new mongoose.Schema(
     bytes: { type: Number, default: null },
     sha256: { type: String, default: null },
     originalName: { type: String, default: null },
-    // Who captured it: a telephony provider, the supplier, or the shopkeeper.
+    // Who captured it: the supplier, or the shopkeeper. "provider" stays a
+    // legal value only so recordings made before the upload flow exist keep
+    // saving cleanly — nothing writes it any more.
     capturedBy: {
       type: String,
       enum: ["provider", "supplier", "shopkeeper", null],
@@ -171,7 +162,6 @@ const phoneCallSchema = new mongoose.Schema(
       default: null,
     },
 
-    provider: { type: providerSchema, default: () => ({}) },
     recording: { type: recordingSchema, default: () => ({}) },
 
     // The transcript/draft/review record this call feeds.
@@ -195,8 +185,6 @@ const phoneCallSchema = new mongoose.Schema(
       default: null,
     },
     orderCreatedAt: { type: Date, default: null },
-    waitNoticeSentAt: { type: Date, default: null },
-    waitUntil: { type: Date, default: null },
 
     // Never silently swallow a failure: this is what the screen shows instead
     // of a wrong order.

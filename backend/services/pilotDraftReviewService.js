@@ -442,7 +442,12 @@ export const checkLine = (line, catalog) => {
     variants.map((variant) => trimOrNull(variant.measurement)).filter(Boolean),
   );
   const companies = new Set(
-    variants.map((variant) => trimOrNull(variant.company)).filter(Boolean),
+    variants.flatMap((variant) =>
+      [
+        trimOrNull(variant?.company),
+        trimOrNull(variant?.companyId),
+      ].filter(Boolean),
+    ),
   );
 
   const measurement = trimOrNull(line?.variantMeasurement);
@@ -463,6 +468,23 @@ export const checkLine = (line, catalog) => {
     issues.push("Company/brand was not stated. Pick the right one.");
   } else if (!companies.has(company)) {
     issues.push(`“${company}” does not make ${product.name}. Pick a listed company.`);
+  }
+
+  // Both fields can be individually right and still be a combination the shop
+  // never sells (500 g of a company that only sells 1 kg). The bridge prices
+  // rows, not fields, so this has to be caught here, before the confirm tap.
+  if (measurement && company && issues.length === 0) {
+    const pairExists = variants.some(
+      (variant) =>
+        trimOrNull(variant?.measurement) === measurement &&
+        (trimOrNull(variant?.company) === company ||
+          trimOrNull(variant?.companyId) === company),
+    );
+    if (!pairExists) {
+      issues.push(
+        `“${company}” does not make ${product.name} in ${measurement}. Pick a listed combination.`,
+      );
+    }
   }
 
   if (quantityUnstated) {
@@ -613,13 +635,13 @@ export const describeBlockers = (blockers) => {
 
   const count = blockers.length;
   return (
-    `Resolve ${count} item${count === 1 ? "" : "s"} before confirming: ` +
+    `पक्का करने से पहले ${count} सामान ठीक करें: ` +
     blockers
       .slice(0, 3)
       .map((blocker) => blocker.productName)
       .join(", ") +
-    (count > 3 ? `, +${count - 3} more` : "") +
-    "."
+    (count > 3 ? `, +${count - 3} और` : "") +
+    "।"
   );
 };
 
@@ -892,11 +914,13 @@ export const addManualReviewLine = ({ doc, input, userId, catalog, now } = {}) =
 
 const blockerSummary = (counts) => {
   const reasons = [];
-  if (counts.unresolved) reasons.push(`${counts.unresolved} unresolved`);
-  if (counts.quantityUnknown) reasons.push(`${counts.quantityUnknown} missing quantity`);
-  if (counts.ambiguous) reasons.push(`${counts.ambiguous} ambiguous`);
-  if (counts.uncertainVariant) reasons.push(`${counts.uncertainVariant} uncertain variant`);
-  if (counts.invalid) reasons.push(`${counts.invalid} invalid`);
+  if (counts.unresolved) reasons.push(`${counts.unresolved} बिना मैच`);
+  if (counts.quantityUnknown)
+    reasons.push(`${counts.quantityUnknown} की मात्रा नहीं`);
+  if (counts.ambiguous) reasons.push(`${counts.ambiguous} जाँचें`);
+  if (counts.uncertainVariant)
+    reasons.push(`${counts.uncertainVariant} की किस्म बाकी`);
+  if (counts.invalid) reasons.push(`${counts.invalid} गलत`);
   return reasons;
 };
 
@@ -925,7 +949,7 @@ export const confirmReviewDraft = ({ doc, catalog, userId, now } = {}) => {
       status: 422,
       message:
         describeBlockers(report.blockers) ||
-        `Cannot confirm: ${blockerSummary(report.counts).join(", ")}.`,
+        `पक्का नहीं हो सका: ${blockerSummary(report.counts).join(", ")}.`,
       report,
     };
   }

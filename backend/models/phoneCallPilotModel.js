@@ -9,41 +9,19 @@ import mongoose from "mongoose";
  * record through `review.confirmed.orderId` and `Order.phoneCallPilotId`.
  */
 
+/**
+ * The states this pipeline can be in, and the only ones a document may be
+ * validated against. The recording arrives already uploaded, so there is no
+ * dialling or downloading state any more.
+ */
 const PIPELINE_STAGES = [
   "new",
-  "call_answered",
-  "call_ended",
-  "recording_ready",
   "processing_recording",
-  "downloading_recording",
   "transcribing",
   "extracting",
   "completed",
   "failed",
 ];
-
-const providerSchema = new mongoose.Schema(
-  {
-    name: { type: String, default: "plivo" },
-    callId: {
-      type: String,
-      default: null,
-      index: true,
-      unique: true,
-      sparse: true,
-    },
-    recordingId: { type: String, default: null },
-    // Provider-hosted URL. Used once to download the audio into private
-    // storage, then never exposed through the API.
-    recordingUrl: { type: String, default: null },
-    from: { type: String, default: null },
-    to: { type: String, default: null },
-    direction: { type: String, default: null },
-    callStatus: { type: String, default: null },
-    durationSeconds: { type: Number, default: null },
-  },
-  { _id: false },
-);
 
 const callerSchema = new mongoose.Schema(
   {
@@ -337,7 +315,6 @@ const phoneCallPilotSchema = new mongoose.Schema(
       sparse: true,
     },
 
-    provider: { type: providerSchema, default: () => ({}) },
     caller: { type: callerSchema, default: () => ({}) },
     customer: { type: customerSchema, default: () => ({}) },
     audio: { type: audioSchema, default: () => ({}) },
@@ -362,4 +339,21 @@ const phoneCallPilotSchema = new mongoose.Schema(
 );
 
 export { PIPELINE_STAGES };
+
+/*
+ * One pilot record per real call: the upload route creates the call and this
+ * record together, and the unique link makes a duplicate upload of the same
+ * recording impossible at the database level. The partial filter leaves the
+ * many nulls in legacy rows untouched while still making each live call link
+ * unique.
+ */
+phoneCallPilotSchema.index(
+  { phoneCallId: 1 },
+  {
+    unique: true,
+    sparse: true,
+    partialFilterExpression: { phoneCallId: { $type: "objectId" } },
+  },
+);
+
 export default mongoose.model("PhoneCallPilot", phoneCallPilotSchema);

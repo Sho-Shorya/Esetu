@@ -596,6 +596,11 @@ const AdminTodayOrders = () => {
                         hour12: true,
                       })}
                     </p>
+                    {order.source === "phone-call" && (
+                      <p className="inline-flex w-fit items-center rounded-full bg-emerald-50 px-3 py-1 text-sm font-bold text-emerald-700">
+                        फोन कॉल से बनाया गया ऑर्डर
+                      </p>
+                    )}
                   </div>
 
                   {/* ==================================================

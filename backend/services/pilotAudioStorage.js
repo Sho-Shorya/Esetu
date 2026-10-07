@@ -35,9 +35,9 @@ export const getAudioDir = () =>
   path.resolve(process.env.PILOT_AUDIO_DIR || DEFAULT_DIR);
 
 /**
- * 64 MB covers a full-length pilot call: a 900 s Plivo WAV at 16 kHz mono
- * 16-bit is ~29 MB, and a 2 minute 48 kHz WAV is ~12 MB. The previous 25 MB
- * default silently rejected long real calls.
+ * 64 MB covers a full-length recording: a 600 s 16 kHz mono 16-bit WAV is
+ * ~19 MB, and a 2 minute 48 kHz WAV is ~12 MB. The previous 25 MB default
+ * silently rejected long real calls.
  */
 export const getMaxAudioBytes = () =>
   Number(process.env.PILOT_MAX_AUDIO_BYTES || 64 * 1024 * 1024);
