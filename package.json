@@ -1,7 +1,12 @@
 {
-  "dependencies": {
-    "axios": "^1.13.5",
-    "node": "^25.7.0",
-    "nodemailer": "^8.0.0"
+  "name": "e-setu-backend",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "postinstall": "npm --prefix backend install",
+    "dev": "npm --prefix backend run dev",
+    "start": "npm --prefix backend run dev"
   }
 }
